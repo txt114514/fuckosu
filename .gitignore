@@ -1,0 +1,12 @@
+# 忽略所有
+*
+
+# 允许目录
+!*/
+
+# 保留这些
+!.gitignore
+!README.md
+!.devcontainer/
+!pytorch/
+!src/
