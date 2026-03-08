@@ -1,1 +1,1 @@
-# fuckosu
+# fuckosucheat
