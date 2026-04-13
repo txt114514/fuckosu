@@ -1,12 +1,16 @@
-# 忽略所有
-*
+# 默认忽略根目录下所有内容
+/*
 
-# 允许目录
-!*/
+# 保留这两个根目录文件
+!/.gitignore
+!/README.md
 
-# 保留这些
-!.gitignore
-!README.md
-!.devcontainer/
-!pytorch/
-!src/
+# 保留这几个目录及其全部内容
+!/.devcontainer/
+!/.devcontainer/**
+
+!/pytorch/
+!/pytorch/**
+
+!/src/
+!/src/**

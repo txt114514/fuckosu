@@ -1,0 +1,40 @@
+{
+  "name": "osu-ai-dev-container",
+  "dockerComposeFile": ["docker-compose.yml"],
+  "service": "osu-dev",
+  "workspaceFolder": "/home/dev/workspace",
+  "remoteUser": "dev",
+  "shutdownAction": "stopCompose",
+
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".",
+    "args": {
+      "USER_UID": "${localEnv:UID:1000}",
+      "USER_GID": "${localEnv:GID:1000}"
+    }
+  },
+
+  "mounts": [
+    "source=${localWorkspaceFolder},target=/home/dev/workspace,type=bind,consistency=cached",
+    "source=/tmp/.X11-unix,target=/tmp/.X11-unix,type=bind",
+    "source=/dev,target=/dev,type=bind"
+  ],
+
+  "customizations": {
+    "vscode": {
+      "settings": {
+      "python.defaultInterpreterPath": "/opt/conda/bin/python3",
+      "python.terminal.activateEnvironment": true
+      },
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-toolsai.jupyter",
+        "eamodio.gitlens"
+      ]
+    }
+  },
+
+  "postStartCommand": "echo 'GPU: nvidia-smi'; echo 'X11: xeyes 或 pyautogui 测试'; echo 'Workspace: ${containerWorkspaceFolder}'"
+}
