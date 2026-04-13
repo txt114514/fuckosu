@@ -9,8 +9,8 @@
 !/.devcontainer/
 !/.devcontainer/**
 
-!/pytorch/
-!/pytorch/**
+# !/pytorch/
+# !/pytorch/**
 
 !/src/
 !/src/**
