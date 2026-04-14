@@ -1,25 +1,47 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
 from pathlib import Path
-import zipfile
-import tempfile
 import shutil
+import tempfile
+import zipfile
+
+from Traning.Lib.traning_package_manager.package_update import PackageUpdater
+
+
+@dataclass
+class OsuEntry:
+    osz_path: Path
+    osu_base_name: str
+    osu_filename: str
+    osu_bytes: bytes
+    sort_key: tuple[int, str]
 
 
 class OsuOszProcessor:
-    def __init__(self, export_dir: str = "/home/dev/workspace/osu-lazer/exports",
-                target_root: str = "/home/dev/workspace/training_package/match-completed_package",
-                keyword: str = "normal"):
+    """
+    严格规则：
+    1. 所有登记顺序以 .osz 的时间排序为准
+    2. order.txt 每次按扫描结果重建
+    3. 只有在 order.txt 中出现的文件夹才会被使用
+    """
+
+    def __init__(
+        self,
+        export_dir: str = "/home/dev/workspace/osu-lazer/exports",
+        target_root: str = "/home/dev/workspace/training_package/match-completed_package",
+        keyword: str = "normal",
+    ):
         self.export_dir = Path(export_dir)
-        self.target_root = Path(target_root)
-        self.order_log = self.target_root / "order.txt"
         self.keyword = keyword.lower()
-
-        self.target_root.mkdir(parents=True, exist_ok=True)
-
-        # 已登记的 .osu 名
-        self.registered_set = self._load_registered_names()
+        self.updater = PackageUpdater(
+            target_root=target_root,
+            order_filename="order.txt",
+        )
 
         self.success_count = 0
         self.skip_count = 0
+        self.fail_count = 0
 
     def _is_target_osu(self, path: Path) -> bool:
         return (
@@ -28,20 +50,7 @@ class OsuOszProcessor:
             and self.keyword in path.name.lower()
         )
 
-    def _load_registered_names(self) -> set[str]:
-        if not self.order_log.exists():
-            return set()
-
-        lines = self.order_log.read_text(encoding="utf-8").splitlines()
-        return {line.strip() for line in lines if line.strip()}
-
-    def _append_order(self, name: str):
-        with self.order_log.open("a", encoding="utf-8") as f:
-            if self.order_log.exists() and self.order_log.stat().st_size > 0:
-                f.write("\n")
-            f.write(name)
-
-    def _process_single_osz(self, osz_path: Path):
+    def _scan_single_osz(self, osz_path: Path) -> OsuEntry | None:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
 
@@ -50,74 +59,123 @@ class OsuOszProcessor:
 
             matched_osu_files = sorted(
                 [p for p in tmp_path.rglob("*") if self._is_target_osu(p)],
-                key=lambda p: p.name.lower()
+                key=lambda p: p.name.lower(),
             )
 
             if not matched_osu_files:
-                print(f"[跳过] {osz_path.name}：未找到包含 '{self.keyword}' 的 .osu")
-                self.skip_count += 1
-                return
+                return None
 
             chosen_osu = matched_osu_files[0]
-            osu_base_name = chosen_osu.stem
 
-            # 已处理过 → 跳过
-            if osu_base_name in self.registered_set:
-                print(f"[跳过] {osz_path.name}：{osu_base_name} 已登记")
-                self.skip_count += 1
-                return
+            return OsuEntry(
+                osz_path=osz_path,
+                osu_base_name=chosen_osu.stem,
+                osu_filename=chosen_osu.name,
+                osu_bytes=chosen_osu.read_bytes(),
+                sort_key=(osz_path.stat().st_mtime_ns, osz_path.name.lower()),
+            )
 
-            dest_dir = self.target_root / osu_base_name
-
-            # 冲突检测
-            if dest_dir.exists():
-                raise FileExistsError(
-                    f"冲突：目录已存在但未登记 → {dest_dir}"
-                )
-
-            dest_dir.mkdir(parents=True, exist_ok=False)
-
-            dest_file = dest_dir / chosen_osu.name
-            shutil.copy2(chosen_osu, dest_file)
-
-            # 记录
-            self._append_order(osu_base_name)
-            self.registered_set.add(osu_base_name)
-
-            print(f"[完成] {osz_path.name} -> {dest_file}")
-            self.success_count += 1
-
-            if len(matched_osu_files) > 1:
-                print(f"       注意：多个匹配，仅使用 {chosen_osu.name}")
-
-    def run(self):
+    def _scan_all_entries_in_time_order(self) -> list[OsuEntry]:
         osz_files = sorted(
             self.export_dir.glob("*.osz"),
-            key=lambda p: p.stat().st_mtime_ns
+            key=lambda p: (p.stat().st_mtime_ns, p.name.lower()),
         )
 
         if not osz_files:
             print(f"没有在 {self.export_dir} 中找到 .osz 文件")
-            return
+            return []
+
+        entries: list[OsuEntry] = []
+        seen_names: set[str] = set()
 
         for osz_path in osz_files:
             try:
-                self._process_single_osz(osz_path)
+                entry = self._scan_single_osz(osz_path)
             except zipfile.BadZipFile:
-                print(f"[错误] {osz_path.name} 不是有效压缩包")
+                print(f"[跳过] {osz_path.name}：不是有效压缩包")
                 self.skip_count += 1
+                continue
             except Exception as e:
-                print(f"[错误] {osz_path.name} 处理失败：{e}")
-                raise
+                print(f"[失败] {osz_path.name}：扫描失败：{e}")
+                self.fail_count += 1
+                continue
+
+            if entry is None:
+                print(f"[跳过] {osz_path.name}：未找到包含 '{self.keyword}' 的 .osu")
+                self.skip_count += 1
+                continue
+
+            if entry.osu_base_name in seen_names:
+                raise ValueError(
+                    f"扫描结果中出现重复目录名: {entry.osu_base_name} "
+                    f"(来源文件至少包括 {osz_path.name})"
+                )
+
+            seen_names.add(entry.osu_base_name)
+            entries.append(entry)
+
+            print(f"[登记候选] {osz_path.name} -> {entry.osu_base_name}")
+
+        entries.sort(key=lambda e: e.sort_key)
+        return entries
+
+    def _rebuild_order(self, entries: list[OsuEntry]):
+        ordered_names = [e.osu_base_name for e in entries]
+        self.updater.overwrite_order(ordered_names)
+        print(f"[完成] 已重建 order.txt，共 {len(ordered_names)} 项")
+
+    def _sync_folders_and_copy_files(self, entries: list[OsuEntry]):
+        # 只按 order.txt 创建允许使用的文件夹
+        self.updater.sync_folders_from_order()
+
+        registered = self.updater.load_registered_names()
+
+        for entry in entries:
+            if entry.osu_base_name not in registered:
+                raise PermissionError(
+                    f"{entry.osu_base_name} 未登记在 order.txt 中，拒绝使用该文件夹"
+                )
+
+            dest_dir = self.updater.create_folder_if_registered(entry.osu_base_name)
+            dest_file = dest_dir / entry.osu_filename
+
+            # 这里用覆盖写入，保证当前包内容严格对应当前重建后的顺序结果
+            dest_file.write_bytes(entry.osu_bytes)
+
+            print(f"[完成] {entry.osz_path.name} -> {dest_file}")
+            self.success_count += 1
+
+    def run(self):
+        entries = self._scan_all_entries_in_time_order()
+        if not entries:
+            print("没有可登记的目标 .osu")
+            return
+
+        # 严格时间顺序：先重建 order.txt
+        self._rebuild_order(entries)
+
+        # 再只使用 order.txt 中允许的文件夹
+        self._sync_folders_and_copy_files(entries)
+
+        extra_dirs = self.updater.find_unregistered_existing_folders()
+        if extra_dirs:
+            print()
+            print("警告：发现未登记到 order.txt 的现有文件夹，这些文件夹不会被使用：")
+            for p in extra_dirs:
+                print(f"  - {p}")
 
         print()
-        print(f"处理完成：成功 {self.success_count} 个，跳过/失败 {self.skip_count} 个")
-        print(f"记录文件：{self.order_log}")
+        print(
+            f"处理完成：成功 {self.success_count} 个，跳过 {self.skip_count} 个，失败 {self.fail_count} 个"
+        )
+        print(f"记录文件：{self.updater.order_file}")
+
+
 def main():
     processor = OsuOszProcessor(
         export_dir="/home/dev/workspace/osu-lazer/exports",
         target_root="/home/dev/workspace/training_package/match-completed_package",
-        keyword="normal"
+        keyword="normal",
     )
     processor.run()
 
