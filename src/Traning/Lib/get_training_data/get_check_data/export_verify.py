@@ -11,6 +11,9 @@ from Traning.Lib.data_class_manager.data_type_group import Circle, Slider, Spinn
 from Traning.Lib.data_class_manager.data_osu_original import OsuOriginalTimingPoint
 from Traning.Lib.traning_package_manager.order_walker import OrderFolderWalker
 from Traning.Lib.traning_package_manager.files_manager import BeatmapFolderStore
+from Traning.Lib.traning_package_manager.process_status_manager import (
+    ProcessStatusManager,
+)
 
 DEFAULT_REPO_ROOT = Path(__file__).resolve().parents[5]
 DEFAULT_TARGET_ROOT = DEFAULT_REPO_ROOT / "training_package" / "match-completed_package"
@@ -23,11 +26,16 @@ class VerifyExporter:
         store: BeatmapFolderStore,
         verify_filename: str = "verify.txt",
         failed_filename: str = "verify_failed.txt",
+        status_manager: ProcessStatusManager | None = None,
     ):
         self.walker = walker
         self.store = store
         self.verify_filename = verify_filename
         self.failed_filename = failed_filename
+        self.status_manager = status_manager or ProcessStatusManager(
+            target_root=str(store.target_root),
+            order_filename=store.order_filename,
+        )
 
         self.success_count = 0
         self.skip_count = 0
@@ -208,6 +216,13 @@ class VerifyExporter:
             self.skip_count += 1
             return "skip"
 
+        self.status_manager.ensure_status_file(folder_name)
+        verify_exists = self.store.file_exists(folder_name, self.verify_filename)
+        verify_done = self.status_manager.is_step_done(folder_name, "verify_exported")
+        if not overwrite and verify_exists and verify_done:
+            self.skip_count += 1
+            return "skip"
+
         osu_files = self.store.find_osu_files(folder_name)
         if not osu_files:
             self.skip_count += 1
@@ -247,9 +262,22 @@ class VerifyExporter:
         )
 
         if verify_result == "skipped":
+            self.status_manager.mark_step_done(
+                folder_name,
+                "verify_exported",
+                detail={"filename": self.verify_filename},
+            )
+            if not verify_done:
+                self.success_count += 1
+                return "success"
             self.skip_count += 1
             return "skip"
 
+        self.status_manager.mark_step_done(
+            folder_name,
+            "verify_exported",
+            detail={"filename": self.verify_filename},
+        )
         self.success_count += 1
         return "success"
 
@@ -266,6 +294,13 @@ class VerifyExporter:
             except Exception as e:
                 self.fail_count += 1
                 self.failed_cases.append((folder_name, str(e)))
+                if self.store.folder_exists(folder_name):
+                    self.status_manager.ensure_status_file(folder_name)
+                    self.status_manager.mark_step_pending(
+                        folder_name,
+                        "verify_exported",
+                        detail={"error": str(e)},
+                    )
                 print(f"[失败] {folder_name}: {e}")
 
         failed_path = self.store.write_failed_report(

@@ -10,8 +10,15 @@ import zipfile
 if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
-from Traning.Lib.get_training_data.config_loader import CONFIG_PATH, load_check_data_config
+from Traning.Lib.get_training_data.config_loader import (
+    CONFIG_PATH,
+    CheckDataConfigError,
+    load_check_data_config,
+)
 from Traning.Lib.traning_package_manager.package_update import PackageUpdater
+from Traning.Lib.traning_package_manager.process_status_manager import (
+    ProcessStatusManager,
+)
 
 DEFAULT_REPO_ROOT = Path(__file__).resolve().parents[5]
 DEFAULT_EXPORT_DIR = DEFAULT_REPO_ROOT / "osu-lazer" / "exports"
@@ -44,6 +51,10 @@ class OsuOszProcessor:
         self.export_dir = Path(export_dir)
         self.keyword = keyword.lower()
         self.updater = PackageUpdater(
+            target_root=target_root,
+            order_filename="order.txt",
+        )
+        self.status_manager = ProcessStatusManager(
             target_root=target_root,
             order_filename="order.txt",
         )
@@ -150,6 +161,12 @@ class OsuOszProcessor:
 
             # 这里用覆盖写入，保证当前包内容严格对应当前重建后的顺序结果
             dest_file.write_bytes(entry.osu_bytes)
+            self.status_manager.ensure_status_file(entry.osu_base_name)
+            self.status_manager.mark_step_done(
+                entry.osu_base_name,
+                "osu_imported",
+                detail={"osu_filename": entry.osu_filename},
+            )
 
             print(f"[完成] {entry.osz_path.name} -> {dest_file}")
             self.success_count += 1
@@ -191,7 +208,7 @@ class OsuOszProcessor:
     ) -> "OsuOszProcessor":
         try:
             return cls.from_config(config_path)
-        except Exception as e:
+        except CheckDataConfigError as e:
             fallback_path = config_path or CONFIG_PATH
             print(
                 f"\033[31m[error] {fallback_path} 读取失败，改用默认参数: {e} "

@@ -6,7 +6,11 @@ from pathlib import Path
 if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
-from Traning.Lib.get_training_data.config_loader import CONFIG_PATH, load_check_data_config
+from Traning.Lib.get_training_data.config_loader import (
+    CONFIG_PATH,
+    CheckDataConfigError,
+    load_check_data_config,
+)
 from Traning.Lib.get_training_data.get_check_data.export_verify import VerifyExporter
 from Traning.Lib.get_training_data.get_check_data.get_files import (
     DEFAULT_EXPORT_DIR,
@@ -127,7 +131,7 @@ class CheckDataPipeline:
     ) -> "CheckDataPipeline":
         try:
             return cls.from_config(config_path)
-        except Exception as e:
+        except CheckDataConfigError as e:
             fallback_path = config_path or CONFIG_PATH
             print(
                 f"\033[31m[error] {fallback_path} 读取失败，改用默认参数: {e} "

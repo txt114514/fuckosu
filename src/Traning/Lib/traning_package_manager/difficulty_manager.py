@@ -9,6 +9,9 @@ from Traning.Lib.traning_package_manager.files_manager import (
     WriteMode,
 )
 from Traning.Lib.traning_package_manager.order_walker import OrderFolderWalker
+from Traning.Lib.traning_package_manager.process_status_manager import (
+    ProcessStatusManager,
+)
 
 
 @dataclass(frozen=True)
@@ -24,11 +27,16 @@ class DifficultyFileManager:
         walker: OrderFolderWalker | None = None,
         difficulty_filename: str = "difficulty.txt",
         failed_filename: str = "difficulty_failed.txt",
+        status_manager: ProcessStatusManager | None = None,
     ):
         self.store = store
         self.walker = walker or store.walker
         self.difficulty_filename = difficulty_filename
         self.failed_filename = failed_filename
+        self.status_manager = status_manager or ProcessStatusManager(
+            target_root=str(store.target_root),
+            order_filename=store.order_filename,
+        )
 
         self.success_count = 0
         self.skip_count = 0
@@ -83,6 +91,16 @@ class DifficultyFileManager:
             self.skip_count += 1
             return "skip"
 
+        self.status_manager.ensure_status_file(folder_name)
+        difficulty_exists = self.store.file_exists(folder_name, self.difficulty_filename)
+        difficulty_done = self.status_manager.is_step_done(
+            folder_name,
+            "difficulty_exported",
+        )
+        if not overwrite and difficulty_exists and difficulty_done:
+            self.skip_count += 1
+            return "skip"
+
         osu_files = self.store.find_osu_files(folder_name)
         if not osu_files:
             self.skip_count += 1
@@ -98,9 +116,22 @@ class DifficultyFileManager:
         )
 
         if result == "skipped":
+            self.status_manager.mark_step_done(
+                folder_name,
+                "difficulty_exported",
+                detail={"filename": self.difficulty_filename},
+            )
+            if not difficulty_done:
+                self.success_count += 1
+                return "success"
             self.skip_count += 1
             return "skip"
 
+        self.status_manager.mark_step_done(
+            folder_name,
+            "difficulty_exported",
+            detail={"filename": self.difficulty_filename},
+        )
         self.success_count += 1
         return "success"
 
@@ -148,6 +179,13 @@ class DifficultyFileManager:
             except Exception as e:
                 self.fail_count += 1
                 self.failed_cases.append((folder_name, str(e)))
+                if self.store.folder_exists(folder_name):
+                    self.status_manager.ensure_status_file(folder_name)
+                    self.status_manager.mark_step_pending(
+                        folder_name,
+                        "difficulty_exported",
+                        detail={"error": str(e)},
+                    )
                 print(f"[失败] {folder_name}: {e}")
 
         failed_path = self.store.write_failed_report(
