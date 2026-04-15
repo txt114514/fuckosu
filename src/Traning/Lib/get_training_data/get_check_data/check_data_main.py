@@ -6,6 +6,7 @@ from pathlib import Path
 if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
+from Traning.Lib.get_training_data.config_loader import CONFIG_PATH, load_check_data_config
 from Traning.Lib.get_training_data.get_check_data.export_verify import VerifyExporter
 from Traning.Lib.get_training_data.get_check_data.get_files import (
     DEFAULT_EXPORT_DIR,
@@ -114,18 +115,29 @@ class CheckDataPipeline:
             max_difficulty=max_difficulty,
         )
 
+    @classmethod
+    def from_config(cls, config_path: Path | None = None) -> "CheckDataPipeline":
+        config = load_check_data_config(config_path)
+        return cls(**config)
+
+    @classmethod
+    def from_config_or_default(
+        cls,
+        config_path: Path | None = None,
+    ) -> "CheckDataPipeline":
+        try:
+            return cls.from_config(config_path)
+        except Exception as e:
+            fallback_path = config_path or CONFIG_PATH
+            print(
+                f"\033[31m[error] {fallback_path} 读取失败，改用默认参数: {e} "
+                f"config.json参数配置不合法\033[0m"
+            )
+            return cls()
+
 
 def main():
-    pipeline = CheckDataPipeline(
-        export_dir=str(DEFAULT_EXPORT_DIR),
-        target_root=str(DEFAULT_TARGET_ROOT),
-        keyword="normal",
-        order_filename="order.txt",
-        verify_filename="verify.txt",
-        difficulty_filename="difficulty.txt",
-        verify_failed_filename="verify_failed.txt",
-        difficulty_failed_filename="difficulty_failed.txt",
-    )
+    pipeline = CheckDataPipeline.from_config_or_default()
     pipeline.run(
         overwrite=False,
         run_get_files=True,

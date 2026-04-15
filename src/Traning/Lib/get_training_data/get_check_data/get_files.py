@@ -10,6 +10,7 @@ import zipfile
 if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
+from Traning.Lib.get_training_data.config_loader import CONFIG_PATH, load_check_data_config
 from Traning.Lib.traning_package_manager.package_update import PackageUpdater
 
 DEFAULT_REPO_ROOT = Path(__file__).resolve().parents[5]
@@ -178,13 +179,29 @@ class OsuOszProcessor:
         )
         print(f"记录文件：{self.updater.order_file}")
 
+    @classmethod
+    def from_config(cls, config_path: Path | None = None) -> "OsuOszProcessor":
+        config = load_check_data_config(config_path)
+        return cls(**config)
+
+    @classmethod
+    def from_config_or_default(
+        cls,
+        config_path: Path | None = None,
+    ) -> "OsuOszProcessor":
+        try:
+            return cls.from_config(config_path)
+        except Exception as e:
+            fallback_path = config_path or CONFIG_PATH
+            print(
+                f"\033[31m[error] {fallback_path} 读取失败，改用默认参数: {e} "
+                f"config.json参数配置不合法\033[0m"
+            )
+            return cls()
+
 
 def main():
-    processor = OsuOszProcessor(
-        export_dir=str(DEFAULT_EXPORT_DIR),
-        target_root=str(DEFAULT_TARGET_ROOT),
-        keyword="normal",
-    )
+    processor = OsuOszProcessor.from_config_or_default()
     processor.run()
 
 

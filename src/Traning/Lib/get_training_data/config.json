@@ -1,0 +1,7 @@
+{
+    "check_data": {
+        "export_dir": "../../../../osu-lazer/exports",
+        "target_root": "../../../../training_package/match-completed_package",
+        "keyword": "normal"
+    }
+}
