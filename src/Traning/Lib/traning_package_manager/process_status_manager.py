@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -108,8 +109,6 @@ class ProcessStatusManager:
         if not status_path.exists():
             return self._default_status()
 
-        import json
-
         with status_path.open("r", encoding="utf-8") as f:
             raw_status = json.load(f)
 
@@ -118,8 +117,6 @@ class ProcessStatusManager:
     def save_status(self, folder_name: str, status: dict[str, Any]):
         status_path = self.get_status_path(folder_name)
         normalized = self._normalize_status(status)
-
-        import json
 
         with status_path.open("w", encoding="utf-8") as f:
             json.dump(normalized, f, ensure_ascii=False, indent=2)

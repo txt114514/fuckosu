@@ -7,9 +7,7 @@ if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
 from Traning.Lib.get_training_data.config_loader import (
-    CONFIG_PATH,
-    CheckDataConfigError,
-    load_check_data_config,
+    build_from_check_data_config_or_default,
 )
 from Traning.Lib.traning_package_manager.order_walker import OrderFolderWalker
 from Traning.Lib.traning_package_manager.process_status_manager import (
@@ -35,55 +33,31 @@ class VideoInitChecker:
             order_filename=self.order_filename,
         )
 
-    def _build_walker(self) -> OrderFolderWalker:
-        return OrderFolderWalker(
-            target_root=str(self.target_root),
-            order_filename=self.order_filename,
-        )
-
-    def check_order_file(self) -> list[str]:
-        walker = self._build_walker()
-        folder_names = walker.read_folder_names()
-        if not folder_names:
-            raise ValueError(f"{walker.order_file} 为空，无法初始化视频流程")
-        return folder_names
-
-    def check_folders_after_check_data(self) -> list[Path]:
-        folder_names = self.check_order_file()
-        missing_folders: list[Path] = []
-
-        for folder_name in folder_names:
-            folder_path = self.target_root / folder_name
-            if not folder_path.exists() or not folder_path.is_dir():
-                missing_folders.append(folder_path)
-
-        if missing_folders:
-            missing_text = "\n".join(str(path) for path in missing_folders)
-            raise FileNotFoundError(
-                "检测到 check_data_main.py 之后应存在的文件夹缺失:\n"
-                f"{missing_text}"
-            )
-
-        return [self.target_root / folder_name for folder_name in folder_names]
-
     def _folder_has_video(self, folder_path: Path) -> bool:
         return any(
             child.is_file() and child.suffix.lower() in VIDEO_SUFFIXES
             for child in folder_path.iterdir()
         )
 
-    def check_video_progress(self) -> tuple[list[Path], list[Path]]:
-        folder_paths = self.check_folders_after_check_data()
-        folders_with_video: list[Path] = []
-        folders_without_video: list[Path] = []
+    def _folder_items(self) -> list[tuple[str, Path]]:
+        walker = OrderFolderWalker(
+            target_root=str(self.target_root),
+            order_filename=self.order_filename,
+        )
+        folder_names = walker.read_folder_names()
+        if not folder_names:
+            raise ValueError(f"{walker.order_file} 为空，无法初始化视频流程")
 
-        for folder_path in folder_paths:
-            if self._folder_has_video(folder_path):
-                folders_with_video.append(folder_path)
-            else:
-                folders_without_video.append(folder_path)
+        items = [(folder_name, self.target_root / folder_name) for folder_name in folder_names]
+        missing_paths = [folder_path for _, folder_path in items if not folder_path.is_dir()]
+        if missing_paths:
+            missing_text = "\n".join(str(path) for path in missing_paths)
+            raise FileNotFoundError(
+                "检测到 check_data_main.py 之后应存在的文件夹缺失:\n"
+                f"{missing_text}"
+            )
 
-        return folders_with_video, folders_without_video
+        return items
 
     def _sync_video_matched_status(self, folder_name: str, folder_path: Path):
         has_video = self._folder_has_video(folder_path)
@@ -104,59 +78,37 @@ class VideoInitChecker:
                 detail={"error": "状态显示已匹配视频，但文件夹中未找到视频文件"},
             )
 
-    def check_process_status(self) -> dict[str, int]:
-        folder_names = self.check_order_file()
-        counts = {step: 0 for step in PROCESS_STEPS}
-
-        for folder_name in folder_names:
-            self.status_manager.ensure_status_file(folder_name)
-            self._sync_video_matched_status(
-                folder_name,
-                self.target_root / folder_name,
-            )
-            summary = self.status_manager.get_steps_summary(folder_name)
-            for step, done in summary.items():
-                if done:
-                    counts[step] += 1
-
-        return counts
-
     def run(self):
-        folder_names = self.check_order_file()
-        folder_paths = self.check_folders_after_check_data()
-        folders_with_video, folders_without_video = self.check_video_progress()
-        status_counts = self.check_process_status()
+        folder_items = self._folder_items()
+        folders_with_video = 0
+        folders_without_video = 0
+        status_counts = {step: 0 for step in PROCESS_STEPS}
 
-        print(f"[完成] order.txt 检查通过，共 {len(folder_names)} 项")
-        print(f"[完成] 文件夹检查通过，共 {len(folder_paths)} 个")
-        print(f"[完成] 已有视频文件夹 {len(folders_with_video)} 个")
-        print(f"[完成] 待处理无视频文件夹 {len(folders_without_video)} 个")
+        for folder_name, folder_path in folder_items:
+            self.status_manager.ensure_status_file(folder_name)
+            self._sync_video_matched_status(folder_name, folder_path)
+
+            if self._folder_has_video(folder_path):
+                folders_with_video += 1
+            else:
+                folders_without_video += 1
+
+            for step, done in self.status_manager.get_steps_summary(folder_name).items():
+                if done:
+                    status_counts[step] += 1
+
+        print(f"[完成] order.txt 检查通过，共 {len(folder_items)} 项")
+        print(f"[完成] 文件夹检查通过，共 {len(folder_items)} 个")
+        print(f"[完成] 已有视频文件夹 {folders_with_video} 个")
+        print(f"[完成] 待处理无视频文件夹 {folders_without_video} 个")
         for step in PROCESS_STEPS:
             print(f"[完成] 状态 {step} 已完成 {status_counts[step]} 个")
 
-    @classmethod
-    def from_config(cls, config_path: Path | None = None) -> "VideoInitChecker":
-        config = load_check_data_config(config_path)
-        return cls(target_root=config["target_root"])
-
-    @classmethod
-    def from_config_or_default(
-        cls,
-        config_path: Path | None = None,
-    ) -> "VideoInitChecker":
-        try:
-            return cls.from_config(config_path)
-        except CheckDataConfigError as e:
-            fallback_path = config_path or CONFIG_PATH
-            print(
-                f"\033[31m[error] {fallback_path} 读取失败，改用默认参数: {e} "
-                f"config.json参数配置不合法\033[0m"
-            )
-            return cls()
-
-
 def main():
-    checker = VideoInitChecker.from_config_or_default()
+    checker = build_from_check_data_config_or_default(
+        lambda **config: VideoInitChecker(target_root=config["target_root"]),
+        default_builder=VideoInitChecker,
+    )
     checker.run()
 
 

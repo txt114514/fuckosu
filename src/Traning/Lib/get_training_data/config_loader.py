@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Callable, TypeVar
 
 
 CONFIG_PATH = Path(__file__).resolve().parent / "config.json"
+T = TypeVar("T")
 
 
 class CheckDataConfigError(Exception):
@@ -52,3 +54,26 @@ def load_check_data_config(config_path: Path | None = None) -> dict[str, str]:
         "target_root": _resolve_config_path(base_dir, str(section["target_root"])),
         "keyword": str(section["keyword"]),
     }
+
+
+def build_from_check_data_config(
+    builder: Callable[..., T],
+    config_path: Path | None = None,
+) -> T:
+    return builder(**load_check_data_config(config_path))
+
+
+def build_from_check_data_config_or_default(
+    builder: Callable[..., T],
+    config_path: Path | None = None,
+    default_builder: Callable[[], T] | None = None,
+) -> T:
+    try:
+        return build_from_check_data_config(builder, config_path)
+    except CheckDataConfigError as e:
+        fallback_path = config_path or CONFIG_PATH
+        print(
+            f"\033[31m[error] {fallback_path} 读取失败，改用默认参数: {e} "
+            f"config.json参数配置不合法\033[0m"
+        )
+        return (default_builder or builder)()

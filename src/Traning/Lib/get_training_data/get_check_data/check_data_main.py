@@ -7,9 +7,7 @@ if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
 from Traning.Lib.get_training_data.config_loader import (
-    CONFIG_PATH,
-    CheckDataConfigError,
-    load_check_data_config,
+    build_from_check_data_config_or_default,
 )
 from Traning.Lib.get_training_data.get_check_data.export_verify import VerifyExporter
 from Traning.Lib.get_training_data.get_check_data.get_files import (
@@ -22,7 +20,6 @@ from Traning.Lib.traning_package_manager.difficulty_manager import (
     DifficultyFileManager,
 )
 from Traning.Lib.traning_package_manager.files_manager import BeatmapFolderStore
-from Traning.Lib.traning_package_manager.order_walker import OrderFolderWalker
 from Traning.Lib.traning_package_manager.package_update import PackageUpdater
 
 
@@ -46,39 +43,28 @@ class CheckDataPipeline:
         self.difficulty_filename = difficulty_filename
         self.verify_failed_filename = verify_failed_filename
         self.difficulty_failed_filename = difficulty_failed_filename
-
-    def _ensure_workspace(self):
-        PackageUpdater(
+        self.updater = PackageUpdater(
             target_root=self.target_root,
             order_filename=self.order_filename,
         )
-
-    def _build_walker(self) -> OrderFolderWalker:
-        self._ensure_workspace()
-        return OrderFolderWalker(
+        self.store = BeatmapFolderStore(
             target_root=self.target_root,
             order_filename=self.order_filename,
         )
-
-    def _build_store(self) -> BeatmapFolderStore:
-        self._ensure_workspace()
-        return BeatmapFolderStore(
-            target_root=self.target_root,
-            order_filename=self.order_filename,
-        )
+        self.walker = self.store.walker
 
     def _build_verify_exporter(self) -> VerifyExporter:
         return VerifyExporter(
-            walker=self._build_walker(),
-            store=self._build_store(),
+            walker=self.walker,
+            store=self.store,
             verify_filename=self.verify_filename,
             failed_filename=self.verify_failed_filename,
         )
 
     def _build_difficulty_manager(self) -> DifficultyFileManager:
         return DifficultyFileManager(
-            walker=self._build_walker(),
-            store=self._build_store(),
+            walker=self.walker,
+            store=self.store,
             difficulty_filename=self.difficulty_filename,
             failed_filename=self.difficulty_failed_filename,
         )
@@ -119,29 +105,9 @@ class CheckDataPipeline:
             max_difficulty=max_difficulty,
         )
 
-    @classmethod
-    def from_config(cls, config_path: Path | None = None) -> "CheckDataPipeline":
-        config = load_check_data_config(config_path)
-        return cls(**config)
-
-    @classmethod
-    def from_config_or_default(
-        cls,
-        config_path: Path | None = None,
-    ) -> "CheckDataPipeline":
-        try:
-            return cls.from_config(config_path)
-        except CheckDataConfigError as e:
-            fallback_path = config_path or CONFIG_PATH
-            print(
-                f"\033[31m[error] {fallback_path} 读取失败，改用默认参数: {e} "
-                f"config.json参数配置不合法\033[0m"
-            )
-            return cls()
-
 
 def main():
-    pipeline = CheckDataPipeline.from_config_or_default()
+    pipeline = build_from_check_data_config_or_default(CheckDataPipeline)
     pipeline.run(
         overwrite=False,
         run_get_files=True,

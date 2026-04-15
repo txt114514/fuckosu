@@ -186,25 +186,3 @@ class BeatmapFolderStore:
 
         failed_path.write_text("\n".join(chunks) + "\n", encoding="utf-8")
         return failed_path
-
-
-def main():
-    target_root = "/home/dev/workspace/training_package/match-completed_package"
-    store = BeatmapFolderStore(target_root=target_root, order_filename="order.txt")
-
-    # 示例：仅对已登记且已存在的目录写入
-    # 在正式使用前，应先由 PackageUpdater.sync_folders_from_order() 创建目录
-    try:
-        result = store.write_text(
-            folder_name="example_folder",
-            filename="demo.txt",
-            content="hello\n",
-            mode="skip_if_exists",
-        )
-        print(f"写入结果: {result}")
-    except Exception as e:
-        print(f"示例执行失败: {e}")
-
-
-if __name__ == "__main__":
-    main()

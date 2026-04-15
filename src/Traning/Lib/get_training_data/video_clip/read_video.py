@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 import sys
-from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -10,9 +9,7 @@ if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
 from Traning.Lib.get_training_data.config_loader import (
-    CONFIG_PATH,
-    CheckDataConfigError,
-    load_check_data_config,
+    build_from_check_data_config_or_default,
 )
 from Traning.Lib.traning_package_manager.order_walker import OrderFolderWalker
 from Traning.Lib.traning_package_manager.process_status_manager import (
@@ -28,19 +25,6 @@ VIDEO_TIME_PATTERN = re.compile(
     r"(?P<hour>\d{2})时(?P<minute>\d{2})分(?P<second>\d{2})秒"
 )
 VIDEO_SUFFIXES = {".mp4", ".webm", ".mkv", ".avi", ".mov"}
-
-
-@dataclass(frozen=True)
-class OrderedVideo:
-    path: Path
-    recorded_at: datetime
-
-
-@dataclass(frozen=True)
-class VideoMovePlan:
-    folder_name: str
-    source: Path
-    destination: Path
 
 
 class VideoPackageRenamer:
@@ -83,35 +67,27 @@ class VideoPackageRenamer:
             second=int(match.group("second")),
         )
 
-    def _list_videos_in_time_order(self) -> list[OrderedVideo]:
+    def _list_videos_in_time_order(self) -> list[Path]:
         if not self.video_root.exists():
             raise FileNotFoundError(f"视频目录不存在: {self.video_root}")
 
-        video_files = sorted(
-            [
-                p
-                for p in self.video_root.iterdir()
-                if p.is_file() and p.suffix.lower() in VIDEO_SUFFIXES
-            ],
-            key=lambda p: p.name.lower(),
-        )
-
-        ordered_videos = [
-            OrderedVideo(path=video_path, recorded_at=self._parse_video_time(video_path))
-            for video_path in video_files
+        video_files = [
+            path
+            for path in self.video_root.iterdir()
+            if path.is_file() and path.suffix.lower() in VIDEO_SUFFIXES
         ]
-        ordered_videos.sort(key=lambda item: (item.recorded_at, item.path.name.lower()))
-        return ordered_videos
-
-    def _build_rename_plan(self) -> list[VideoMovePlan]:
-        ordered_names = self.walker.read_folder_names()
-        ordered_videos = self._list_videos_in_time_order()
-
-        if not ordered_videos:
+        if not video_files:
             raise ValueError(f"{self.video_root} 中没有可重命名的视频文件")
 
-        pending_folder_names: list[str] = []
-        for folder_name in ordered_names:
+        return sorted(
+            video_files,
+            key=lambda path: (self._parse_video_time(path), path.name.lower()),
+        )
+
+    def _pending_folder_names(self) -> list[str]:
+        pending_names: list[str] = []
+
+        for folder_name in self.walker.read_folder_names():
             destination_dir = self.target_root / folder_name
             if not destination_dir.exists():
                 raise FileNotFoundError(
@@ -131,10 +107,16 @@ class VideoPackageRenamer:
                     "video_matched",
                     detail={"error": "状态显示已匹配视频，但文件夹中未找到视频文件"},
                 )
-            pending_folder_names.append(folder_name)
+            pending_names.append(folder_name)
 
-        if not pending_folder_names:
+        if not pending_names:
             raise ValueError("order.txt 对应文件夹都已经存在视频文件，无需继续处理")
+
+        return pending_names
+
+    def _build_rename_plan(self) -> list[tuple[str, Path, Path]]:
+        ordered_videos = self._list_videos_in_time_order()
+        pending_folder_names = self._pending_folder_names()
 
         if len(ordered_videos) != len(pending_folder_names):
             raise ValueError(
@@ -142,58 +124,54 @@ class VideoPackageRenamer:
                 f"video={len(ordered_videos)}, pending_folder={len(pending_folder_names)}"
             )
 
-        plan: list[VideoMovePlan] = []
-        for ordered_video, folder_name in zip(ordered_videos, pending_folder_names):
+        plan: list[tuple[str, Path, Path]] = []
+        for source_path, folder_name in zip(ordered_videos, pending_folder_names):
             destination_dir = self.target_root / folder_name
-            destination = destination_dir / f"{folder_name}{ordered_video.path.suffix}"
-            plan.append(
-                VideoMovePlan(
-                    folder_name=folder_name,
-                    source=ordered_video.path,
-                    destination=destination,
-                )
-            )
+            destination_path = destination_dir / f"{folder_name}{source_path.suffix}"
+            plan.append((folder_name, source_path, destination_path))
 
-        destination_paths = [item.destination for item in plan]
+        destination_paths = [destination_path for _, _, destination_path in plan]
         if len(set(destination_paths)) != len(destination_paths):
             raise ValueError("重命名目标中出现重复文件名")
 
-        source_paths = {item.source for item in plan}
-        for item in plan:
-            if item.destination.exists() and item.destination not in source_paths:
-                raise FileExistsError(f"目标文件已存在，无法覆盖: {item.destination}")
+        source_paths = {source_path for _, source_path, _ in plan}
+        for _, _, destination_path in plan:
+            if destination_path.exists() and destination_path not in source_paths:
+                raise FileExistsError(f"目标文件已存在，无法覆盖: {destination_path}")
 
         return plan
 
     def run(self):
         plan = self._build_rename_plan()
         temp_plan: list[tuple[Path, Path]] = []
-        completed_plan: list[tuple[VideoMovePlan, Path]] = []
+        completed_plan: list[tuple[str, Path, Path]] = []
 
-        for index, item in enumerate(plan):
-            source = item.source
-            temp_path = source.with_name(f".__rename_tmp__{index}{source.suffix}")
+        for index, (_folder_name, source_path, _destination_path) in enumerate(plan):
+            temp_path = source_path.with_name(f".__rename_tmp__{index}{source_path.suffix}")
             if temp_path.exists():
                 raise FileExistsError(f"临时文件已存在，请先清理: {temp_path}")
-            source.rename(temp_path)
-            temp_plan.append((temp_path, source))
+            source_path.rename(temp_path)
+            temp_plan.append((temp_path, source_path))
 
         try:
-            for (temp_path, original_path), item in zip(temp_plan, plan):
-                temp_path.rename(item.destination)
-                completed_plan.append((item, original_path))
+            for (temp_path, original_path), (folder_name, _source_path, destination_path) in zip(
+                temp_plan,
+                plan,
+            ):
+                temp_path.rename(destination_path)
+                completed_plan.append((folder_name, destination_path, original_path))
                 self.status_manager.mark_step_done(
-                    item.folder_name,
+                    folder_name,
                     "video_matched",
-                    detail={"video_path": str(item.destination)},
+                    detail={"video_path": str(destination_path)},
                 )
-                print(f"[完成] {original_path.name} -> {item.destination}")
+                print(f"[完成] {original_path.name} -> {destination_path}")
         except Exception:
-            for item, original_path in reversed(completed_plan):
-                if item.destination.exists():
-                    item.destination.rename(original_path)
+            for folder_name, destination_path, original_path in reversed(completed_plan):
+                if destination_path.exists():
+                    destination_path.rename(original_path)
                     self.status_manager.mark_step_pending(
-                        item.folder_name,
+                        folder_name,
                         "video_matched",
                         detail={"error": "视频移动过程中发生异常，已回滚"},
                     )
@@ -205,29 +183,11 @@ class VideoPackageRenamer:
         print()
         print(f"处理完成：共重命名 {len(plan)} 个视频")
 
-    @classmethod
-    def from_config(cls, config_path: Path | None = None) -> "VideoPackageRenamer":
-        config = load_check_data_config(config_path)
-        return cls(target_root=config["target_root"])
-
-    @classmethod
-    def from_config_or_default(
-        cls,
-        config_path: Path | None = None,
-    ) -> "VideoPackageRenamer":
-        try:
-            return cls.from_config(config_path)
-        except CheckDataConfigError as e:
-            fallback_path = config_path or CONFIG_PATH
-            print(
-                f"\033[31m[error] {fallback_path} 读取失败，改用默认参数: {e} "
-                f"config.json参数配置不合法\033[0m"
-            )
-            return cls()
-
-
 def main():
-    renamer = VideoPackageRenamer.from_config_or_default()
+    renamer = build_from_check_data_config_or_default(
+        lambda **config: VideoPackageRenamer(target_root=config["target_root"]),
+        default_builder=VideoPackageRenamer,
+    )
     renamer.run()
 
 
