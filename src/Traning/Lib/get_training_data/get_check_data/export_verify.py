@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sys
 from typing import List, Tuple
+
+if __package__ is None or __package__ == "":
+    sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
 from Traning.Lib.data_class_manager.data_type_group import Circle, Slider, Spinner
 from Traning.Lib.data_class_manager.data_osu_original import OsuOriginalTimingPoint
 from Traning.Lib.traning_package_manager.order_walker import OrderFolderWalker
 from Traning.Lib.traning_package_manager.files_manager import BeatmapFolderStore
+
+DEFAULT_REPO_ROOT = Path(__file__).resolve().parents[5]
+DEFAULT_TARGET_ROOT = DEFAULT_REPO_ROOT / "training_package" / "match-completed_package"
 
 
 class VerifyExporter:
@@ -15,13 +22,11 @@ class VerifyExporter:
         walker: OrderFolderWalker,
         store: BeatmapFolderStore,
         verify_filename: str = "verify.txt",
-        difficulty_filename: str = "difficulty.txt",
         failed_filename: str = "verify_failed.txt",
     ):
         self.walker = walker
         self.store = store
         self.verify_filename = verify_filename
-        self.difficulty_filename = difficulty_filename
         self.failed_filename = failed_filename
 
         self.success_count = 0
@@ -198,11 +203,6 @@ class VerifyExporter:
 
         return lines
 
-    def _extract_difficulty_value(self, difficulty: dict[str, str]) -> float:
-        if "OverallDifficulty" not in difficulty:
-            raise ValueError("缺少 OverallDifficulty")
-        return float(difficulty["OverallDifficulty"])
-
     def export_one(self, folder_name: str, overwrite: bool = False) -> str:
         if not self.store.folder_exists(folder_name):
             self.skip_count += 1
@@ -219,7 +219,7 @@ class VerifyExporter:
         general = self._parse_key_value_section(sections.get("General", []))
         difficulty = self._parse_key_value_section(sections.get("Difficulty", []))
         hitobjects = sections.get("HitObjects", [])
-        timing_lines = sections.get("OsuOriginalTimingPoints", [])
+        timing_lines = sections.get("TimingPoints", [])
 
         mode = int(general.get("Mode", "0"))
         if mode != 0:
@@ -228,13 +228,11 @@ class VerifyExporter:
         if "SliderMultiplier" not in difficulty:
             raise ValueError(f"{osu_path} 缺少 SliderMultiplier")
         if not timing_lines:
-            raise ValueError(f"{osu_path} 缺少 OsuOriginalTimingPoints")
+            raise ValueError(f"{osu_path} 缺少 TimingPoints")
         if not hitobjects:
             raise ValueError(f"{osu_path} 缺少 HitObjects")
 
         slider_multiplier = float(difficulty["SliderMultiplier"])
-        difficulty_value = self._extract_difficulty_value(difficulty)
-
         timing_points = self._parse_timing_points(timing_lines)
         objects = self._parse_hitobjects(hitobjects, timing_points, slider_multiplier)
         verify_lines = self._objects_to_lines(objects)
@@ -248,14 +246,7 @@ class VerifyExporter:
             mode=write_mode,
         )
 
-        difficulty_result = self.store.write_text(
-            folder_name=folder_name,
-            filename=self.difficulty_filename,
-            content=f"{difficulty_value}\n",
-            mode=write_mode,
-        )
-
-        if verify_result == "skipped" and difficulty_result == "skipped":
+        if verify_result == "skipped":
             self.skip_count += 1
             return "skip"
 
@@ -290,7 +281,7 @@ class VerifyExporter:
 
 
 def main():
-    target_root = "/home/dev/workspace/training_package/match-completed_package"
+    target_root = str(DEFAULT_TARGET_ROOT)
 
     walker = OrderFolderWalker(target_root=target_root, order_filename="order.txt")
     store = BeatmapFolderStore(target_root=target_root, order_filename="order.txt")
@@ -299,7 +290,6 @@ def main():
         walker=walker,
         store=store,
         verify_filename="verify.txt",
-        difficulty_filename="difficulty.txt",
         failed_filename="verify_failed.txt",
     )
 

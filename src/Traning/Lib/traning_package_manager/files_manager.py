@@ -113,7 +113,7 @@ class BeatmapFolderStore:
         if mode == "skip_if_exists" and file_path.exists():
             return "skipped"
 
-        if mode == "overwrite":
+        if mode == "overwrite" or mode == "skip_if_exists":
             file_path.write_text(content, encoding="utf-8")
             return "written"
 

@@ -3,10 +3,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 import shutil
+import sys
 import tempfile
 import zipfile
 
+if __package__ is None or __package__ == "":
+    sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
+
 from Traning.Lib.traning_package_manager.package_update import PackageUpdater
+
+DEFAULT_REPO_ROOT = Path(__file__).resolve().parents[5]
+DEFAULT_EXPORT_DIR = DEFAULT_REPO_ROOT / "osu-lazer" / "exports"
+DEFAULT_TARGET_ROOT = DEFAULT_REPO_ROOT / "training_package" / "match-completed_package"
 
 
 @dataclass
@@ -28,8 +36,8 @@ class OsuOszProcessor:
 
     def __init__(
         self,
-        export_dir: str = "/home/dev/workspace/osu-lazer/exports",
-        target_root: str = "/home/dev/workspace/training_package/match-completed_package",
+        export_dir: str = str(DEFAULT_EXPORT_DIR),
+        target_root: str = str(DEFAULT_TARGET_ROOT),
         keyword: str = "normal",
     ):
         self.export_dir = Path(export_dir)
@@ -173,8 +181,8 @@ class OsuOszProcessor:
 
 def main():
     processor = OsuOszProcessor(
-        export_dir="/home/dev/workspace/osu-lazer/exports",
-        target_root="/home/dev/workspace/training_package/match-completed_package",
+        export_dir=str(DEFAULT_EXPORT_DIR),
+        target_root=str(DEFAULT_TARGET_ROOT),
         keyword="normal",
     )
     processor.run()
