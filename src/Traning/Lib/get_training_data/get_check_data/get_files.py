@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-import shutil
 import sys
 import tempfile
 import zipfile
@@ -11,16 +10,21 @@ if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
 from Traning.Lib.get_training_data.config_loader import (
-    build_from_check_data_config_or_default,
+    build_from_get_check_data_config_or_default,
 )
 from Traning.Lib.traning_package_manager.package_update import PackageUpdater
-from Traning.Lib.traning_package_manager.process_status_manager import (
+from Traning.Lib.get_training_data.process_status_manager import (
     ProcessStatusManager,
 )
 
 DEFAULT_REPO_ROOT = Path(__file__).resolve().parents[5]
 DEFAULT_EXPORT_DIR = DEFAULT_REPO_ROOT / "osu-lazer" / "exports"
 DEFAULT_TARGET_ROOT = DEFAULT_REPO_ROOT / "training_package" / "match-completed_package"
+DEFAULT_KEYWORD = "normal"
+DEFAULT_ORDER_FILENAME = "order.txt"
+DEFAULT_AUDIO_FILENAME = "audio.mp3"
+
+# 默认值保留在当前文件；config.json 里的合法参数只用于覆盖这些默认值。
 
 
 @dataclass
@@ -29,6 +33,8 @@ class OsuEntry:
     osu_base_name: str
     osu_filename: str
     osu_bytes: bytes
+    audio_source_filename: str
+    audio_bytes: bytes
     sort_key: tuple[int, str]
 
 
@@ -44,17 +50,22 @@ class OsuOszProcessor:
         self,
         export_dir: str = str(DEFAULT_EXPORT_DIR),
         target_root: str = str(DEFAULT_TARGET_ROOT),
-        keyword: str = "normal",
+        keyword: str = DEFAULT_KEYWORD,
+        order_filename: str = DEFAULT_ORDER_FILENAME,
+        audio_filename: str = DEFAULT_AUDIO_FILENAME,
     ):
         self.export_dir = Path(export_dir)
+        self.target_root = Path(target_root)
         self.keyword = keyword.lower()
+        self.order_filename = order_filename
+        self.audio_filename = audio_filename
         self.updater = PackageUpdater(
-            target_root=target_root,
-            order_filename="order.txt",
+            target_root=str(self.target_root),
+            order_filename=self.order_filename,
         )
         self.status_manager = ProcessStatusManager(
-            target_root=target_root,
-            order_filename="order.txt",
+            target_root=str(self.target_root),
+            order_filename=self.order_filename,
         )
 
         self.success_count = 0
@@ -67,6 +78,47 @@ class OsuOszProcessor:
             and path.suffix.lower() == ".osu"
             and self.keyword in path.name.lower()
         )
+
+    def _extract_audio_filename(self, osu_path: Path) -> str:
+        in_general_section = False
+
+        with osu_path.open("r", encoding="utf-8-sig") as f:
+            for raw_line in f:
+                line = raw_line.strip()
+
+                if not line or line.startswith("//"):
+                    continue
+
+                if line.startswith("[") and line.endswith("]"):
+                    in_general_section = (line == "[General]")
+                    continue
+
+                if not in_general_section or ":" not in line:
+                    continue
+
+                key, value = line.split(":", 1)
+                if key.strip() == "AudioFilename":
+                    audio_filename = value.strip()
+                    if not audio_filename:
+                        raise ValueError(f"{osu_path} 的 AudioFilename 为空")
+                    return audio_filename
+
+        raise ValueError(f"{osu_path} 缺少 AudioFilename")
+
+    def _read_audio_bytes(self, osu_path: Path) -> tuple[str, bytes]:
+        audio_filename = self._extract_audio_filename(osu_path)
+        audio_path = (osu_path.parent / audio_filename).resolve()
+
+        if not audio_path.is_file():
+            raise FileNotFoundError(f"{osu_path} 对应音频不存在: {audio_filename}")
+
+        if audio_path.suffix.lower() != ".mp3":
+            raise ValueError(
+                f"{osu_path} 对应音频不是 mp3，当前仅支持导出为 {self.audio_filename}: "
+                f"{audio_filename}"
+            )
+
+        return audio_path.name, audio_path.read_bytes()
 
     def _scan_single_osz(self, osz_path: Path) -> OsuEntry | None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -84,12 +136,15 @@ class OsuOszProcessor:
                 return None
 
             chosen_osu = matched_osu_files[0]
+            audio_source_filename, audio_bytes = self._read_audio_bytes(chosen_osu)
 
             return OsuEntry(
                 osz_path=osz_path,
                 osu_base_name=chosen_osu.stem,
                 osu_filename=chosen_osu.name,
                 osu_bytes=chosen_osu.read_bytes(),
+                audio_source_filename=audio_source_filename,
+                audio_bytes=audio_bytes,
                 sort_key=(osz_path.stat().st_mtime_ns, osz_path.name.lower()),
             )
 
@@ -132,7 +187,10 @@ class OsuOszProcessor:
             seen_names.add(entry.osu_base_name)
             entries.append(entry)
 
-            print(f"[登记候选] {osz_path.name} -> {entry.osu_base_name}")
+            print(
+                f"[登记候选] {osz_path.name} -> {entry.osu_base_name} "
+                f"(audio: {entry.audio_source_filename})"
+            )
 
         entries.sort(key=lambda e: e.sort_key)
         return entries
@@ -155,18 +213,31 @@ class OsuOszProcessor:
                 )
 
             dest_dir = self.updater.create_folder_if_registered(entry.osu_base_name)
-            dest_file = dest_dir / entry.osu_filename
+            dest_osu_file = dest_dir / entry.osu_filename
+            dest_audio_file = dest_dir / self.audio_filename
 
             # 这里用覆盖写入，保证当前包内容严格对应当前重建后的顺序结果
-            dest_file.write_bytes(entry.osu_bytes)
+            dest_osu_file.write_bytes(entry.osu_bytes)
+            dest_audio_file.write_bytes(entry.audio_bytes)
+
             self.status_manager.ensure_status_file(entry.osu_base_name)
             self.status_manager.mark_step_done(
                 entry.osu_base_name,
                 "osu_imported",
                 detail={"osu_filename": entry.osu_filename},
             )
+            self.status_manager.mark_step_done(
+                entry.osu_base_name,
+                "audio_imported",
+                detail={
+                    "source_audio_filename": entry.audio_source_filename,
+                    "saved_audio_filename": self.audio_filename,
+                },
+            )
 
-            print(f"[完成] {entry.osz_path.name} -> {dest_file}")
+            print(
+                f"[完成] {entry.osz_path.name} -> {dest_osu_file} + {dest_audio_file.name}"
+            )
             self.success_count += 1
 
     def run(self):
@@ -195,7 +266,10 @@ class OsuOszProcessor:
         print(f"记录文件：{self.updater.order_file}")
 
 def main():
-    processor = build_from_check_data_config_or_default(OsuOszProcessor)
+    processor = build_from_get_check_data_config_or_default(
+        OsuOszProcessor,
+        default_builder=OsuOszProcessor,
+    )
     processor.run()
 
 

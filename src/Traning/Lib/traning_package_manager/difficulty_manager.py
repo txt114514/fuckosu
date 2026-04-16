@@ -9,7 +9,7 @@ from Traning.Lib.traning_package_manager.files_manager import (
     WriteMode,
 )
 from Traning.Lib.traning_package_manager.order_walker import OrderFolderWalker
-from Traning.Lib.traning_package_manager.process_status_manager import (
+from Traning.Lib.get_training_data.process_status_manager import (
     ProcessStatusManager,
 )
 

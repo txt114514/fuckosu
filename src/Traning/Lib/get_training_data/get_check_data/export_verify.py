@@ -7,25 +7,33 @@ from typing import List, Tuple
 if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
+from Traning.Lib.get_training_data.config_loader import (
+    build_from_get_check_data_config_or_default,
+)
 from Traning.Lib.data_class_manager.data_type_group import Circle, Slider, Spinner
 from Traning.Lib.data_class_manager.data_osu_original import OsuOriginalTimingPoint
 from Traning.Lib.traning_package_manager.order_walker import OrderFolderWalker
 from Traning.Lib.traning_package_manager.files_manager import BeatmapFolderStore
-from Traning.Lib.traning_package_manager.process_status_manager import (
+from Traning.Lib.get_training_data.process_status_manager import (
     ProcessStatusManager,
 )
 
+
 DEFAULT_REPO_ROOT = Path(__file__).resolve().parents[5]
 DEFAULT_TARGET_ROOT = DEFAULT_REPO_ROOT / "training_package" / "match-completed_package"
+DEFAULT_ORDER_FILENAME = "order.txt"
+DEFAULT_VERIFY_FILENAME = "verify.txt"
+DEFAULT_VERIFY_FAILED_FILENAME = "verify_failed.txt"
 
+# 默认值保留在当前文件；config.json 里的合法参数只用于覆盖这些默认值。
 
 class VerifyExporter:
     def __init__(
         self,
         walker: OrderFolderWalker,
         store: BeatmapFolderStore,
-        verify_filename: str = "verify.txt",
-        failed_filename: str = "verify_failed.txt",
+        verify_filename: str = DEFAULT_VERIFY_FILENAME,
+        failed_filename: str = DEFAULT_VERIFY_FAILED_FILENAME,
         status_manager: ProcessStatusManager | None = None,
     ):
         self.walker = walker
@@ -315,19 +323,27 @@ class VerifyExporter:
         print(f"失败名单：{failed_path}")
 
 
-def main():
-    target_root = str(DEFAULT_TARGET_ROOT)
-
-    walker = OrderFolderWalker(target_root=target_root, order_filename="order.txt")
-    store = BeatmapFolderStore(target_root=target_root, order_filename="order.txt")
-
-    exporter = VerifyExporter(
+def _build_verify_exporter_from_config(
+    target_root: str = str(DEFAULT_TARGET_ROOT),
+    order_filename: str = DEFAULT_ORDER_FILENAME,
+    verify_filename: str = DEFAULT_VERIFY_FILENAME,
+    verify_failed_filename: str = DEFAULT_VERIFY_FAILED_FILENAME,
+) -> VerifyExporter:
+    walker = OrderFolderWalker(target_root=target_root, order_filename=order_filename)
+    store = BeatmapFolderStore(target_root=target_root, order_filename=order_filename)
+    return VerifyExporter(
         walker=walker,
         store=store,
-        verify_filename="verify.txt",
-        failed_filename="verify_failed.txt",
+        verify_filename=verify_filename,
+        failed_filename=verify_failed_filename,
     )
 
+
+def main():
+    exporter = build_from_get_check_data_config_or_default(
+        _build_verify_exporter_from_config,
+        default_builder=_build_verify_exporter_from_config,
+    )
     exporter.run(overwrite=False)
 
 

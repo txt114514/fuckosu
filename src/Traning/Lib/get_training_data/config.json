@@ -1,7 +1,75 @@
 {
+    "_comment": "整个训练数据流程的配置。为了保持标准 JSON 合法性，这里使用 _comment 字段代替 // 注释。",
     "check_data": {
+        "_comment": "基础路径和主流程步骤配置。",
         "export_dir": "../../../../osu-lazer/exports",
         "target_root": "../../../../training_package/match-completed_package",
-        "keyword": "normal"
+        "keyword": "normal",
+        "process_steps": [
+            "osu_imported",
+            "audio_imported",
+            "verify_exported",
+            "difficulty_exported",
+            "video_matched",
+            "av_corresponded",
+            "video_processed"
+        ],
+        "_comment_export_dir": ".osz 导出目录。",
+        "_comment_target_root": "训练数据输出目录，所有谱面文件夹都在这里生成。",
+        "_comment_keyword": "选择 .osu 时匹配的关键字，例如 normal / hard。",
+        "_comment_process_steps": "整个流程的步骤顺序，process_status.json 会按这里的步骤生成。"
+    },
+    "get_check_data": {
+        "_comment": "只给 get_check_data 文件夹下模块使用的文件名参数。",
+        "order_filename": "order.txt",
+        "verify_filename": "verify.txt",
+        "difficulty_filename": "difficulty.txt",
+        "verify_failed_filename": "verify_failed.txt",
+        "difficulty_failed_filename": "difficulty_failed.txt",
+        "_comment_order_filename": "谱面目录顺序登记文件名。",
+        "_comment_verify_filename": "导出的命中对象验证文件名。",
+        "_comment_difficulty_filename": "导出的难度文件名。",
+        "_comment_verify_failed_filename": "verify 导出失败报告文件名。",
+        "_comment_difficulty_failed_filename": "difficulty 导出失败报告文件名。"
+    },
+    "video_shared": {
+        "_comment": "多个视频相关模块共用的参数。",
+        "video_suffixes": [
+            ".mp4",
+            ".webm",
+            ".mkv",
+            ".avi",
+            ".mov"
+        ],
+        "audio_filename": "audio.mp3",
+        "output_filename": "video_processed.mp4",
+        "status_step": "av_corresponded",
+        "_comment_video_suffixes": "允许识别的视频后缀。",
+        "_comment_audio_filename": "谱面目录内的标准音频文件名，也会被 get_check_data/get_files.py 使用。",
+        "_comment_output_filename": "AV 对齐后的标准输出视频文件名。",
+        "_comment_status_step": "AV 对齐步骤在 process_status.json 中对应的状态名。"
+    },
+    "video_match": {
+        "_comment": "只给 read_video.py 使用的参数。",
+        "video_root": "../../../../training_package/video_package",
+        "_comment_video_root": "原始待匹配视频所在目录。"
+    },
+    "av_correspondence": {
+        "_comment": "只给 AV_correspondence.py 使用的参数。",
+        "failed_filename": "av_correspondence_failed.txt",
+        "required_steps": [
+            "audio_imported",
+            "video_matched"
+        ],
+        "sample_rate": 8000,
+        "envelope_hz": 100,
+        "refine_hz": 1000,
+        "refine_search_seconds": 1.5,
+        "_comment_failed_filename": "AV 对齐失败报告文件名，写在 target_root 根目录下。",
+        "_comment_required_steps": "执行 AV 对齐之前，要求先完成的状态步骤。",
+        "_comment_sample_rate": "抽音频和对齐时使用的采样率。",
+        "_comment_envelope_hz": "粗对齐时的特征帧率，越大越精细但越慢。",
+        "_comment_refine_hz": "精对齐时的特征帧率，越大越精细但越慢。",
+        "_comment_refine_search_seconds": "精对齐时围绕粗定位额外搜索的时间窗口（秒）。"
     }
 }

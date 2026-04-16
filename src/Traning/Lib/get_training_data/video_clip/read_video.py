@@ -4,27 +4,30 @@ import re
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Iterable
 
 if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
 from Traning.Lib.get_training_data.config_loader import (
-    build_from_check_data_config_or_default,
+    build_from_video_match_config_or_default,
 )
+from Traning.Lib.get_training_data.process_status_manager import ProcessStatusManager
 from Traning.Lib.traning_package_manager.order_walker import OrderFolderWalker
-from Traning.Lib.traning_package_manager.process_status_manager import (
-    ProcessStatusManager,
-)
 
 DEFAULT_REPO_ROOT = Path(__file__).resolve().parents[5]
-DEFAULT_VIDEO_ROOT = DEFAULT_REPO_ROOT / "training_package" / "video_package"
 DEFAULT_TARGET_ROOT = DEFAULT_REPO_ROOT / "training_package" / "match-completed_package"
+DEFAULT_VIDEO_ROOT = DEFAULT_REPO_ROOT / "training_package" / "video_package"
+DEFAULT_ORDER_FILENAME = "order.txt"
+DEFAULT_VIDEO_SUFFIXES = (".mp4", ".webm", ".mkv", ".avi", ".mov")
 
+# 默认值保留在当前文件；config.json 里的合法参数只用于覆盖这些默认值。
+
+# 视频文件名规则仍然固定在代码里，便于保持严格格式校验。
 VIDEO_TIME_PATTERN = re.compile(
-    r"(?P<year>\d{4})年(?P<month>\d{2})月(?P<day>\d{2})日\s+"
-    r"(?P<hour>\d{2})时(?P<minute>\d{2})分(?P<second>\d{2})秒"
+    r"^osu_(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})_"
+    r"(?P<hour>\d{2})-(?P<minute>\d{2})-(?P<second>\d{2})$"
 )
-VIDEO_SUFFIXES = {".mp4", ".webm", ".mkv", ".avi", ".mov"}
 
 
 class VideoPackageRenamer:
@@ -32,12 +35,14 @@ class VideoPackageRenamer:
         self,
         video_root: str = str(DEFAULT_VIDEO_ROOT),
         target_root: str = str(DEFAULT_TARGET_ROOT),
-        order_filename: str = "order.txt",
+        order_filename: str = DEFAULT_ORDER_FILENAME,
+        video_suffixes: Iterable[str] = DEFAULT_VIDEO_SUFFIXES,
         status_manager: ProcessStatusManager | None = None,
     ):
         self.video_root = Path(video_root)
         self.target_root = Path(target_root)
         self.order_filename = order_filename
+        self.video_suffixes = {suffix.lower() for suffix in video_suffixes}
         self.walker = OrderFolderWalker(
             target_root=str(self.target_root),
             order_filename=self.order_filename,
@@ -49,14 +54,17 @@ class VideoPackageRenamer:
 
     def _folder_has_video(self, folder_path: Path) -> bool:
         return any(
-            child.is_file() and child.suffix.lower() in VIDEO_SUFFIXES
+            child.is_file() and child.suffix.lower() in self.video_suffixes
             for child in folder_path.iterdir()
         )
 
     def _parse_video_time(self, path: Path) -> datetime:
-        match = VIDEO_TIME_PATTERN.search(path.name)
+        match = VIDEO_TIME_PATTERN.fullmatch(path.stem)
         if match is None:
-            raise ValueError(f"视频文件名中缺少可识别时间: {path.name}")
+            raise ValueError(
+                "视频文件名格式非法，必须严格使用: osu_YYYY-MM-DD_HH-MM-SS，例如 "
+                f"osu_2026-04-16_19-54-54{path.suffix or '.mkv'}；当前文件: {path.name}"
+            )
 
         return datetime(
             year=int(match.group("year")),
@@ -74,7 +82,7 @@ class VideoPackageRenamer:
         video_files = [
             path
             for path in self.video_root.iterdir()
-            if path.is_file() and path.suffix.lower() in VIDEO_SUFFIXES
+            if path.is_file() and path.suffix.lower() in self.video_suffixes
         ]
         if not video_files:
             raise ValueError(f"{self.video_root} 中没有可重命名的视频文件")
@@ -183,9 +191,10 @@ class VideoPackageRenamer:
         print()
         print(f"处理完成：共重命名 {len(plan)} 个视频")
 
+
 def main():
-    renamer = build_from_check_data_config_or_default(
-        lambda **config: VideoPackageRenamer(target_root=config["target_root"]),
+    renamer = build_from_video_match_config_or_default(
+        VideoPackageRenamer,
         default_builder=VideoPackageRenamer,
     )
     renamer.run()

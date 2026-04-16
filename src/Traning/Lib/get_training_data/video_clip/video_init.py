@@ -2,32 +2,41 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Iterable
 
 if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
 from Traning.Lib.get_training_data.config_loader import (
-    build_from_check_data_config_or_default,
+    build_from_video_shared_config_or_default,
 )
+from Traning.Lib.get_training_data.process_status_manager import ProcessStatusManager
 from Traning.Lib.traning_package_manager.order_walker import OrderFolderWalker
-from Traning.Lib.traning_package_manager.process_status_manager import (
-    PROCESS_STEPS,
-    ProcessStatusManager,
-)
+
 
 DEFAULT_REPO_ROOT = Path(__file__).resolve().parents[5]
 DEFAULT_TARGET_ROOT = DEFAULT_REPO_ROOT / "training_package" / "match-completed_package"
-VIDEO_SUFFIXES = {".mp4", ".webm", ".mkv", ".avi", ".mov"}
+DEFAULT_ORDER_FILENAME = "order.txt"
+DEFAULT_VIDEO_SUFFIXES = (".mp4", ".webm", ".mkv", ".avi", ".mov")
+DEFAULT_OUTPUT_FILENAME = "video_processed.mp4"
+DEFAULT_STATUS_STEP = "av_corresponded"
 
+# 默认值保留在当前文件；config.json 里的合法参数只用于覆盖这些默认值。
 
 class VideoInitChecker:
     def __init__(
         self,
         target_root: str = str(DEFAULT_TARGET_ROOT),
-        order_filename: str = "order.txt",
+        order_filename: str = DEFAULT_ORDER_FILENAME,
+        video_suffixes: Iterable[str] = DEFAULT_VIDEO_SUFFIXES,
+        output_filename: str = DEFAULT_OUTPUT_FILENAME,
+        status_step: str = DEFAULT_STATUS_STEP,
     ):
         self.target_root = Path(target_root)
         self.order_filename = order_filename
+        self.video_suffixes = {suffix.lower() for suffix in video_suffixes}
+        self.output_filename = output_filename
+        self.status_step = status_step
         self.status_manager = ProcessStatusManager(
             target_root=str(self.target_root),
             order_filename=self.order_filename,
@@ -35,7 +44,7 @@ class VideoInitChecker:
 
     def _folder_has_video(self, folder_path: Path) -> bool:
         return any(
-            child.is_file() and child.suffix.lower() in VIDEO_SUFFIXES
+            child.is_file() and child.suffix.lower() in self.video_suffixes
             for child in folder_path.iterdir()
         )
 
@@ -78,15 +87,42 @@ class VideoInitChecker:
                 detail={"error": "状态显示已匹配视频，但文件夹中未找到视频文件"},
             )
 
+    def _sync_av_corresponded_status(self, folder_name: str, folder_path: Path):
+        if self.status_step not in self.status_manager.process_steps:
+            return
+
+        output_path = folder_path / self.output_filename
+        output_exists = output_path.is_file()
+        is_done = self.status_manager.is_step_done(folder_name, self.status_step)
+
+        if output_exists and not is_done:
+            self.status_manager.mark_step_done(
+                folder_name,
+                self.status_step,
+                detail={
+                    "stage": "auto_synced",
+                    "output_video_path": str(output_path),
+                },
+            )
+            return
+
+        if not output_exists and is_done:
+            self.status_manager.mark_step_pending(
+                folder_name,
+                self.status_step,
+                detail={"error": "状态显示已完成 AV 对齐，但未找到输出视频"},
+            )
+
     def run(self):
         folder_items = self._folder_items()
         folders_with_video = 0
         folders_without_video = 0
-        status_counts = {step: 0 for step in PROCESS_STEPS}
+        status_counts = {step: 0 for step in self.status_manager.process_steps}
 
         for folder_name, folder_path in folder_items:
             self.status_manager.ensure_status_file(folder_name)
             self._sync_video_matched_status(folder_name, folder_path)
+            self._sync_av_corresponded_status(folder_name, folder_path)
 
             if self._folder_has_video(folder_path):
                 folders_with_video += 1
@@ -101,12 +137,13 @@ class VideoInitChecker:
         print(f"[完成] 文件夹检查通过，共 {len(folder_items)} 个")
         print(f"[完成] 已有视频文件夹 {folders_with_video} 个")
         print(f"[完成] 待处理无视频文件夹 {folders_without_video} 个")
-        for step in PROCESS_STEPS:
+        for step in self.status_manager.process_steps:
             print(f"[完成] 状态 {step} 已完成 {status_counts[step]} 个")
 
+
 def main():
-    checker = build_from_check_data_config_or_default(
-        lambda **config: VideoInitChecker(target_root=config["target_root"]),
+    checker = build_from_video_shared_config_or_default(
+        VideoInitChecker,
         default_builder=VideoInitChecker,
     )
     checker.run()
