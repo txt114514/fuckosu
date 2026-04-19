@@ -2,13 +2,20 @@ from __future__ import annotations
 
 from pathlib import Path
 import sys
-from typing import List, Tuple
+from typing import List
 
 if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
+from Traning.Lib.function_tools.functions_process_tool import (
+    BatchProcessResult,
+    FolderBatchProcessor,
+    read_config_values,
+)
 from Traning.Lib.get_training_data.config_loader import (
-    build_from_get_check_data_config_or_default,
+    build_from_config_or_default,
+    ConfigReader,
+    VERIFY_EXPORTER_CONFIG_SPECS,
 )
 from Traning.Lib.data_class_manager.data_type_group import Circle, Slider, Spinner
 from Traning.Lib.data_class_manager.data_osu_original import OsuOriginalTimingPoint
@@ -27,7 +34,12 @@ DEFAULT_VERIFY_FAILED_FILENAME = "verify_failed.txt"
 
 # 默认值保留在当前文件；config.json 里的合法参数只用于覆盖这些默认值。
 
-class VerifyExporter:
+
+def _load_verify_exporter_config(config: ConfigReader) -> dict[str, object]:
+    # verify 导出只读取目标目录、order 文件名和 verify 输出/失败文件名。
+    return read_config_values(config, VERIFY_EXPORTER_CONFIG_SPECS)
+
+class VerifyExporter(FolderBatchProcessor):
     def __init__(
         self,
         walker: OrderFolderWalker,
@@ -39,16 +51,11 @@ class VerifyExporter:
         self.walker = walker
         self.store = store
         self.verify_filename = verify_filename
-        self.failed_filename = failed_filename
+        super().__init__(failed_filename)
         self.status_manager = status_manager or ProcessStatusManager(
             target_root=str(store.target_root),
             order_filename=store.order_filename,
         )
-
-        self.success_count = 0
-        self.skip_count = 0
-        self.fail_count = 0
-        self.failed_cases: List[Tuple[str, str]] = []
 
     def _parse_sections(self, osu_path: Path) -> tuple[str | None, dict[str, list[str]]]:
         version = None
@@ -219,21 +226,22 @@ class VerifyExporter:
 
         return lines
 
-    def export_one(self, folder_name: str, overwrite: bool = False) -> str:
+    def process_one(
+        self,
+        folder_name: str,
+        overwrite: bool = False,
+    ) -> BatchProcessResult:
         if not self.store.folder_exists(folder_name):
-            self.skip_count += 1
             return "skip"
 
         self.status_manager.ensure_status_file(folder_name)
         verify_exists = self.store.file_exists(folder_name, self.verify_filename)
         verify_done = self.status_manager.is_step_done(folder_name, "verify_exported")
         if not overwrite and verify_exists and verify_done:
-            self.skip_count += 1
             return "skip"
 
         osu_files = self.store.find_osu_files(folder_name)
         if not osu_files:
-            self.skip_count += 1
             return "skip"
 
         osu_path = osu_files[0]
@@ -276,9 +284,7 @@ class VerifyExporter:
                 detail={"filename": self.verify_filename},
             )
             if not verify_done:
-                self.success_count += 1
                 return "success"
-            self.skip_count += 1
             return "skip"
 
         self.status_manager.mark_step_done(
@@ -286,41 +292,16 @@ class VerifyExporter:
             "verify_exported",
             detail={"filename": self.verify_filename},
         )
-        self.success_count += 1
         return "success"
 
-    def run(self, overwrite: bool = False):
-        folder_names = self.walker.read_folder_names()
-
-        for folder_name in folder_names:
-            try:
-                result = self.export_one(folder_name, overwrite=overwrite)
-                if result == "success":
-                    print(f"[完成] {folder_name}")
-                else:
-                    print(f"[跳过] {folder_name}")
-            except Exception as e:
-                self.fail_count += 1
-                self.failed_cases.append((folder_name, str(e)))
-                if self.store.folder_exists(folder_name):
-                    self.status_manager.ensure_status_file(folder_name)
-                    self.status_manager.mark_step_pending(
-                        folder_name,
-                        "verify_exported",
-                        detail={"error": str(e)},
-                    )
-                print(f"[失败] {folder_name}: {e}")
-
-        failed_path = self.store.write_failed_report(
-            self.failed_cases,
-            failed_filename=self.failed_filename,
-        )
-
-        print()
-        print(
-            f"处理完成：成功 {self.success_count} 个，跳过 {self.skip_count} 个，失败 {self.fail_count} 个"
-        )
-        print(f"失败名单：{failed_path}")
+    def handle_failure(self, folder_name: str, error: Exception):
+        if self.store.folder_exists(folder_name):
+            self.status_manager.ensure_status_file(folder_name)
+            self.status_manager.mark_step_pending(
+                folder_name,
+                "verify_exported",
+                detail={"error": str(error)},
+            )
 
 
 def _build_verify_exporter_from_config(
@@ -339,11 +320,19 @@ def _build_verify_exporter_from_config(
     )
 
 
-def main():
-    exporter = build_from_get_check_data_config_or_default(
+def build_verify_exporter_from_config_or_default(
+    config_path: Path | None = None,
+) -> VerifyExporter:
+    return build_from_config_or_default(
         _build_verify_exporter_from_config,
+        [_load_verify_exporter_config],
+        config_path=config_path,
         default_builder=_build_verify_exporter_from_config,
     )
+
+
+def main():
+    exporter = build_verify_exporter_from_config_or_default()
     exporter.run(overwrite=False)
 
 

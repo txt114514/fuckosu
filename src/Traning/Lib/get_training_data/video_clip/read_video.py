@@ -9,8 +9,13 @@ from typing import Iterable
 if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
+from Traning.Lib.function_tools.functions_process_tool import (
+    read_config_values,
+)
 from Traning.Lib.get_training_data.config_loader import (
-    build_from_video_match_config_or_default,
+    build_from_config_or_default,
+    ConfigReader,
+    VIDEO_PACKAGE_RENAMER_CONFIG_SPECS,
 )
 from Traning.Lib.get_training_data.process_status_manager import ProcessStatusManager
 from Traning.Lib.traning_package_manager.order_walker import OrderFolderWalker
@@ -28,6 +33,22 @@ VIDEO_TIME_PATTERN = re.compile(
     r"^osu_(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})_"
     r"(?P<hour>\d{2})-(?P<minute>\d{2})-(?P<second>\d{2})$"
 )
+
+
+def _load_video_package_renamer_config(config: ConfigReader) -> dict[str, object]:
+    # video_match 阶段只读取视频源目录、目标目录、order 文件名和允许的视频后缀。
+    return read_config_values(config, VIDEO_PACKAGE_RENAMER_CONFIG_SPECS)
+
+
+def build_video_package_renamer_from_config_or_default(
+    config_path: Path | None = None,
+) -> "VideoPackageRenamer":
+    return build_from_config_or_default(
+        VideoPackageRenamer,
+        [_load_video_package_renamer_config],
+        config_path=config_path,
+        default_builder=VideoPackageRenamer,
+    )
 
 
 class VideoPackageRenamer:
@@ -193,10 +214,7 @@ class VideoPackageRenamer:
 
 
 def main():
-    renamer = build_from_video_match_config_or_default(
-        VideoPackageRenamer,
-        default_builder=VideoPackageRenamer,
-    )
+    renamer = build_video_package_renamer_from_config_or_default()
     renamer.run()
 
 

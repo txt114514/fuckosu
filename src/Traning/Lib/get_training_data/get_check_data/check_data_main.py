@@ -6,8 +6,13 @@ from pathlib import Path
 if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
+from Traning.Lib.function_tools.functions_process_tool import (
+    read_config_values,
+)
 from Traning.Lib.get_training_data.config_loader import (
-    build_from_get_check_data_config_or_default,
+    build_from_config_or_default,
+    CHECK_DATA_PIPELINE_CONFIG_SPECS,
+    ConfigReader,
 )
 from Traning.Lib.get_training_data.get_check_data.export_verify import VerifyExporter
 from Traning.Lib.get_training_data.get_check_data.get_files import OsuOszProcessor
@@ -31,6 +36,22 @@ DEFAULT_VERIFY_FAILED_FILENAME = "verify_failed.txt"
 DEFAULT_DIFFICULTY_FAILED_FILENAME = "difficulty_failed.txt"
 
 # 默认值保留在当前文件；config.json 里的合法参数只用于覆盖这些默认值。
+
+
+def _load_check_data_pipeline_config(config: ConfigReader) -> dict[str, object]:
+    # check_data 主流程只读取导出目录、目标目录、关键字和几个文件名覆盖项。
+    return read_config_values(config, CHECK_DATA_PIPELINE_CONFIG_SPECS)
+
+
+def build_check_data_pipeline_from_config_or_default(
+    config_path: Path | None = None,
+) -> "CheckDataPipeline":
+    return build_from_config_or_default(
+        CheckDataPipeline,
+        [_load_check_data_pipeline_config],
+        config_path=config_path,
+        default_builder=CheckDataPipeline,
+    )
 
 class CheckDataPipeline:
     def __init__(
@@ -120,10 +141,7 @@ class CheckDataPipeline:
 
 
 def main():
-    pipeline = build_from_get_check_data_config_or_default(
-        CheckDataPipeline,
-        default_builder=CheckDataPipeline,
-    )
+    pipeline = build_check_data_pipeline_from_config_or_default()
     pipeline.run(
         overwrite=False,
         run_get_files=True,

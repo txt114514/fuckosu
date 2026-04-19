@@ -1,16 +1,25 @@
 from __future__ import annotations
 
-import json
-import subprocess
 import sys
 from pathlib import Path
-from typing import Iterable, List, Tuple
+from typing import Iterable
 
 if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
+from Traning.Lib.function_tools.functions_process_tool import (
+    BatchProcessResult,
+    FolderBatchProcessor,
+    read_config_values,
+)
+from Traning.Lib.function_tools.video_process_tool import (
+    get_video_size as probe_video_size,
+    run_ffmpeg,
+)
 from Traning.Lib.get_training_data.config_loader import (
-    build_from_clip_config_or_default,
+    CLIP_PROCESSOR_CONFIG_SPECS,
+    ConfigReader,
+    build_from_config_or_default,
 )
 from Traning.Lib.get_training_data.process_status_manager import ProcessStatusManager
 from Traning.Lib.traning_package_manager.files_manager import BeatmapFolderStore
@@ -33,7 +42,24 @@ DEFAULT_CROP_BOTTOM = 1080
 # clip.py 当前使用基于 2048x1152 参考图的裁剪框：(186, 178) -> (1768, 1080)。
 
 
-class FixedRegionVideoCropProcessor:
+def _load_fixed_region_video_crop_processor_config(
+    config: ConfigReader,
+) -> dict[str, object]:
+    # clip 阶段读取输出视频名、状态名、前置步骤和参考裁剪框。
+    return read_config_values(config, CLIP_PROCESSOR_CONFIG_SPECS)
+
+def build_fixed_region_video_crop_processor_from_config_or_default(
+    config_path: Path | None = None,
+) -> "FixedRegionVideoCropProcessor":
+    return build_from_config_or_default(
+        FixedRegionVideoCropProcessor,
+        [_load_fixed_region_video_crop_processor_config],
+        config_path=config_path,
+        default_builder=FixedRegionVideoCropProcessor,
+    )
+
+
+class FixedRegionVideoCropProcessor(FolderBatchProcessor):
     def __init__(
         self,
         target_root: str = str(DEFAULT_TARGET_ROOT),
@@ -68,7 +94,7 @@ class FixedRegionVideoCropProcessor:
         self.target_root = Path(target_root)
         self.order_filename = order_filename
         self.output_filename = output_filename
-        self.failed_filename = failed_filename
+        super().__init__(failed_filename)
         self.status_step = status_step.strip()
         self.required_steps = tuple(step.strip() for step in required_steps if step.strip())
         self.crop_reference_width = crop_reference_width
@@ -91,11 +117,6 @@ class FixedRegionVideoCropProcessor:
 
         self._ensure_status_steps_registered()
 
-        self.success_count = 0
-        self.skip_count = 0
-        self.fail_count = 0
-        self.failed_cases: List[Tuple[str, str]] = []
-
     def _ensure_status_steps_registered(self):
         registered_steps = set(self.status_manager.process_steps)
         required_registered_steps = set(self.required_steps)
@@ -107,50 +128,8 @@ class FixedRegionVideoCropProcessor:
                 f"{', '.join(missing_steps)}"
             )
 
-    def _run_ffmpeg(self, args: list[str]):
-        result = subprocess.run(
-            args,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            error_text = result.stderr.strip() or result.stdout.strip() or "未知 ffmpeg 错误"
-            raise RuntimeError(error_text)
-
-    def _get_video_size(self, video_path: Path) -> tuple[int, int]:
-        result = subprocess.run(
-            [
-                "ffprobe",
-                "-v",
-                "error",
-                "-select_streams",
-                "v:0",
-                "-show_entries",
-                "stream=width,height",
-                "-of",
-                "json",
-                str(video_path),
-            ],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            error_text = result.stderr.strip() or result.stdout.strip() or "未知 ffprobe 错误"
-            raise RuntimeError(f"读取视频尺寸失败: {error_text}")
-
-        payload = json.loads(result.stdout)
-        streams = payload.get("streams", [])
-        if not streams:
-            raise ValueError(f"未找到视频流: {video_path}")
-
-        width = int(streams[0]["width"])
-        height = int(streams[0]["height"])
-        return width, height
-
     def get_video_size(self, video_path: Path) -> tuple[int, int]:
-        return self._get_video_size(video_path)
+        return probe_video_size(video_path)
 
     def _scale_crop_coordinate(
         self,
@@ -218,7 +197,7 @@ class FixedRegionVideoCropProcessor:
         }
 
     def _validate_crop_bounds(self, video_path: Path) -> tuple[int, int, dict[str, int]]:
-        video_width, video_height = self._get_video_size(video_path)
+        video_width, video_height = self.get_video_size(video_path)
         crop_info = self._resolve_scaled_crop(video_width, video_height)
 
         if crop_info["crop_right"] > video_width or crop_info["crop_bottom"] > video_height:
@@ -243,9 +222,8 @@ class FixedRegionVideoCropProcessor:
             raise FileExistsError(f"临时裁剪文件已存在，请先清理: {temp_output_path}")
 
         try:
-            self._run_ffmpeg(
+            run_ffmpeg(
                 [
-                    "ffmpeg",
                     "-y",
                     "-hide_banner",
                     "-loglevel",
@@ -279,15 +257,20 @@ class FixedRegionVideoCropProcessor:
             if temp_output_path.exists():
                 temp_output_path.unlink()
 
-    def process_one(self, folder_name: str, overwrite: bool = False) -> str:
+    def progress_message(self, index: int, total: int, folder_name: str) -> str | None:
+        return f"[进度] {index}/{total} {folder_name}"
+
+    def process_one(
+        self,
+        folder_name: str,
+        overwrite: bool = False,
+    ) -> BatchProcessResult:
         if not self.store.folder_exists(folder_name):
-            self.skip_count += 1
             return "skip"
 
         self.status_manager.ensure_status_file(folder_name)
 
         if not overwrite and self.status_manager.is_step_done(folder_name, self.status_step):
-            self.skip_count += 1
             return "skip"
 
         missing_steps = [
@@ -337,88 +320,29 @@ class FixedRegionVideoCropProcessor:
                 **crop_info,
             },
         )
-        self.success_count += 1
         return "success"
 
-    def run(self, overwrite: bool = False):
-        folder_names = self.walker.read_folder_names()
-
-        for index, folder_name in enumerate(folder_names, start=1):
-            print(f"[进度] {index}/{len(folder_names)} {folder_name}")
-            try:
-                result = self.process_one(folder_name, overwrite=overwrite)
-                if result == "success":
-                    print(f"[完成] {folder_name}")
-                else:
-                    print(f"[跳过] {folder_name}")
-            except Exception as e:
-                self.fail_count += 1
-                self.failed_cases.append((folder_name, str(e)))
-                if self.store.folder_exists(folder_name):
-                    self.status_manager.ensure_status_file(folder_name)
-                    self.status_manager.mark_step_pending(
-                        folder_name,
-                        self.status_step,
-                        detail={
-                            "stage": "failed",
-                            "error": str(e),
-                            "reference_width": self.crop_reference_width,
-                            "reference_height": self.crop_reference_height,
-                            "reference_crop_left": self.crop_left,
-                            "reference_crop_top": self.crop_top,
-                            "reference_crop_right": self.crop_right,
-                            "reference_crop_bottom": self.crop_bottom,
-                        },
-                    )
-                print(f"[失败] {folder_name}: {e}")
-
-        failed_path = self.store.write_failed_report(
-            self.failed_cases,
-            failed_filename=self.failed_filename,
-        )
-
-        print()
-        print(
-            f"处理完成：成功 {self.success_count} 个，跳过 {self.skip_count} 个，失败 {self.fail_count} 个"
-        )
-        print(f"失败名单：{failed_path}")
-
-
-def _build_clip_processor_from_config(
-    target_root: str = str(DEFAULT_TARGET_ROOT),
-    order_filename: str = DEFAULT_ORDER_FILENAME,
-    output_filename: str = DEFAULT_OUTPUT_FILENAME,
-    clip_failed_filename: str = DEFAULT_FAILED_FILENAME,
-    clip_status_step: str = DEFAULT_STATUS_STEP,
-    clip_required_steps: Iterable[str] = DEFAULT_REQUIRED_STEPS,
-    clip_crop_reference_width: int = DEFAULT_CROP_REFERENCE_WIDTH,
-    clip_crop_reference_height: int = DEFAULT_CROP_REFERENCE_HEIGHT,
-    clip_crop_left: int = DEFAULT_CROP_LEFT,
-    clip_crop_top: int = DEFAULT_CROP_TOP,
-    clip_crop_right: int = DEFAULT_CROP_RIGHT,
-    clip_crop_bottom: int = DEFAULT_CROP_BOTTOM,
-) -> FixedRegionVideoCropProcessor:
-    return FixedRegionVideoCropProcessor(
-        target_root=target_root,
-        order_filename=order_filename,
-        output_filename=output_filename,
-        failed_filename=clip_failed_filename,
-        status_step=clip_status_step,
-        required_steps=clip_required_steps,
-        crop_reference_width=clip_crop_reference_width,
-        crop_reference_height=clip_crop_reference_height,
-        crop_left=clip_crop_left,
-        crop_top=clip_crop_top,
-        crop_right=clip_crop_right,
-        crop_bottom=clip_crop_bottom,
-    )
+    def handle_failure(self, folder_name: str, error: Exception):
+        if self.store.folder_exists(folder_name):
+            self.status_manager.ensure_status_file(folder_name)
+            self.status_manager.mark_step_pending(
+                folder_name,
+                self.status_step,
+                detail={
+                    "stage": "failed",
+                    "error": str(error),
+                    "reference_width": self.crop_reference_width,
+                    "reference_height": self.crop_reference_height,
+                    "reference_crop_left": self.crop_left,
+                    "reference_crop_top": self.crop_top,
+                    "reference_crop_right": self.crop_right,
+                    "reference_crop_bottom": self.crop_bottom,
+                },
+            )
 
 
 def main():
-    processor = build_from_clip_config_or_default(
-        _build_clip_processor_from_config,
-        default_builder=_build_clip_processor_from_config,
-    )
+    processor = build_fixed_region_video_crop_processor_from_config_or_default()
     processor.run(overwrite=False)
 
 

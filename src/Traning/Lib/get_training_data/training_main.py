@@ -9,12 +9,12 @@ from time import perf_counter
 if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from Traning.Lib.get_training_data.config_loader import (
-    build_from_get_check_data_config_or_default,
-    build_from_video_clip_config_or_default,
+from Traning.Lib.get_training_data.get_check_data.check_data_main import (
+    build_check_data_pipeline_from_config_or_default,
 )
-from Traning.Lib.get_training_data.get_check_data.check_data_main import CheckDataPipeline
-from Traning.Lib.get_training_data.video_clip.video_clip_main import VideoClipPipeline
+from Traning.Lib.get_training_data.video_clip.video_clip_main import (
+    build_video_clip_pipeline_from_config_or_default,
+)
 
 
 class TemporaryTrainingRunner:
@@ -22,15 +22,11 @@ class TemporaryTrainingRunner:
 
     def __init__(self, config_path: Path | None = None):
         self.config_path = config_path
-        self.check_data_pipeline = build_from_get_check_data_config_or_default(
-            CheckDataPipeline,
+        self.check_data_pipeline = build_check_data_pipeline_from_config_or_default(
             config_path=config_path,
-            default_builder=CheckDataPipeline,
         )
-        self.video_clip_pipeline = build_from_video_clip_config_or_default(
-            VideoClipPipeline,
+        self.video_clip_pipeline = build_video_clip_pipeline_from_config_or_default(
             config_path=config_path,
-            default_builder=VideoClipPipeline,
         )
 
     def _run_stage(self, label: str, stage_func, continue_on_error: bool):

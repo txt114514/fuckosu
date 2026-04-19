@@ -7,8 +7,13 @@ from typing import Iterable
 if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
+from Traning.Lib.function_tools.functions_process_tool import (
+    read_config_values,
+)
 from Traning.Lib.get_training_data.config_loader import (
-    build_from_video_clip_config_or_default,
+    ConfigReader,
+    VIDEO_INIT_CHECKER_CONFIG_SPECS,
+    build_from_config_or_default,
 )
 from Traning.Lib.get_training_data.process_status_manager import ProcessStatusManager
 from Traning.Lib.get_training_data.video_clip.clip import (
@@ -34,6 +39,22 @@ DEFAULT_OUTPUT_FILENAME = "video_processed.mp4"
 DEFAULT_STATUS_STEP = "av_corresponded"
 
 # 默认值保留在当前文件；config.json 里的合法参数只用于覆盖这些默认值。
+
+
+def _load_video_init_checker_config(config: ConfigReader) -> dict[str, object]:
+    # video_init 同时校验视频匹配状态、AV 输出状态，以及 clip 参考裁剪信息。
+    return read_config_values(config, VIDEO_INIT_CHECKER_CONFIG_SPECS)
+
+
+def build_video_init_checker_from_config_or_default(
+    config_path: Path | None = None,
+) -> "VideoInitChecker":
+    return build_from_config_or_default(
+        VideoInitChecker,
+        [_load_video_init_checker_config],
+        config_path=config_path,
+        default_builder=VideoInitChecker,
+    )
 
 class VideoInitChecker:
     def __init__(
@@ -274,10 +295,7 @@ class VideoInitChecker:
 
 
 def main():
-    checker = build_from_video_clip_config_or_default(
-        VideoInitChecker,
-        default_builder=VideoInitChecker,
-    )
+    checker = build_video_init_checker_from_config_or_default()
     checker.run()
 
 

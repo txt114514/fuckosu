@@ -9,8 +9,13 @@ import zipfile
 if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
+from Traning.Lib.function_tools.functions_process_tool import (
+    read_config_values,
+)
 from Traning.Lib.get_training_data.config_loader import (
-    build_from_get_check_data_config_or_default,
+    build_from_config_or_default,
+    ConfigReader,
+    OSU_OSZ_PROCESSOR_CONFIG_SPECS,
 )
 from Traning.Lib.traning_package_manager.package_update import PackageUpdater
 from Traning.Lib.get_training_data.process_status_manager import (
@@ -25,6 +30,22 @@ DEFAULT_ORDER_FILENAME = "order.txt"
 DEFAULT_AUDIO_FILENAME = "audio.mp3"
 
 # 默认值保留在当前文件；config.json 里的合法参数只用于覆盖这些默认值。
+
+
+def _load_osu_osz_processor_config(config: ConfigReader) -> dict[str, object]:
+    # get_files 只关心导入来源、目标目录、选谱关键字和导出音频文件名。
+    return read_config_values(config, OSU_OSZ_PROCESSOR_CONFIG_SPECS)
+
+
+def build_osu_osz_processor_from_config_or_default(
+    config_path: Path | None = None,
+) -> "OsuOszProcessor":
+    return build_from_config_or_default(
+        OsuOszProcessor,
+        [_load_osu_osz_processor_config],
+        config_path=config_path,
+        default_builder=OsuOszProcessor,
+    )
 
 
 @dataclass
@@ -266,10 +287,7 @@ class OsuOszProcessor:
         print(f"记录文件：{self.updater.order_file}")
 
 def main():
-    processor = build_from_get_check_data_config_or_default(
-        OsuOszProcessor,
-        default_builder=OsuOszProcessor,
-    )
+    processor = build_osu_osz_processor_from_config_or_default()
     processor.run()
 
 

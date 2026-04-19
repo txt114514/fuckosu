@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import json
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Iterable, List, Tuple
+from typing import Iterable, List
 
 import numpy as np
 from scipy import signal
@@ -14,8 +12,19 @@ from scipy.io import wavfile
 if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
+from Traning.Lib.function_tools.functions_process_tool import (
+    BatchProcessResult,
+    FolderBatchProcessor,
+    read_config_values,
+)
+from Traning.Lib.function_tools.video_process_tool import (
+    get_audio_stream_start_time,
+    run_ffmpeg,
+)
 from Traning.Lib.get_training_data.config_loader import (
-    build_from_av_correspondence_config_or_default,
+    AV_CORRESPONDENCE_PROCESSOR_CONFIG_SPECS,
+    ConfigReader,
+    build_from_config_or_default,
 )
 from Traning.Lib.get_training_data.process_status_manager import ProcessStatusManager
 from Traning.Lib.traning_package_manager.files_manager import BeatmapFolderStore
@@ -40,7 +49,22 @@ DEFAULT_VIDEO_SUFFIXES = (".mp4", ".webm", ".mkv", ".avi", ".mov")
 # AV 对齐专属参数优先从 config.json 的 av_correspondence 读取。
 
 
-class AVCorrespondenceProcessor:
+def _load_av_correspondence_processor_config(config: ConfigReader) -> dict[str, object]:
+    return read_config_values(config, AV_CORRESPONDENCE_PROCESSOR_CONFIG_SPECS)
+
+
+def build_av_correspondence_processor_from_config_or_default(
+    config_path: Path | None = None,
+) -> "AVCorrespondenceProcessor":
+    return build_from_config_or_default(
+        AVCorrespondenceProcessor,
+        [_load_av_correspondence_processor_config],
+        config_path=config_path,
+        default_builder=AVCorrespondenceProcessor,
+    )
+
+
+class AVCorrespondenceProcessor(FolderBatchProcessor):
     def __init__(
         self,
         target_root: str = str(DEFAULT_TARGET_ROOT),
@@ -72,7 +96,7 @@ class AVCorrespondenceProcessor:
         self.order_filename = order_filename
         self.audio_filename = audio_filename
         self.output_filename = output_filename
-        self.failed_filename = failed_filename
+        super().__init__(failed_filename)
         self.status_step = status_step.strip()
         self.required_steps = tuple(step.strip() for step in required_steps if step.strip())
         self.sample_rate = sample_rate
@@ -92,11 +116,6 @@ class AVCorrespondenceProcessor:
 
         self._ensure_status_steps_registered()
 
-        self.success_count = 0
-        self.skip_count = 0
-        self.fail_count = 0
-        self.failed_cases: List[Tuple[str, str]] = []
-
     def _ensure_status_steps_registered(self):
         registered_steps = set(self.status_manager.process_steps)
         required_registered_steps = set(self.required_steps)
@@ -108,52 +127,8 @@ class AVCorrespondenceProcessor:
                 f"{', '.join(missing_steps)}"
             )
 
-    def _run_ffmpeg(self, args: list[str]):
-        result = subprocess.run(
-            args,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            error_text = result.stderr.strip() or result.stdout.strip() or "未知 ffmpeg 错误"
-            raise RuntimeError(error_text)
-
-    def _get_audio_stream_start_time(self, source_path: Path) -> float:
-        result = subprocess.run(
-            [
-                "ffprobe",
-                "-v",
-                "error",
-                "-select_streams",
-                "a:0",
-                "-show_entries",
-                "stream=start_time",
-                "-of",
-                "json",
-                str(source_path),
-            ],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            error_text = result.stderr.strip() or result.stdout.strip() or "未知 ffprobe 错误"
-            raise RuntimeError(f"读取音频流 start_time 失败: {error_text}")
-
-        payload = json.loads(result.stdout)
-        streams = payload.get("streams", [])
-        if not streams:
-            return 0.0
-
-        raw_start_time = streams[0].get("start_time")
-        if raw_start_time in (None, "N/A", ""):
-            return 0.0
-        return float(raw_start_time)
-
     def _extract_audio_to_wav(self, source_path: Path, output_path: Path, from_video: bool):
         args = [
-            "ffmpeg",
             "-y",
             "-hide_banner",
             "-loglevel",
@@ -176,7 +151,7 @@ class AVCorrespondenceProcessor:
                 str(output_path),
             ]
         )
-        self._run_ffmpeg(args)
+        run_ffmpeg(args)
 
     def _load_wav_samples(self, wav_path: Path) -> np.ndarray:
         sample_rate, samples = wavfile.read(wav_path)
@@ -373,9 +348,8 @@ class AVCorrespondenceProcessor:
         trim_start_seconds: float,
         trim_duration_seconds: float,
     ):
-        self._run_ffmpeg(
+        run_ffmpeg(
             [
-                "ffmpeg",
                 "-y",
                 "-hide_banner",
                 "-loglevel",
@@ -448,15 +422,20 @@ class AVCorrespondenceProcessor:
                 f"{', '.join(pending_steps)}"
             )
 
-    def process_one(self, folder_name: str, overwrite: bool = False) -> str:
+    def progress_message(self, index: int, total: int, folder_name: str) -> str | None:
+        return f"[进度] {index}/{total} {folder_name}"
+
+    def process_one(
+        self,
+        folder_name: str,
+        overwrite: bool = False,
+    ) -> BatchProcessResult:
         if not self.store.folder_exists(folder_name):
-            self.skip_count += 1
             return "skip"
 
         self.status_manager.ensure_status_file(folder_name)
         output_exists, step_done = self._sync_output_status(folder_name)
         if not overwrite and output_exists and step_done:
-            self.skip_count += 1
             return "skip"
 
         self._ensure_required_steps_done(folder_name)
@@ -464,8 +443,8 @@ class AVCorrespondenceProcessor:
         source_video_path = self._resolve_source_video_path(folder_name)
         song_audio_path = self._resolve_song_audio_path(folder_name)
         output_video_path = self.store.get_file_path(folder_name, self.output_filename)
-        video_audio_start_time = self._get_audio_stream_start_time(source_video_path)
-        song_audio_start_time = self._get_audio_stream_start_time(song_audio_path)
+        video_audio_start_time = get_audio_stream_start_time(source_video_path)
+        song_audio_start_time = get_audio_stream_start_time(song_audio_path)
 
         self._update_progress(
             folder_name,
@@ -540,50 +519,20 @@ class AVCorrespondenceProcessor:
                 "refine_hz": self.refine_hz,
             },
         )
-        self.success_count += 1
         return "success"
 
-    def run(self, overwrite: bool = False):
-        folder_names = self.walker.read_folder_names()
-        total = len(folder_names)
-
-        for index, folder_name in enumerate(folder_names, start=1):
-            print(f"[进度] {index}/{total} {folder_name}")
-            try:
-                result = self.process_one(folder_name, overwrite=overwrite)
-                if result == "success":
-                    print(f"[完成] {folder_name}")
-                else:
-                    print(f"[跳过] {folder_name}")
-            except Exception as e:
-                self.fail_count += 1
-                self.failed_cases.append((folder_name, str(e)))
-                if self.store.folder_exists(folder_name):
-                    self.status_manager.ensure_status_file(folder_name)
-                    self.status_manager.mark_step_pending(
-                        folder_name,
-                        self.status_step,
-                        detail={"stage": "failed", "error": str(e)},
-                    )
-                print(f"[失败] {folder_name}: {e}")
-
-        failed_path = self.store.write_failed_report(
-            self.failed_cases,
-            failed_filename=self.failed_filename,
-        )
-
-        print()
-        print(
-            f"处理完成：成功 {self.success_count} 个，跳过 {self.skip_count} 个，失败 {self.fail_count} 个"
-        )
-        print(f"失败名单：{failed_path}")
+    def handle_failure(self, folder_name: str, error: Exception):
+        if self.store.folder_exists(folder_name):
+            self.status_manager.ensure_status_file(folder_name)
+            self.status_manager.mark_step_pending(
+                folder_name,
+                self.status_step,
+                detail={"stage": "failed", "error": str(error)},
+            )
 
 
 def main():
-    processor = build_from_av_correspondence_config_or_default(
-        AVCorrespondenceProcessor,
-        default_builder=AVCorrespondenceProcessor,
-    )
+    processor = build_av_correspondence_processor_from_config_or_default()
     processor.run(overwrite=False)
 
 

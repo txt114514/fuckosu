@@ -7,8 +7,13 @@ from typing import Iterable
 if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
+from Traning.Lib.function_tools.functions_process_tool import (
+    read_config_values,
+)
 from Traning.Lib.get_training_data.config_loader import (
-    build_from_video_clip_config_or_default,
+    ConfigReader,
+    VIDEO_CLIP_PIPELINE_CONFIG_SPECS,
+    build_from_config_or_default,
 )
 from Traning.Lib.get_training_data.video_clip.AV_correspondence import (
     AVCorrespondenceProcessor,
@@ -46,6 +51,22 @@ DEFAULT_REFINE_SEARCH_SECONDS = 1.5
 DEFAULT_RUN_CLIP_STAGE = True
 
 # 默认值保留在当前文件；config.json 里的合法参数只用于覆盖这些默认值。
+
+
+def _load_video_clip_pipeline_config(config: ConfigReader) -> dict[str, object]:
+    # video_clip 总流程会统一读取视频目录、AV 对齐参数，以及 clip 阶段裁剪参数。
+    return read_config_values(config, VIDEO_CLIP_PIPELINE_CONFIG_SPECS)
+
+
+def build_video_clip_pipeline_from_config_or_default(
+    config_path: Path | None = None,
+) -> "VideoClipPipeline":
+    return build_from_config_or_default(
+        VideoClipPipeline,
+        [_load_video_clip_pipeline_config],
+        config_path=config_path,
+        default_builder=VideoClipPipeline,
+    )
 
 
 class VideoClipPipeline:
@@ -187,10 +208,7 @@ class VideoClipPipeline:
 
 
 def main():
-    pipeline = build_from_video_clip_config_or_default(
-        VideoClipPipeline,
-        default_builder=VideoClipPipeline,
-    )
+    pipeline = build_video_clip_pipeline_from_config_or_default()
     pipeline.run(
         overwrite=False,
         run_init_check=True,

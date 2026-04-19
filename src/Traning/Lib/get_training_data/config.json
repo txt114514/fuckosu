@@ -1,8 +1,4 @@
 {
-    // 进度与状态管理。
-    // process_steps 决定 process_status.json 的完整步骤顺序。
-    // status_steps 决定每个阶段写入哪个状态名。
-    // required_steps 决定每个阶段开始前要求完成的前置步骤。
     "progress": {
         "process_steps": [
             "osu_imported",
@@ -28,8 +24,6 @@
         }
     },
 
-    // 路径与文件名管理。
-    // 这里集中放“文件在哪”和“文件叫什么”这类配置。
     "file_management": {
         "export_dir": "../../../../osu-lazer/exports",
         "target_root": "../../../../training_package/match-completed_package",
@@ -45,9 +39,6 @@
         "clip_failed_filename": "clip_failed.txt"
     },
 
-    // 文件匹配与格式管理。
-    // keyword 用于选择目标 .osu。
-    // video_suffixes 用于识别允许的视频格式。
     "file_formats": {
         "keyword": "normal",
         "video_suffixes": [
@@ -59,8 +50,6 @@
         ]
     },
 
-    // 实际处理参数。
-    // 这里集中放算法、裁剪框等真正影响处理结果的参数。
     "parameters": {
         "av_correspondence": {
             "sample_rate": 8000,
@@ -69,7 +58,6 @@
             "refine_search_seconds": 1.5
         },
         "clip": {
-            // 裁剪框基于参考图 2048x1152 定义，再按比例映射到实际视频。
             "crop_reference_width": 2048,
             "crop_reference_height": 1152,
             "crop_left": 186,
