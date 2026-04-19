@@ -13,6 +13,18 @@ from Traning.Lib.get_training_data.config_loader import (
 from Traning.Lib.get_training_data.video_clip.AV_correspondence import (
     AVCorrespondenceProcessor,
 )
+from Traning.Lib.get_training_data.video_clip.clip import (
+    DEFAULT_CROP_BOTTOM as DEFAULT_CLIP_CROP_BOTTOM,
+    DEFAULT_CROP_LEFT as DEFAULT_CLIP_CROP_LEFT,
+    DEFAULT_CROP_REFERENCE_HEIGHT as DEFAULT_CLIP_CROP_REFERENCE_HEIGHT,
+    DEFAULT_CROP_REFERENCE_WIDTH as DEFAULT_CLIP_CROP_REFERENCE_WIDTH,
+    DEFAULT_CROP_RIGHT as DEFAULT_CLIP_CROP_RIGHT,
+    DEFAULT_CROP_TOP as DEFAULT_CLIP_CROP_TOP,
+    DEFAULT_FAILED_FILENAME as DEFAULT_CLIP_FAILED_FILENAME,
+    DEFAULT_REQUIRED_STEPS as DEFAULT_CLIP_REQUIRED_STEPS,
+    DEFAULT_STATUS_STEP as DEFAULT_CLIP_STATUS_STEP,
+    FixedRegionVideoCropProcessor,
+)
 from Traning.Lib.get_training_data.video_clip.read_video import VideoPackageRenamer
 from Traning.Lib.get_training_data.video_clip.video_init import VideoInitChecker
 
@@ -31,8 +43,10 @@ DEFAULT_SAMPLE_RATE = 8000
 DEFAULT_ENVELOPE_HZ = 100
 DEFAULT_REFINE_HZ = 1000
 DEFAULT_REFINE_SEARCH_SECONDS = 1.5
+DEFAULT_RUN_CLIP_STAGE = True
 
 # 默认值保留在当前文件；config.json 里的合法参数只用于覆盖这些默认值。
+
 
 class VideoClipPipeline:
     def __init__(
@@ -50,6 +64,15 @@ class VideoClipPipeline:
         envelope_hz: int = DEFAULT_ENVELOPE_HZ,
         refine_hz: int = DEFAULT_REFINE_HZ,
         refine_search_seconds: float = DEFAULT_REFINE_SEARCH_SECONDS,
+        clip_failed_filename: str = DEFAULT_CLIP_FAILED_FILENAME,
+        clip_status_step: str = DEFAULT_CLIP_STATUS_STEP,
+        clip_required_steps: Iterable[str] = DEFAULT_CLIP_REQUIRED_STEPS,
+        clip_crop_reference_width: int = DEFAULT_CLIP_CROP_REFERENCE_WIDTH,
+        clip_crop_reference_height: int = DEFAULT_CLIP_CROP_REFERENCE_HEIGHT,
+        clip_crop_left: int = DEFAULT_CLIP_CROP_LEFT,
+        clip_crop_top: int = DEFAULT_CLIP_CROP_TOP,
+        clip_crop_right: int = DEFAULT_CLIP_CROP_RIGHT,
+        clip_crop_bottom: int = DEFAULT_CLIP_CROP_BOTTOM,
     ):
         self.target_root = target_root
         self.order_filename = order_filename
@@ -64,6 +87,15 @@ class VideoClipPipeline:
         self.envelope_hz = envelope_hz
         self.refine_hz = refine_hz
         self.refine_search_seconds = refine_search_seconds
+        self.clip_failed_filename = clip_failed_filename
+        self.clip_status_step = clip_status_step
+        self.clip_required_steps = tuple(clip_required_steps)
+        self.clip_crop_reference_width = clip_crop_reference_width
+        self.clip_crop_reference_height = clip_crop_reference_height
+        self.clip_crop_left = clip_crop_left
+        self.clip_crop_top = clip_crop_top
+        self.clip_crop_right = clip_crop_right
+        self.clip_crop_bottom = clip_crop_bottom
 
     def _build_video_init_checker(self) -> VideoInitChecker:
         return VideoInitChecker(
@@ -72,6 +104,15 @@ class VideoClipPipeline:
             video_suffixes=self.video_suffixes,
             output_filename=self.output_filename,
             status_step=self.status_step,
+            clip_status_step=self.clip_status_step,
+            clip_failed_filename=self.clip_failed_filename,
+            clip_required_steps=self.clip_required_steps,
+            clip_crop_reference_width=self.clip_crop_reference_width,
+            clip_crop_reference_height=self.clip_crop_reference_height,
+            clip_crop_left=self.clip_crop_left,
+            clip_crop_top=self.clip_crop_top,
+            clip_crop_right=self.clip_crop_right,
+            clip_crop_bottom=self.clip_crop_bottom,
         )
 
     def _build_video_package_renamer(self) -> VideoPackageRenamer:
@@ -98,8 +139,24 @@ class VideoClipPipeline:
             video_suffixes=self.video_suffixes,
         )
 
-    def _run_clip_placeholder(self):
-        print("[保留] clip.py 尚未完成，当前仅保留接口，暂不执行裁剪阶段")
+    def _build_clip_processor(self) -> FixedRegionVideoCropProcessor:
+        return FixedRegionVideoCropProcessor(
+            target_root=self.target_root,
+            order_filename=self.order_filename,
+            output_filename=self.output_filename,
+            failed_filename=self.clip_failed_filename,
+            status_step=self.clip_status_step,
+            required_steps=self.clip_required_steps,
+            crop_reference_width=self.clip_crop_reference_width,
+            crop_reference_height=self.clip_crop_reference_height,
+            crop_left=self.clip_crop_left,
+            crop_top=self.clip_crop_top,
+            crop_right=self.clip_crop_right,
+            crop_bottom=self.clip_crop_bottom,
+        )
+
+    def _run_clip_stage(self, overwrite: bool):
+        self._build_clip_processor().run(overwrite=overwrite)
 
     def run(
         self,
@@ -107,7 +164,7 @@ class VideoClipPipeline:
         run_init_check: bool = True,
         run_video_match: bool = True,
         run_av_correspondence: bool = True,
-        run_clip_stage: bool = False,
+        run_clip_stage: bool = DEFAULT_RUN_CLIP_STAGE,
     ):
         if run_init_check:
             print("[阶段] 初始化视频流程状态")
@@ -125,8 +182,8 @@ class VideoClipPipeline:
 
         if run_clip_stage:
             print()
-            print("[阶段] 预留 clip.py 裁剪接口")
-            self._run_clip_placeholder()
+            print("[阶段] 执行固定区域裁剪")
+            self._run_clip_stage(overwrite=overwrite)
 
 
 def main():
@@ -139,7 +196,7 @@ def main():
         run_init_check=True,
         run_video_match=True,
         run_av_correspondence=True,
-        run_clip_stage=False,
+        run_clip_stage=DEFAULT_RUN_CLIP_STAGE,
     )
 
 

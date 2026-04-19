@@ -1,10 +1,9 @@
 {
-    "_comment": "整个训练数据流程的配置。为了保持标准 JSON 合法性，这里使用 _comment 字段代替 // 注释。",
-    "check_data": {
-        "_comment": "基础路径和主流程步骤配置。",
-        "export_dir": "../../../../osu-lazer/exports",
-        "target_root": "../../../../training_package/match-completed_package",
-        "keyword": "normal",
+    // 进度与状态管理。
+    // process_steps 决定 process_status.json 的完整步骤顺序。
+    // status_steps 决定每个阶段写入哪个状态名。
+    // required_steps 决定每个阶段开始前要求完成的前置步骤。
+    "progress": {
         "process_steps": [
             "osu_imported",
             "audio_imported",
@@ -14,62 +13,69 @@
             "av_corresponded",
             "video_processed"
         ],
-        "_comment_export_dir": ".osz 导出目录。",
-        "_comment_target_root": "训练数据输出目录，所有谱面文件夹都在这里生成。",
-        "_comment_keyword": "选择 .osu 时匹配的关键字，例如 normal / hard。",
-        "_comment_process_steps": "整个流程的步骤顺序，process_status.json 会按这里的步骤生成。"
+        "status_steps": {
+            "av_correspondence": "av_corresponded",
+            "clip": "video_processed"
+        },
+        "required_steps": {
+            "av_correspondence": [
+                "audio_imported",
+                "video_matched"
+            ],
+            "clip": [
+                "av_corresponded"
+            ]
+        }
     },
-    "get_check_data": {
-        "_comment": "只给 get_check_data 文件夹下模块使用的文件名参数。",
+
+    // 路径与文件名管理。
+    // 这里集中放“文件在哪”和“文件叫什么”这类配置。
+    "file_management": {
+        "export_dir": "../../../../osu-lazer/exports",
+        "target_root": "../../../../training_package/match-completed_package",
+        "video_root": "../../../../training_package/video_package",
         "order_filename": "order.txt",
         "verify_filename": "verify.txt",
         "difficulty_filename": "difficulty.txt",
         "verify_failed_filename": "verify_failed.txt",
         "difficulty_failed_filename": "difficulty_failed.txt",
-        "_comment_order_filename": "谱面目录顺序登记文件名。",
-        "_comment_verify_filename": "导出的命中对象验证文件名。",
-        "_comment_difficulty_filename": "导出的难度文件名。",
-        "_comment_verify_failed_filename": "verify 导出失败报告文件名。",
-        "_comment_difficulty_failed_filename": "difficulty 导出失败报告文件名。"
+        "audio_filename": "audio.mp3",
+        "output_filename": "video_processed.mp4",
+        "av_correspondence_failed_filename": "av_correspondence_failed.txt",
+        "clip_failed_filename": "clip_failed.txt"
     },
-    "video_shared": {
-        "_comment": "多个视频相关模块共用的参数。",
+
+    // 文件匹配与格式管理。
+    // keyword 用于选择目标 .osu。
+    // video_suffixes 用于识别允许的视频格式。
+    "file_formats": {
+        "keyword": "normal",
         "video_suffixes": [
             ".mp4",
             ".webm",
             ".mkv",
             ".avi",
             ".mov"
-        ],
-        "audio_filename": "audio.mp3",
-        "output_filename": "video_processed.mp4",
-        "status_step": "av_corresponded",
-        "_comment_video_suffixes": "允许识别的视频后缀。",
-        "_comment_audio_filename": "谱面目录内的标准音频文件名，也会被 get_check_data/get_files.py 使用。",
-        "_comment_output_filename": "AV 对齐后的标准输出视频文件名。",
-        "_comment_status_step": "AV 对齐步骤在 process_status.json 中对应的状态名。"
+        ]
     },
-    "video_match": {
-        "_comment": "只给 read_video.py 使用的参数。",
-        "video_root": "../../../../training_package/video_package",
-        "_comment_video_root": "原始待匹配视频所在目录。"
-    },
-    "av_correspondence": {
-        "_comment": "只给 AV_correspondence.py 使用的参数。",
-        "failed_filename": "av_correspondence_failed.txt",
-        "required_steps": [
-            "audio_imported",
-            "video_matched"
-        ],
-        "sample_rate": 8000,
-        "envelope_hz": 100,
-        "refine_hz": 1000,
-        "refine_search_seconds": 1.5,
-        "_comment_failed_filename": "AV 对齐失败报告文件名，写在 target_root 根目录下。",
-        "_comment_required_steps": "执行 AV 对齐之前，要求先完成的状态步骤。",
-        "_comment_sample_rate": "抽音频和对齐时使用的采样率。",
-        "_comment_envelope_hz": "粗对齐时的特征帧率，越大越精细但越慢。",
-        "_comment_refine_hz": "精对齐时的特征帧率，越大越精细但越慢。",
-        "_comment_refine_search_seconds": "精对齐时围绕粗定位额外搜索的时间窗口（秒）。"
+
+    // 实际处理参数。
+    // 这里集中放算法、裁剪框等真正影响处理结果的参数。
+    "parameters": {
+        "av_correspondence": {
+            "sample_rate": 8000,
+            "envelope_hz": 100,
+            "refine_hz": 1000,
+            "refine_search_seconds": 1.5
+        },
+        "clip": {
+            // 裁剪框基于参考图 2048x1152 定义，再按比例映射到实际视频。
+            "crop_reference_width": 2048,
+            "crop_reference_height": 1152,
+            "crop_left": 186,
+            "crop_top": 178,
+            "crop_right": 1768,
+            "crop_bottom": 1080
+        }
     }
 }

@@ -8,9 +8,21 @@ if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
 from Traning.Lib.get_training_data.config_loader import (
-    build_from_video_shared_config_or_default,
+    build_from_video_clip_config_or_default,
 )
 from Traning.Lib.get_training_data.process_status_manager import ProcessStatusManager
+from Traning.Lib.get_training_data.video_clip.clip import (
+    DEFAULT_CROP_BOTTOM as DEFAULT_CLIP_CROP_BOTTOM,
+    DEFAULT_CROP_LEFT as DEFAULT_CLIP_CROP_LEFT,
+    DEFAULT_CROP_REFERENCE_HEIGHT as DEFAULT_CLIP_CROP_REFERENCE_HEIGHT,
+    DEFAULT_CROP_REFERENCE_WIDTH as DEFAULT_CLIP_CROP_REFERENCE_WIDTH,
+    DEFAULT_CROP_RIGHT as DEFAULT_CLIP_CROP_RIGHT,
+    DEFAULT_CROP_TOP as DEFAULT_CLIP_CROP_TOP,
+    DEFAULT_FAILED_FILENAME as DEFAULT_CLIP_FAILED_FILENAME,
+    DEFAULT_REQUIRED_STEPS as DEFAULT_CLIP_REQUIRED_STEPS,
+    DEFAULT_STATUS_STEP as DEFAULT_CLIP_STATUS_STEP,
+    FixedRegionVideoCropProcessor,
+)
 from Traning.Lib.traning_package_manager.order_walker import OrderFolderWalker
 
 
@@ -31,15 +43,40 @@ class VideoInitChecker:
         video_suffixes: Iterable[str] = DEFAULT_VIDEO_SUFFIXES,
         output_filename: str = DEFAULT_OUTPUT_FILENAME,
         status_step: str = DEFAULT_STATUS_STEP,
+        clip_status_step: str = DEFAULT_CLIP_STATUS_STEP,
+        clip_failed_filename: str = DEFAULT_CLIP_FAILED_FILENAME,
+        clip_required_steps: Iterable[str] = DEFAULT_CLIP_REQUIRED_STEPS,
+        clip_crop_reference_width: int = DEFAULT_CLIP_CROP_REFERENCE_WIDTH,
+        clip_crop_reference_height: int = DEFAULT_CLIP_CROP_REFERENCE_HEIGHT,
+        clip_crop_left: int = DEFAULT_CLIP_CROP_LEFT,
+        clip_crop_top: int = DEFAULT_CLIP_CROP_TOP,
+        clip_crop_right: int = DEFAULT_CLIP_CROP_RIGHT,
+        clip_crop_bottom: int = DEFAULT_CLIP_CROP_BOTTOM,
     ):
         self.target_root = Path(target_root)
         self.order_filename = order_filename
         self.video_suffixes = {suffix.lower() for suffix in video_suffixes}
         self.output_filename = output_filename
         self.status_step = status_step
+        self.clip_status_step = clip_status_step
         self.status_manager = ProcessStatusManager(
             target_root=str(self.target_root),
             order_filename=self.order_filename,
+        )
+        self.clip_processor = FixedRegionVideoCropProcessor(
+            target_root=str(self.target_root),
+            order_filename=self.order_filename,
+            output_filename=self.output_filename,
+            failed_filename=clip_failed_filename,
+            status_step=self.clip_status_step,
+            required_steps=clip_required_steps,
+            crop_reference_width=clip_crop_reference_width,
+            crop_reference_height=clip_crop_reference_height,
+            crop_left=clip_crop_left,
+            crop_top=clip_crop_top,
+            crop_right=clip_crop_right,
+            crop_bottom=clip_crop_bottom,
+            status_manager=self.status_manager,
         )
 
     def _folder_has_video(self, folder_path: Path) -> bool:
@@ -113,6 +150,100 @@ class VideoInitChecker:
                 detail={"error": "状态显示已完成 AV 对齐，但未找到输出视频"},
             )
 
+    def _resolve_source_video_path(self, folder_name: str) -> Path:
+        candidates = [
+            self.target_root / folder_name / f"{folder_name}{suffix}"
+            for suffix in sorted(self.video_suffixes)
+            if (self.target_root / folder_name / f"{folder_name}{suffix}").is_file()
+        ]
+
+        if not candidates:
+            raise FileNotFoundError(
+                f"{folder_name} 中未找到源视频，要求文件名为 {folder_name} + 视频后缀"
+            )
+        if len(candidates) > 1:
+            names = ", ".join(path.name for path in candidates)
+            raise FileExistsError(f"{folder_name} 中找到多个源视频候选: {names}")
+        return candidates[0]
+
+    def _clip_reference_detail(self) -> dict[str, int]:
+        return {
+            "reference_width": self.clip_processor.crop_reference_width,
+            "reference_height": self.clip_processor.crop_reference_height,
+            "reference_crop_left": self.clip_processor.crop_left,
+            "reference_crop_top": self.clip_processor.crop_top,
+            "reference_crop_right": self.clip_processor.crop_right,
+            "reference_crop_bottom": self.clip_processor.crop_bottom,
+        }
+
+    def _sync_video_processed_status(self, folder_name: str, folder_path: Path):
+        if self.clip_status_step not in self.status_manager.process_steps:
+            return
+
+        output_path = folder_path / self.output_filename
+        output_exists = output_path.is_file()
+        is_done = self.status_manager.is_step_done(folder_name, self.clip_status_step)
+
+        if not output_exists:
+            if is_done:
+                self.status_manager.mark_step_pending(
+                    folder_name,
+                    self.clip_status_step,
+                    detail={"error": "状态显示已完成 clip 裁剪，但未找到输出视频"},
+                )
+            return
+
+        try:
+            source_video_path = self._resolve_source_video_path(folder_name)
+            source_width, source_height, crop_info = self.clip_processor.describe_crop_for_video(
+                source_video_path
+            )
+            output_width, output_height = self.clip_processor.get_video_size(output_path)
+        except Exception as e:
+            if is_done:
+                self.status_manager.mark_step_pending(
+                    folder_name,
+                    self.clip_status_step,
+                    detail={"error": f"校验 clip 输出失败: {e}"},
+                )
+            return
+
+        is_expected_output = (
+            output_width == crop_info["crop_width"]
+            and output_height == crop_info["crop_height"]
+        )
+
+        if is_expected_output and not is_done:
+            self.status_manager.mark_step_done(
+                folder_name,
+                self.clip_status_step,
+                detail={
+                    "stage": "auto_synced",
+                    "source_video_path": str(source_video_path),
+                    "output_video_path": str(output_path),
+                    "video_width": source_width,
+                    "video_height": source_height,
+                    **self._clip_reference_detail(),
+                    **crop_info,
+                },
+            )
+            return
+
+        if not is_expected_output and is_done:
+            self.status_manager.mark_step_pending(
+                folder_name,
+                self.clip_status_step,
+                detail={
+                    "error": "状态显示已完成 clip 裁剪，但输出分辨率与预期不符",
+                    "output_video_path": str(output_path),
+                    "output_video_width": output_width,
+                    "output_video_height": output_height,
+                    "expected_video_width": crop_info["crop_width"],
+                    "expected_video_height": crop_info["crop_height"],
+                    **self._clip_reference_detail(),
+                },
+            )
+
     def run(self):
         folder_items = self._folder_items()
         folders_with_video = 0
@@ -123,6 +254,7 @@ class VideoInitChecker:
             self.status_manager.ensure_status_file(folder_name)
             self._sync_video_matched_status(folder_name, folder_path)
             self._sync_av_corresponded_status(folder_name, folder_path)
+            self._sync_video_processed_status(folder_name, folder_path)
 
             if self._folder_has_video(folder_path):
                 folders_with_video += 1
@@ -142,7 +274,7 @@ class VideoInitChecker:
 
 
 def main():
-    checker = build_from_video_shared_config_or_default(
+    checker = build_from_video_clip_config_or_default(
         VideoInitChecker,
         default_builder=VideoInitChecker,
     )

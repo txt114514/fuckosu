@@ -37,14 +37,11 @@
 
 - `src/Traning/Lib/get_training_data/config.json`
 
-当前配置项为：
+当前配置项按职责分成 4 组：
 
-```json
+```jsonc
 {
-  "check_data": {
-    "export_dir": "../../../../osu-lazer/exports",
-    "target_root": "../../../../training_package/match-completed_package",
-    "keyword": "normal",
+  "progress": {
     "process_steps": [
       "osu_imported",
       "audio_imported",
@@ -53,40 +50,64 @@
       "video_matched",
       "av_corresponded",
       "video_processed"
-    ]
+    ],
+    "status_steps": {
+      "av_correspondence": "av_corresponded",
+      "clip": "video_processed"
+    },
+    "required_steps": {
+      "av_correspondence": ["audio_imported", "video_matched"],
+      "clip": ["av_corresponded"]
+    }
   },
-  "video_shared": {
-    "video_suffixes": [".mp4", ".webm", ".mkv", ".avi", ".mov"],
+  "file_management": {
+    "export_dir": "../../../../osu-lazer/exports",
+    "target_root": "../../../../training_package/match-completed_package",
+    "video_root": "../../../../training_package/video_package",
+    "order_filename": "order.txt",
+    "verify_filename": "verify.txt",
+    "difficulty_filename": "difficulty.txt",
+    "verify_failed_filename": "verify_failed.txt",
+    "difficulty_failed_filename": "difficulty_failed.txt",
     "audio_filename": "audio.mp3",
     "output_filename": "video_processed.mp4",
-    "status_step": "av_corresponded"
+    "av_correspondence_failed_filename": "av_correspondence_failed.txt",
+    "clip_failed_filename": "clip_failed.txt"
   },
-  "video_match": {
-    "video_root": "../../../../training_package/video_package"
+  "file_formats": {
+    "keyword": "normal",
+    "video_suffixes": [".mp4", ".webm", ".mkv", ".avi", ".mov"]
   },
-  "av_correspondence": {
-    "failed_filename": "av_correspondence_failed.txt",
-    "required_steps": ["audio_imported", "video_matched"],
-    "sample_rate": 8000,
-    "envelope_hz": 100,
-    "refine_hz": 1000,
-    "refine_search_seconds": 1.5
+  "parameters": {
+    "av_correspondence": {
+      "sample_rate": 8000,
+      "envelope_hz": 100,
+      "refine_hz": 1000,
+      "refine_search_seconds": 1.5
+    },
+    "clip": {
+      "crop_reference_width": 2048,
+      "crop_reference_height": 1152,
+      "crop_left": 186,
+      "crop_top": 178,
+      "crop_right": 1768,
+      "crop_bottom": 1080
+    }
   }
 }
 ```
 
 含义：
 
-- `export_dir`: `.osz` 导出目录
-- `target_root`: 训练数据输出目录
-- `keyword`: 从 `.osz` 解包后筛选 `.osu` 文件名时使用的关键字
-- `video_shared`: 多个视频相关文件共用的参数
-- `video_match`: `read_video.py` 单独使用的参数
-- `av_correspondence`: `AV_correspondence.py` 单独使用的参数
+- `progress`: 进度步骤、阶段状态名、阶段前置依赖
+- `file_management`: 路径和文件名
+- `file_formats`: 文件筛选和格式识别规则
+- `parameters`: 真正影响处理结果的参数
 
 注意：
 
 - 这些脚本优先读取 `config.json`
+- `config_loader.py` 支持 `//` 和 `/* ... */` 注释，所以 `config.json` 可以按 JSONC 风格写说明
 - 如果配置缺失或格式不对，会打印报错并回退到代码里的默认路径
 
 ## 3. 推荐执行顺序
@@ -97,7 +118,7 @@
 2. 确认每个谱面目录已经生成 `.osu`
 3. 再运行 `VideoPackageRenamer`
 4. 然后运行 `AVCorrespondenceProcessor` 做音视频对齐和裁剪
-5. 如果还需要额外的固定区域裁剪，再单独使用 `clip.py`
+5. 最后运行 `clip.py`，把对齐后视频按参考裁剪框裁成最终训练视频
 
 对应关系可以理解成：
 
@@ -105,7 +126,8 @@
 2. `VerifyExporter` 负责“生成 `verify.txt`”
 3. `DifficultyFileManager` 负责“生成 `difficulty.txt`”
 4. `VideoPackageRenamer` 负责“把视频按顺序放进去”
-5. `AVCorrespondenceProcessor` 负责“对齐音频并裁出最终视频”
+5. `AVCorrespondenceProcessor` 负责“对齐音频并生成待裁剪视频”
+6. `FixedRegionVideoCropProcessor` 负责“按参考裁剪框输出最终训练视频”
 
 ## 4. 核心类怎么用
 
@@ -392,26 +414,34 @@ processor.run(overwrite=False)
 
 作用：
 
-- 这是一个独立脚本，不是类
-- 使用 OpenCV 按固定矩形裁剪视频
+- 提供 `FixedRegionVideoCropProcessor`
+- 按参考分辨率上的裁剪框，等比换算后裁剪 `video_processed.mp4`
+- 默认已经接入 `video_clip_main.py` 和 `training_main.py` 主流程
 
-当前脚本写死了这些参数：
+常用配置：
 
-- 输入文件：`input.mp4`
-- 输出文件：`cropped.mp4`
-- 裁剪区域：`left, top, right, bottom = 101, 199, 1848, 1197`
+- 输出文件名：默认复用 `video_shared.output_filename`
+- 状态步骤：默认 `video_processed`
+- 参考裁剪框：`crop_left, crop_top, crop_right, crop_bottom`
+- 参考分辨率：`crop_reference_width, crop_reference_height`
 
 适合场景：
 
-- 你已经有视频，但想统一裁掉边缘区域
+- 你已经完成 AV 对齐，还需要把视频裁到统一训练视野
 
-使用前通常要先手改这几个变量：
+最常见用法：
 
 ```python
-video_path = "input.mp4"
-out_path = "cropped.mp4"
-left, top, right, bottom = ...
+from Traning.Lib.get_training_data.video_clip.clip import FixedRegionVideoCropProcessor
+
+processor = FixedRegionVideoCropProcessor(target_root="训练输出目录")
+processor.run(overwrite=False)
 ```
+
+输出结果：
+
+- `process_status.json` 中的 `video_processed` 会被标记完成
+- `video_processed.mp4` 会被原地替换为裁剪后的最终视频
 
 ## 5. 数据类怎么理解
 
@@ -541,7 +571,7 @@ renamer.run()
 - `BeatmapFolderStore` 只允许操作 `order.txt` 中登记过的目录
 - `VerifyExporter` 默认只取一个目录中的第一个 `.osu`
 - `VideoPackageRenamer` 依赖视频文件名中的中文时间格式
-- `clip.py` 不是通用工具类，而是一个需要手动改参数的小脚本
+- `clip.py` 的裁剪参数现在从 `config.json` 的 `clip` 段读取
 
 ## 9. 简单建议
 
@@ -552,4 +582,4 @@ renamer.run()
 - 想单独生成判定对象文本，用 `VerifyExporter`
 - 想单独生成难度，用 `DifficultyFileManager`
 - 想给谱面目录配视频，用 `VideoPackageRenamer`
-- 想做固定区域裁剪，用 `clip.py`
+- 想做最终统一裁剪，用 `clip.py`

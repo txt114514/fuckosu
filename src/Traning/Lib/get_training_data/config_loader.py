@@ -109,16 +109,21 @@ def _load_raw_config(
     return actual_config_path, raw_config, base_dir
 
 
-def _load_optional_section(
+def _load_optional_value_by_paths(
     raw_config: dict[str, Any],
-    section_name: str,
-) -> dict[str, Any] | None:
-    section = raw_config.get(section_name)
-    if section is None:
-        return None
-    if not isinstance(section, dict):
-        return None
-    return section
+    *paths: tuple[str, ...],
+) -> Any:
+    for path in paths:
+        current: Any = raw_config
+        found = True
+        for part in path:
+            if not isinstance(current, dict) or part not in current:
+                found = False
+                break
+            current = current[part]
+        if found:
+            return current
+    return None
 
 
 def _optional_nonempty_str(value: Any) -> str | None:
@@ -150,6 +155,16 @@ def _optional_positive_int(value: Any) -> int | None:
     if isinstance(value, int) and value > 0:
         return value
     if isinstance(value, float) and value.is_integer() and value > 0:
+        return int(value)
+    return None
+
+
+def _optional_nonnegative_int(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int) and value >= 0:
+        return value
+    if isinstance(value, float) and value.is_integer() and value >= 0:
         return int(value)
     return None
 
@@ -222,14 +237,30 @@ def _normalize_process_steps(raw_process_steps: Any, source: str) -> tuple[str, 
 
 def load_check_data_config(config_path: Path | None = None) -> dict[str, Any]:
     _actual_config_path, raw_config, base_dir = _load_raw_config(config_path)
-    section = _load_optional_section(raw_config, "check_data")
-    if section is None:
-        return {}
-
     config: dict[str, Any] = {}
-    export_dir = _optional_resolved_path(base_dir, section.get("export_dir"))
-    target_root = _optional_resolved_path(base_dir, section.get("target_root"))
-    keyword = _optional_nonempty_str(section.get("keyword"))
+    export_dir = _optional_resolved_path(
+        base_dir,
+        _load_optional_value_by_paths(
+            raw_config,
+            ("file_management", "export_dir"),
+            ("check_data", "export_dir"),
+        ),
+    )
+    target_root = _optional_resolved_path(
+        base_dir,
+        _load_optional_value_by_paths(
+            raw_config,
+            ("file_management", "target_root"),
+            ("check_data", "target_root"),
+        ),
+    )
+    keyword = _optional_nonempty_str(
+        _load_optional_value_by_paths(
+            raw_config,
+            ("file_formats", "keyword"),
+            ("check_data", "keyword"),
+        )
+    )
 
     if export_dir is not None:
         config["export_dir"] = export_dir
@@ -243,17 +274,17 @@ def load_check_data_config(config_path: Path | None = None) -> dict[str, Any]:
 
 def load_process_steps_config(config_path: Path | None = None) -> tuple[str, ...] | None:
     actual_config_path, raw_config, _base_dir = _load_raw_config(config_path)
-    section = _load_optional_section(raw_config, "check_data")
-    if section is None:
-        return None
-
-    raw_process_steps = section.get("process_steps")
+    raw_process_steps = _load_optional_value_by_paths(
+        raw_config,
+        ("progress", "process_steps"),
+        ("check_data", "process_steps"),
+    )
     if raw_process_steps is None:
         return None
 
     return _normalize_process_steps(
         raw_process_steps,
-        source=f"{actual_config_path} check_data.process_steps",
+        source=f"{actual_config_path} progress.process_steps",
     )
 
 
@@ -276,17 +307,41 @@ def load_process_steps_config_or_default(
 
 def load_get_check_data_files_config(config_path: Path | None = None) -> dict[str, Any]:
     _actual_config_path, raw_config, _base_dir = _load_raw_config(config_path)
-    section = _load_optional_section(raw_config, "get_check_data")
-    if section is None:
-        return {}
-
     config: dict[str, Any] = {}
-    order_filename = _optional_filename(section.get("order_filename"))
-    verify_filename = _optional_filename(section.get("verify_filename"))
-    difficulty_filename = _optional_filename(section.get("difficulty_filename"))
-    verify_failed_filename = _optional_filename(section.get("verify_failed_filename"))
+    order_filename = _optional_filename(
+        _load_optional_value_by_paths(
+            raw_config,
+            ("file_management", "order_filename"),
+            ("get_check_data", "order_filename"),
+        )
+    )
+    verify_filename = _optional_filename(
+        _load_optional_value_by_paths(
+            raw_config,
+            ("file_management", "verify_filename"),
+            ("get_check_data", "verify_filename"),
+        )
+    )
+    difficulty_filename = _optional_filename(
+        _load_optional_value_by_paths(
+            raw_config,
+            ("file_management", "difficulty_filename"),
+            ("get_check_data", "difficulty_filename"),
+        )
+    )
+    verify_failed_filename = _optional_filename(
+        _load_optional_value_by_paths(
+            raw_config,
+            ("file_management", "verify_failed_filename"),
+            ("get_check_data", "verify_failed_filename"),
+        )
+    )
     difficulty_failed_filename = _optional_filename(
-        section.get("difficulty_failed_filename")
+        _load_optional_value_by_paths(
+            raw_config,
+            ("file_management", "difficulty_failed_filename"),
+            ("get_check_data", "difficulty_failed_filename"),
+        )
     )
 
     if order_filename is not None:
@@ -305,15 +360,35 @@ def load_get_check_data_files_config(config_path: Path | None = None) -> dict[st
 
 def load_video_shared_config(config_path: Path | None = None) -> dict[str, Any]:
     _actual_config_path, raw_config, _base_dir = _load_raw_config(config_path)
-    section = _load_optional_section(raw_config, "video_shared")
-    if section is None:
-        return {}
-
     config: dict[str, Any] = {}
-    video_suffixes = _optional_suffix_tuple(section.get("video_suffixes"))
-    audio_filename = _optional_filename(section.get("audio_filename"))
-    output_filename = _optional_filename(section.get("output_filename"))
-    status_step = _optional_nonempty_str(section.get("status_step"))
+    video_suffixes = _optional_suffix_tuple(
+        _load_optional_value_by_paths(
+            raw_config,
+            ("file_formats", "video_suffixes"),
+            ("video_shared", "video_suffixes"),
+        )
+    )
+    audio_filename = _optional_filename(
+        _load_optional_value_by_paths(
+            raw_config,
+            ("file_management", "audio_filename"),
+            ("video_shared", "audio_filename"),
+        )
+    )
+    output_filename = _optional_filename(
+        _load_optional_value_by_paths(
+            raw_config,
+            ("file_management", "output_filename"),
+            ("video_shared", "output_filename"),
+        )
+    )
+    status_step = _optional_nonempty_str(
+        _load_optional_value_by_paths(
+            raw_config,
+            ("progress", "status_steps", "av_correspondence"),
+            ("video_shared", "status_step"),
+        )
+    )
 
     if video_suffixes is not None:
         config["video_suffixes"] = video_suffixes
@@ -329,12 +404,15 @@ def load_video_shared_config(config_path: Path | None = None) -> dict[str, Any]:
 
 def load_video_match_config(config_path: Path | None = None) -> dict[str, Any]:
     _actual_config_path, raw_config, base_dir = _load_raw_config(config_path)
-    section = _load_optional_section(raw_config, "video_match")
-    if section is None:
-        return {}
-
     config: dict[str, Any] = {}
-    video_root = _optional_resolved_path(base_dir, section.get("video_root"))
+    video_root = _optional_resolved_path(
+        base_dir,
+        _load_optional_value_by_paths(
+            raw_config,
+            ("file_management", "video_root"),
+            ("video_match", "video_root"),
+        ),
+    )
     if video_root is not None:
         config["video_root"] = video_root
     return config
@@ -342,17 +420,49 @@ def load_video_match_config(config_path: Path | None = None) -> dict[str, Any]:
 
 def load_av_correspondence_config(config_path: Path | None = None) -> dict[str, Any]:
     _actual_config_path, raw_config, _base_dir = _load_raw_config(config_path)
-    section = _load_optional_section(raw_config, "av_correspondence")
-    if section is None:
-        return {}
-
     config: dict[str, Any] = {}
-    failed_filename = _optional_filename(section.get("failed_filename"))
-    required_steps = _optional_string_tuple(section.get("required_steps"))
-    sample_rate = _optional_positive_int(section.get("sample_rate"))
-    envelope_hz = _optional_positive_int(section.get("envelope_hz"))
-    refine_hz = _optional_positive_int(section.get("refine_hz"))
-    refine_search_seconds = _optional_positive_float(section.get("refine_search_seconds"))
+    failed_filename = _optional_filename(
+        _load_optional_value_by_paths(
+            raw_config,
+            ("file_management", "av_correspondence_failed_filename"),
+            ("av_correspondence", "failed_filename"),
+        )
+    )
+    required_steps = _optional_string_tuple(
+        _load_optional_value_by_paths(
+            raw_config,
+            ("progress", "required_steps", "av_correspondence"),
+            ("av_correspondence", "required_steps"),
+        )
+    )
+    sample_rate = _optional_positive_int(
+        _load_optional_value_by_paths(
+            raw_config,
+            ("parameters", "av_correspondence", "sample_rate"),
+            ("av_correspondence", "sample_rate"),
+        )
+    )
+    envelope_hz = _optional_positive_int(
+        _load_optional_value_by_paths(
+            raw_config,
+            ("parameters", "av_correspondence", "envelope_hz"),
+            ("av_correspondence", "envelope_hz"),
+        )
+    )
+    refine_hz = _optional_positive_int(
+        _load_optional_value_by_paths(
+            raw_config,
+            ("parameters", "av_correspondence", "refine_hz"),
+            ("av_correspondence", "refine_hz"),
+        )
+    )
+    refine_search_seconds = _optional_positive_float(
+        _load_optional_value_by_paths(
+            raw_config,
+            ("parameters", "av_correspondence", "refine_search_seconds"),
+            ("av_correspondence", "refine_search_seconds"),
+        )
+    )
 
     if failed_filename is not None:
         config["failed_filename"] = failed_filename
@@ -366,6 +476,95 @@ def load_av_correspondence_config(config_path: Path | None = None) -> dict[str, 
         config["refine_hz"] = refine_hz
     if refine_search_seconds is not None:
         config["refine_search_seconds"] = refine_search_seconds
+
+    return config
+
+
+def load_clip_config(config_path: Path | None = None) -> dict[str, Any]:
+    _actual_config_path, raw_config, _base_dir = _load_raw_config(config_path)
+    config: dict[str, Any] = {}
+    failed_filename = _optional_filename(
+        _load_optional_value_by_paths(
+            raw_config,
+            ("file_management", "clip_failed_filename"),
+            ("clip", "failed_filename"),
+        )
+    )
+    status_step = _optional_nonempty_str(
+        _load_optional_value_by_paths(
+            raw_config,
+            ("progress", "status_steps", "clip"),
+            ("clip", "status_step"),
+        )
+    )
+    required_steps = _optional_string_tuple(
+        _load_optional_value_by_paths(
+            raw_config,
+            ("progress", "required_steps", "clip"),
+            ("clip", "required_steps"),
+        )
+    )
+    crop_reference_width = _optional_positive_int(
+        _load_optional_value_by_paths(
+            raw_config,
+            ("parameters", "clip", "crop_reference_width"),
+            ("clip", "crop_reference_width"),
+        )
+    )
+    crop_reference_height = _optional_positive_int(
+        _load_optional_value_by_paths(
+            raw_config,
+            ("parameters", "clip", "crop_reference_height"),
+            ("clip", "crop_reference_height"),
+        )
+    )
+    crop_left = _optional_nonnegative_int(
+        _load_optional_value_by_paths(
+            raw_config,
+            ("parameters", "clip", "crop_left"),
+            ("clip", "crop_left"),
+        )
+    )
+    crop_top = _optional_nonnegative_int(
+        _load_optional_value_by_paths(
+            raw_config,
+            ("parameters", "clip", "crop_top"),
+            ("clip", "crop_top"),
+        )
+    )
+    crop_right = _optional_nonnegative_int(
+        _load_optional_value_by_paths(
+            raw_config,
+            ("parameters", "clip", "crop_right"),
+            ("clip", "crop_right"),
+        )
+    )
+    crop_bottom = _optional_nonnegative_int(
+        _load_optional_value_by_paths(
+            raw_config,
+            ("parameters", "clip", "crop_bottom"),
+            ("clip", "crop_bottom"),
+        )
+    )
+
+    if failed_filename is not None:
+        config["clip_failed_filename"] = failed_filename
+    if status_step is not None:
+        config["clip_status_step"] = status_step
+    if required_steps is not None:
+        config["clip_required_steps"] = required_steps
+    if crop_reference_width is not None:
+        config["clip_crop_reference_width"] = crop_reference_width
+    if crop_reference_height is not None:
+        config["clip_crop_reference_height"] = crop_reference_height
+    if crop_left is not None:
+        config["clip_crop_left"] = crop_left
+    if crop_top is not None:
+        config["clip_crop_top"] = crop_top
+    if crop_right is not None:
+        config["clip_crop_right"] = crop_right
+    if crop_bottom is not None:
+        config["clip_crop_bottom"] = crop_bottom
 
     return config
 
@@ -463,7 +662,11 @@ def build_from_video_shared_config_or_default(
 ) -> T:
     return _build_from_config_loaders_or_default(
         builder,
-        [load_check_data_config, load_video_shared_config],
+        [
+            load_check_data_config,
+            load_get_check_data_files_config,
+            load_video_shared_config,
+        ],
         config_path,
         default_builder,
     )
@@ -476,7 +679,12 @@ def build_from_video_match_config_or_default(
 ) -> T:
     return _build_from_config_loaders_or_default(
         builder,
-        [load_check_data_config, load_video_shared_config, load_video_match_config],
+        [
+            load_check_data_config,
+            load_get_check_data_files_config,
+            load_video_shared_config,
+            load_video_match_config,
+        ],
         config_path,
         default_builder,
     )
@@ -491,8 +699,27 @@ def build_from_av_correspondence_config_or_default(
         builder,
         [
             load_check_data_config,
+            load_get_check_data_files_config,
             load_video_shared_config,
             load_av_correspondence_config,
+        ],
+        config_path,
+        default_builder,
+    )
+
+
+def build_from_clip_config_or_default(
+    builder: Callable[..., T],
+    config_path: Path | None = None,
+    default_builder: Callable[[], T] | None = None,
+) -> T:
+    return _build_from_config_loaders_or_default(
+        builder,
+        [
+            load_check_data_config,
+            load_get_check_data_files_config,
+            load_video_shared_config,
+            load_clip_config,
         ],
         config_path,
         default_builder,
@@ -508,9 +735,11 @@ def build_from_video_clip_config_or_default(
         builder,
         [
             load_check_data_config,
+            load_get_check_data_files_config,
             load_video_shared_config,
             load_video_match_config,
             load_av_correspondence_config,
+            load_clip_config,
         ],
         config_path,
         default_builder,
