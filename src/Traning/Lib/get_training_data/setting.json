@@ -1,0 +1,21 @@
+{
+    "runtime": {
+        "overwrite": false,
+        "continue_on_error": false
+    },
+    "check_data": {
+        "enabled": true,
+        "run_get_files": true,
+        "run_verify_export": true,
+        "run_difficulty_export": true
+    },
+    "video_clip": {
+        "enabled": true,
+        "run_video_init_check": true,
+        "run_video_match": true,
+        "run_av_correspondence": true,
+        "run_clip_stage": true,
+        "use_audio_match_experiment": true,
+        "global_offset_ms": 0.0
+    }
+}

@@ -7,7 +7,9 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, TypeVar
 
 from Traning.Lib.function_tools.functions_process_tool import (
+    config_bools,
     config_filenames,
+    config_floats,
     config_nonempty_strs,
     config_nonnegative_ints,
     config_positive_floats,
@@ -70,6 +72,12 @@ OUTPUT_FILENAME_CONFIG_SPECS = config_filenames(
 VIDEO_SUFFIXES_CONFIG_SPECS = config_suffix_tuples(
     video_suffixes=("file_formats.video_suffixes", "video_shared.video_suffixes"),
 )
+VIDEO_MATCH_CONFIG_SPECS = config_bools(
+    use_audio_match_experiment=(
+        "parameters.video_match.use_audio_match_experiment",
+        "video_match.use_audio_match_experiment",
+    ),
+)
 AV_CONFIG_SPECS = (
     merge_config_specs(
         config_filenames(
@@ -97,11 +105,21 @@ AV_CONFIG_SPECS = (
                 "av_correspondence.envelope_hz",
             ),
             refine_hz=("parameters.av_correspondence.refine_hz", "av_correspondence.refine_hz"),
+            music_lowpass_hz=(
+                "parameters.av_correspondence.music_lowpass_hz",
+                "av_correspondence.music_lowpass_hz",
+            ),
         ),
         config_positive_floats(
             refine_search_seconds=(
                 "parameters.av_correspondence.refine_search_seconds",
                 "av_correspondence.refine_search_seconds",
+            ),
+        ),
+        config_floats(
+            global_offset_ms=(
+                "parameters.av_correspondence.global_offset_ms",
+                "av_correspondence.global_offset_ms",
             ),
         ),
     )
@@ -171,6 +189,7 @@ AV_CORRESPONDENCE_PROCESSOR_CONFIG_SPECS = merge_config_specs(
     TARGET_ROOT_CONFIG_SPECS,
     ORDER_FILENAME_CONFIG_SPECS,
     AUDIO_FILENAME_CONFIG_SPECS,
+    VERIFY_FILENAME_CONFIG_SPECS,
     OUTPUT_FILENAME_CONFIG_SPECS,
     VIDEO_SUFFIXES_CONFIG_SPECS,
     AV_CONFIG_SPECS,
@@ -194,10 +213,21 @@ VIDEO_CLIP_PIPELINE_CONFIG_SPECS = merge_config_specs(
     VIDEO_ROOT_CONFIG_SPECS,
     ORDER_FILENAME_CONFIG_SPECS,
     AUDIO_FILENAME_CONFIG_SPECS,
+    VERIFY_FILENAME_CONFIG_SPECS,
     OUTPUT_FILENAME_CONFIG_SPECS,
     VIDEO_SUFFIXES_CONFIG_SPECS,
+    VIDEO_MATCH_CONFIG_SPECS,
     AV_CONFIG_SPECS,
     PREFIXED_CLIP_CONFIG_SPECS,
+)
+AUDIO_MATCH_EXPERIMENT_CONFIG_SPECS = merge_config_specs(
+    TARGET_ROOT_CONFIG_SPECS,
+    VIDEO_ROOT_CONFIG_SPECS,
+    ORDER_FILENAME_CONFIG_SPECS,
+    AUDIO_FILENAME_CONFIG_SPECS,
+    VERIFY_FILENAME_CONFIG_SPECS,
+    VIDEO_SUFFIXES_CONFIG_SPECS,
+    AV_CONFIG_SPECS,
 )
 
 
@@ -253,6 +283,12 @@ def _optional_nonempty_str(value: Any) -> str | None:
     return normalized or None
 
 
+def _optional_bool(value: Any) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    return None
+
+
 def _optional_filename(value: Any) -> str | None:
     normalized = _optional_nonempty_str(value)
     if normalized is None:
@@ -293,6 +329,14 @@ def _optional_positive_float(value: Any) -> float | None:
     if isinstance(value, bool):
         return None
     if isinstance(value, (int, float)) and float(value) > 0:
+        return float(value)
+    return None
+
+
+def _optional_float(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
         return float(value)
     return None
 
@@ -388,6 +432,9 @@ class ConfigReader:
     def nonempty_str(self, *paths: tuple[str, ...]) -> str | None:
         return self._read_value(_optional_nonempty_str, *paths)
 
+    def bool(self, *paths: tuple[str, ...]) -> bool | None:
+        return self._read_value(_optional_bool, *paths)
+
     def filename(self, *paths: tuple[str, ...]) -> str | None:
         return self._read_value(_optional_filename, *paths)
 
@@ -402,6 +449,9 @@ class ConfigReader:
 
     def positive_float(self, *paths: tuple[str, ...]) -> float | None:
         return self._read_value(_optional_positive_float, *paths)
+
+    def float(self, *paths: tuple[str, ...]) -> float | None:
+        return self._read_value(_optional_float, *paths)
 
     def string_tuple(self, *paths: tuple[str, ...]) -> tuple[str, ...] | None:
         return self._read_value(_optional_string_tuple, *paths)

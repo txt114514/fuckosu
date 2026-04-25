@@ -13,7 +13,9 @@ __all__ = [
     "FailedReportStoreLike",
     "FolderBatchProcessor",
     "FolderWalkerLike",
+    "config_bools",
     "config_filenames",
+    "config_floats",
     "config_nonempty_strs",
     "config_nonnegative_ints",
     "config_positive_floats",
@@ -91,6 +93,10 @@ def config_nonempty_strs(**entries: ConfigPathGroupInput) -> tuple[ConfigValueSp
     return _config_values("nonempty_str", **entries)
 
 
+def config_bools(**entries: ConfigPathGroupInput) -> tuple[ConfigValueSpec, ...]:
+    return _config_values("bool", **entries)
+
+
 def config_string_tuples(**entries: ConfigPathGroupInput) -> tuple[ConfigValueSpec, ...]:
     return _config_values("string_tuple", **entries)
 
@@ -109,6 +115,10 @@ def config_nonnegative_ints(**entries: ConfigPathGroupInput) -> tuple[ConfigValu
 
 def config_positive_floats(**entries: ConfigPathGroupInput) -> tuple[ConfigValueSpec, ...]:
     return _config_values("positive_float", **entries)
+
+
+def config_floats(**entries: ConfigPathGroupInput) -> tuple[ConfigValueSpec, ...]:
+    return _config_values("float", **entries)
 
 
 def merge_config_specs(

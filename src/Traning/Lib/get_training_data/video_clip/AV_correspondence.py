@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import ast
 import sys
 import tempfile
 from pathlib import Path
-from typing import Iterable, List
+from typing import Iterable
 
 import numpy as np
 from scipy import signal
@@ -18,7 +19,6 @@ from Traning.Lib.function_tools.functions_process_tool import (
     read_config_values,
 )
 from Traning.Lib.function_tools.video_process_tool import (
-    get_audio_stream_start_time,
     run_ffmpeg,
 )
 from Traning.Lib.get_training_data.config_loader import (
@@ -33,6 +33,7 @@ DEFAULT_REPO_ROOT = Path(__file__).resolve().parents[5]
 DEFAULT_TARGET_ROOT = DEFAULT_REPO_ROOT / "training_package" / "match-completed_package"
 DEFAULT_ORDER_FILENAME = "order.txt"
 DEFAULT_AUDIO_FILENAME = "audio.mp3"
+DEFAULT_VERIFY_FILENAME = "verify.txt"
 DEFAULT_OUTPUT_FILENAME = "video_processed.mp4"
 DEFAULT_FAILED_FILENAME = "av_correspondence_failed.txt"
 DEFAULT_STATUS_STEP = "av_corresponded"
@@ -41,6 +42,9 @@ DEFAULT_SAMPLE_RATE = 8000
 DEFAULT_ENVELOPE_HZ = 100
 DEFAULT_REFINE_HZ = 1000
 DEFAULT_REFINE_SEARCH_SECONDS = 1.5
+DEFAULT_MUSIC_LOWPASS_HZ = 1500
+DEFAULT_VERIFY_CORRECTION_WINDOW_MS = 120.0
+DEFAULT_GLOBAL_OFFSET_MS = 0.0
 DEFAULT_VIDEO_SUFFIXES = (".mp4", ".webm", ".mkv", ".avi", ".mov")
 
 # 默认值保留在当前文件；config.json 里的合法参数只用于覆盖这些默认值。
@@ -70,6 +74,7 @@ class AVCorrespondenceProcessor(FolderBatchProcessor):
         target_root: str = str(DEFAULT_TARGET_ROOT),
         order_filename: str = DEFAULT_ORDER_FILENAME,
         audio_filename: str = DEFAULT_AUDIO_FILENAME,
+        verify_filename: str = DEFAULT_VERIFY_FILENAME,
         output_filename: str = DEFAULT_OUTPUT_FILENAME,
         failed_filename: str = DEFAULT_FAILED_FILENAME,
         status_step: str = DEFAULT_STATUS_STEP,
@@ -78,6 +83,8 @@ class AVCorrespondenceProcessor(FolderBatchProcessor):
         envelope_hz: int = DEFAULT_ENVELOPE_HZ,
         refine_hz: int = DEFAULT_REFINE_HZ,
         refine_search_seconds: float = DEFAULT_REFINE_SEARCH_SECONDS,
+        music_lowpass_hz: int = DEFAULT_MUSIC_LOWPASS_HZ,
+        global_offset_ms: float = DEFAULT_GLOBAL_OFFSET_MS,
         video_suffixes: Iterable[str] = DEFAULT_VIDEO_SUFFIXES,
         status_manager: ProcessStatusManager | None = None,
     ):
@@ -89,12 +96,17 @@ class AVCorrespondenceProcessor(FolderBatchProcessor):
             raise ValueError("refine_hz 必须大于 0")
         if refine_search_seconds <= 0:
             raise ValueError("refine_search_seconds 必须大于 0")
+        if music_lowpass_hz <= 0:
+            raise ValueError("music_lowpass_hz 必须大于 0")
+        if not np.isfinite(float(global_offset_ms)):
+            raise ValueError("global_offset_ms 必须是有限数字")
         if not status_step.strip():
             raise ValueError("status_step 不能为空")
 
         self.target_root = Path(target_root)
         self.order_filename = order_filename
         self.audio_filename = audio_filename
+        self.verify_filename = verify_filename
         self.output_filename = output_filename
         super().__init__(failed_filename)
         self.status_step = status_step.strip()
@@ -103,6 +115,8 @@ class AVCorrespondenceProcessor(FolderBatchProcessor):
         self.envelope_hz = envelope_hz
         self.refine_hz = min(sample_rate, refine_hz)
         self.refine_search_seconds = refine_search_seconds
+        self.music_lowpass_hz = music_lowpass_hz
+        self.global_offset_ms = float(global_offset_ms)
         self.video_suffixes = {suffix.lower() for suffix in video_suffixes}
         self.store = BeatmapFolderStore(
             target_root=str(self.target_root),
@@ -210,6 +224,28 @@ class AVCorrespondenceProcessor(FolderBatchProcessor):
 
         return self._normalize_series(feature)
 
+    def _lowpass_samples(self, samples: np.ndarray) -> np.ndarray:
+        nyquist_hz = self.sample_rate / 2.0
+        normalized_cutoff = self.music_lowpass_hz / nyquist_hz
+        if normalized_cutoff >= 1.0:
+            return samples.astype(np.float32, copy=False)
+
+        b, a = signal.butter(4, normalized_cutoff, btype="low")
+        pad_length = 3 * (max(len(a), len(b)) - 1)
+        if samples.size <= pad_length:
+            return samples.astype(np.float32, copy=False)
+
+        filtered = signal.filtfilt(b, a, samples)
+        return filtered.astype(np.float32)
+
+    def _build_music_refine_series(self, samples: np.ndarray) -> np.ndarray:
+        filtered_samples = self._lowpass_samples(samples)
+        return self._build_feature_series(
+            filtered_samples,
+            self.refine_hz,
+            mode="energy",
+        )
+
     def _estimate_best_start_frame(
         self,
         long_series: np.ndarray,
@@ -261,16 +297,10 @@ class AVCorrespondenceProcessor(FolderBatchProcessor):
         )
         coarse_offset_seconds = coarse_start_frame / float(self.envelope_hz)
 
-        fine_video = self._build_feature_series(
-            video_audio_samples,
-            self.refine_hz,
-            mode="transient",
-        )
-        fine_song = self._build_feature_series(
-            song_audio_samples,
-            self.refine_hz,
-            mode="transient",
-        )
+        # 视频里额外混入打击音效时，瞬态特征容易被玩家输入带偏。
+        # 细对齐改为低通后的能量序列，更偏向歌曲主体而不是短促点击声。
+        fine_video = self._build_music_refine_series(video_audio_samples)
+        fine_song = self._build_music_refine_series(song_audio_samples)
         if fine_video.size < fine_song.size:
             raise ValueError(
                 "视频音频时长短于歌曲音频，无法在视频中找到完整歌曲片段"
@@ -316,6 +346,90 @@ class AVCorrespondenceProcessor(FolderBatchProcessor):
         if not audio_path.exists():
             raise FileNotFoundError(f"{folder_name} 中缺少音频文件: {audio_path.name}")
         return audio_path
+
+    def _resolve_verify_path(self, folder_name: str) -> Path:
+        return self.store.get_file_path(folder_name, self.verify_filename)
+
+    def _parse_verify_hit_times_ms(self, verify_path: Path) -> list[int]:
+        if not verify_path.is_file():
+            return []
+
+        hit_times_ms: list[int] = []
+        for raw_line in verify_path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            name, rest = line.split("(", 1)
+            args = ast.literal_eval(f"({rest}")
+            if name in {"Circle", "Slider", "Spinner"}:
+                hit_times_ms.append(int(args[0]))
+        return hit_times_ms
+
+    def _build_verify_click_train(self, hit_times_ms: list[int], length_frames: int) -> np.ndarray:
+        click_train = np.zeros(length_frames, dtype=np.float32)
+        radius = int(round(self.refine_hz * 0.03))
+        sigma = max(radius / 2, 1)
+        for time_ms in hit_times_ms:
+            center = int(round((time_ms / 1000.0) * self.refine_hz))
+            left = max(0, center - radius)
+            right = min(click_train.size, center + radius + 1)
+            if left >= right:
+                continue
+            xs = np.arange(left, right) - center
+            pulse = np.exp(-(xs.astype(np.float32) ** 2) / (2.0 * sigma**2))
+            click_train[left:right] += pulse.astype(np.float32)
+        return self._normalize_series(click_train)
+
+    def _estimate_verify_adjustment_seconds(
+        self,
+        transient_series: np.ndarray,
+        verify_path: Path,
+        base_offset_seconds: float,
+    ) -> tuple[float, dict[str, float]] | None:
+        hit_times_ms = self._parse_verify_hit_times_ms(verify_path)
+        if not hit_times_ms:
+            return None
+
+        last_hit_seconds = max(hit_times_ms) / 1000.0
+        click_train = self._build_verify_click_train(
+            hit_times_ms,
+            int(np.ceil(last_hit_seconds * self.refine_hz)) + 1,
+        )
+        base_frame = int(round(base_offset_seconds * self.refine_hz))
+        window_frames = int(
+            round(DEFAULT_VERIFY_CORRECTION_WINDOW_MS / 1000.0 * self.refine_hz)
+        )
+
+        best_delta_frames: int | None = None
+        best_score: float | None = None
+        for delta_frames in range(-window_frames, window_frames + 1):
+            start = base_frame + delta_frames
+            end = start + click_train.size
+            if start < 0 or end > transient_series.size:
+                continue
+
+            score = float(
+                np.dot(
+                    self._normalize_series(transient_series[start:end]),
+                    click_train,
+                )
+                / max(click_train.size, 1)
+            )
+            if best_score is None or score > best_score:
+                best_delta_frames = delta_frames
+                best_score = score
+
+        if best_delta_frames is None or best_score is None or best_score <= 0.0:
+            return None
+
+        verify_adjustment_seconds = best_delta_frames / float(self.refine_hz)
+        verify_adjustment_ms = verify_adjustment_seconds * 1000.0
+        return verify_adjustment_seconds, {
+            "verify_adjustment_seconds": verify_adjustment_seconds,
+            "verify_adjustment_ms": verify_adjustment_ms,
+            "verify_score": best_score,
+            "verify_window_ms": DEFAULT_VERIFY_CORRECTION_WINDOW_MS,
+        }
 
     def _validate_trim_window(
         self,
@@ -442,9 +556,8 @@ class AVCorrespondenceProcessor(FolderBatchProcessor):
 
         source_video_path = self._resolve_source_video_path(folder_name)
         song_audio_path = self._resolve_song_audio_path(folder_name)
+        verify_path = self._resolve_verify_path(folder_name)
         output_video_path = self.store.get_file_path(folder_name, self.output_filename)
-        video_audio_start_time = get_audio_stream_start_time(source_video_path)
-        song_audio_start_time = get_audio_stream_start_time(song_audio_path)
 
         self._update_progress(
             folder_name,
@@ -452,6 +565,7 @@ class AVCorrespondenceProcessor(FolderBatchProcessor):
             detail={
                 "source_video_path": str(source_video_path),
                 "audio_path": str(song_audio_path),
+                "verify_path": str(verify_path),
                 "output_video_path": str(output_video_path),
             },
         )
@@ -472,8 +586,25 @@ class AVCorrespondenceProcessor(FolderBatchProcessor):
                 video_audio_samples,
                 song_audio_samples,
             )
-            metadata_adjustment_seconds = video_audio_start_time - song_audio_start_time
-            offset_seconds = raw_offset_seconds + metadata_adjustment_seconds
+            verify_adjustment_seconds = 0.0
+            verify_detail = None
+            verify_adjustment = self._estimate_verify_adjustment_seconds(
+                self._build_feature_series(
+                    video_audio_samples,
+                    self.refine_hz,
+                    mode="transient",
+                ),
+                verify_path,
+                raw_offset_seconds,
+            )
+            if verify_adjustment is not None:
+                verify_adjustment_seconds, verify_detail = verify_adjustment
+            global_offset_seconds = self.global_offset_ms / 1000.0
+            offset_seconds = (
+                raw_offset_seconds
+                + verify_adjustment_seconds
+                + global_offset_seconds
+            )
             song_duration_seconds = song_audio_samples.size / float(self.sample_rate)
             video_duration_seconds = video_audio_samples.size / float(self.sample_rate)
             trim_start_seconds = self._validate_trim_window(
@@ -487,6 +618,8 @@ class AVCorrespondenceProcessor(FolderBatchProcessor):
             "trimming_video",
             detail={
                 "raw_offset_seconds": round(raw_offset_seconds, 6),
+                "verify_adjustment_seconds": round(verify_adjustment_seconds, 6),
+                "global_offset_seconds": round(global_offset_seconds, 6),
                 "offset_seconds": round(offset_seconds, 6),
                 "trim_start_seconds": round(trim_start_seconds, 6),
                 "trim_duration_seconds": round(song_duration_seconds, 6),
@@ -499,25 +632,35 @@ class AVCorrespondenceProcessor(FolderBatchProcessor):
             trim_duration_seconds=song_duration_seconds,
         )
 
+        detail = {
+            "stage": "done",
+            "source_video_path": str(source_video_path),
+            "output_video_path": str(output_video_path),
+            "audio_path": str(song_audio_path),
+            "verify_path": str(verify_path),
+            "raw_offset_seconds": round(raw_offset_seconds, 6),
+            "verify_adjustment_seconds": round(verify_adjustment_seconds, 6),
+            "global_offset_seconds": round(global_offset_seconds, 6),
+            "global_offset_ms": round(self.global_offset_ms, 6),
+            "offset_seconds": round(offset_seconds, 6),
+            "trim_start_seconds": round(trim_start_seconds, 6),
+            "trim_duration_seconds": round(song_duration_seconds, 6),
+            "match_score": round(score, 6),
+            "coarse_match_score": round(coarse_score, 6),
+            "refine_hz": self.refine_hz,
+            "music_lowpass_hz": self.music_lowpass_hz,
+        }
+        if verify_detail is not None:
+            detail.update(
+                {
+                    key: round(value, 6)
+                    for key, value in verify_detail.items()
+                }
+            )
         self.status_manager.mark_step_done(
             folder_name,
             self.status_step,
-            detail={
-                "stage": "done",
-                "source_video_path": str(source_video_path),
-                "output_video_path": str(output_video_path),
-                "audio_path": str(song_audio_path),
-                "raw_offset_seconds": round(raw_offset_seconds, 6),
-                "metadata_adjustment_seconds": round(metadata_adjustment_seconds, 6),
-                "offset_seconds": round(offset_seconds, 6),
-                "video_audio_start_time": round(video_audio_start_time, 6),
-                "song_audio_start_time": round(song_audio_start_time, 6),
-                "trim_start_seconds": round(trim_start_seconds, 6),
-                "trim_duration_seconds": round(song_duration_seconds, 6),
-                "match_score": round(score, 6),
-                "coarse_match_score": round(coarse_score, 6),
-                "refine_hz": self.refine_hz,
-            },
+            detail=detail,
         )
         return "success"
 

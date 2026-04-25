@@ -51,11 +51,16 @@
     },
 
     "parameters": {
+        "video_match": {
+            "use_audio_match_experiment": true
+        },
         "av_correspondence": {
             "sample_rate": 8000,
             "envelope_hz": 100,
             "refine_hz": 1000,
-            "refine_search_seconds": 1.5
+            "refine_search_seconds": 1.5,
+            "music_lowpass_hz": 1500,
+            "global_offset_ms": 0.0
         },
         "clip": {
             "crop_reference_width": 2048,
