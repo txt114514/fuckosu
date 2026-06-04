@@ -43,6 +43,13 @@ RUN pip install --no-cache-dir \
     torchvision torchaudio \
     stable-baselines3 gymnasium \
     tensorboard slider \
-    rich loguru
+    rich loguru \
+    typer \
+    prefect \
+    pydantic \
+    pydantic-settings \
+    sqlmodel \
+    alembic \
+    pathspec
 
 CMD ["/bin/bash"]

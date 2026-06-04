@@ -11,14 +11,14 @@ services:
 
     image: osu-ai-dev:latest
     container_name: osu_ai_dev
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+    gpus: all
     privileged: true
     network_mode: host
     pid: host

@@ -1,0 +1,74 @@
+progress:
+  process_steps:
+    - osu_imported
+    - audio_imported
+    - verify_exported
+    - difficulty_exported
+    - video_matched
+    - av_corresponded
+    - video_processed
+  status_steps:
+    av_correspondence: av_corresponded
+    clip: video_processed
+  required_steps:
+    av_correspondence:
+      - audio_imported
+      - video_matched
+    clip:
+      - av_corresponded
+
+runtime:
+  overwrite: false
+  continue_on_error: false
+
+check_data:
+  run_get_files: true
+  run_verify_export: true
+  run_difficulty_export: true
+
+video_clip:
+  run_video_match: true
+  run_av_correspondence: true
+  run_clip_stage: true
+  use_audio_match_experiment: true
+  global_offset_ms: 0.0
+
+file_management:
+  export_dir: ../../../osu-lazer/exports
+  target_root: ../../../training_package/match-completed_package
+  video_root: ../../../training_package/video_package
+  order_filename: order.txt
+  verify_filename: verify.txt
+  difficulty_filename: difficulty.txt
+  verify_failed_filename: verify_failed.txt
+  difficulty_failed_filename: difficulty_failed.txt
+  audio_filename: audio.mp3
+  output_filename: video_processed.mp4
+  av_correspondence_failed_filename: av_correspondence_failed.txt
+  clip_failed_filename: clip_failed.txt
+
+file_formats:
+  keyword: normal
+  video_suffixes:
+    - .mp4
+    - .webm
+    - .mkv
+    - .avi
+    - .mov
+
+parameters:
+  video_match:
+    use_audio_match_experiment: true
+  av_correspondence:
+    sample_rate: 8000
+    envelope_hz: 100
+    refine_hz: 1000
+    refine_search_seconds: 1.5
+    music_lowpass_hz: 1500
+  clip:
+    crop_reference_width: 2048
+    crop_reference_height: 1152
+    crop_left: 186
+    crop_top: 178
+    crop_right: 1768
+    crop_bottom: 1080
