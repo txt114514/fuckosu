@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 from time import perf_counter
@@ -8,16 +7,15 @@ from time import perf_counter
 if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-DEFAULT_REPO_ROOT = Path(__file__).resolve().parents[2]
-os.environ.setdefault("PREFECT_HOME", str(DEFAULT_REPO_ROOT / ".prefect"))
-
 import typer
 from rich.console import Console
 from rich.table import Table
 
-from Traning.conf import Settings, load_settings
+from Traning.conf import Settings, ensure_prefect_home, load_settings
 from Traning.core.flows.pipeline import train_pipeline, train_pipeline_direct
 
+
+ensure_prefect_home()
 
 app = typer.Typer(help="Training data workflow commands.", no_args_is_help=False)
 console = Console()

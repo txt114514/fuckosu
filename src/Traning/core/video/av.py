@@ -4,7 +4,7 @@ from time import perf_counter
 
 from loguru import logger
 
-from Traning.Lib.video.av import (
+from Traning.Lib.video.av_processing import (
     VideoAVProcessor,
 )
 from Traning.conf import Settings

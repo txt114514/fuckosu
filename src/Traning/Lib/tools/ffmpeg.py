@@ -8,11 +8,29 @@ from typing import Any
 
 
 __all__ = [
+    "build_crop_video_args",
+    "build_extract_wav_args",
+    "build_trim_video_args",
     "get_audio_stream_start_time",
     "get_video_size",
     "run_ffmpeg",
     "run_ffprobe_json",
 ]
+
+COMMON_FFMPEG_ARGS = ("-y", "-hide_banner", "-loglevel", "error")
+FASTSTART_ARGS = ("-movflags", "+faststart")
+AUDIO_AAC_192K_ARGS = ("-c:a", "aac", "-b:a", "192k")
+H264_FAST_ARGS = ("-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p")
+H264_VERYFAST_ARGS = (
+    "-c:v",
+    "libx264",
+    "-preset",
+    "veryfast",
+    "-crf",
+    "18",
+    "-pix_fmt",
+    "yuv420p",
+)
 
 
 def _command_error_text(
@@ -35,6 +53,75 @@ def run_ffmpeg(args: Sequence[str]):
     result = _run_command(["ffmpeg", *args])
     if result.returncode != 0:
         raise RuntimeError(_command_error_text(result, "未知 ffmpeg 错误"))
+
+
+def build_extract_wav_args(
+    source_path: Path,
+    output_path: Path,
+    *,
+    sample_rate: int,
+    from_video: bool,
+) -> tuple[str, ...]:
+    video_args = ("-vn",) if from_video else ()
+    return (
+        *COMMON_FFMPEG_ARGS,
+        "-i",
+        str(source_path),
+        *video_args,
+        "-ac",
+        "1",
+        "-ar",
+        str(sample_rate),
+        "-f",
+        "wav",
+        "-acodec",
+        "pcm_s16le",
+        str(output_path),
+    )
+
+
+def build_trim_video_args(
+    source_video_path: Path,
+    output_video_path: Path,
+    *,
+    trim_start_seconds: float,
+    trim_duration_seconds: float,
+) -> tuple[str, ...]:
+    return (
+        *COMMON_FFMPEG_ARGS,
+        "-i",
+        str(source_video_path),
+        "-ss",
+        f"{trim_start_seconds:.6f}",
+        "-t",
+        f"{trim_duration_seconds:.6f}",
+        *H264_VERYFAST_ARGS,
+        *AUDIO_AAC_192K_ARGS,
+        *FASTSTART_ARGS,
+        str(output_video_path),
+    )
+
+
+def build_crop_video_args(
+    source_video_path: Path,
+    output_video_path: Path,
+    *,
+    crop_left: int,
+    crop_top: int,
+    crop_width: int,
+    crop_height: int,
+) -> tuple[str, ...]:
+    return (
+        *COMMON_FFMPEG_ARGS,
+        "-i",
+        str(source_video_path),
+        "-vf",
+        f"crop={crop_width}:{crop_height}:{crop_left}:{crop_top}",
+        *H264_FAST_ARGS,
+        *AUDIO_AAC_192K_ARGS,
+        *FASTSTART_ARGS,
+        str(output_video_path),
+    )
 
 
 def run_ffprobe_json(

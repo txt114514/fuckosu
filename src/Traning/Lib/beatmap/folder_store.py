@@ -5,6 +5,8 @@ from typing import Iterable, List, Tuple, Literal
 
 from Traning.Lib.beatmap.order import OrderFolderWalker
 from Traning.Lib.common.pathspec import filter_files, gitwildmatch_spec
+from Traning.conf.legacy_config import settings_namespace
+from Traning.Lib.defaults import DEFAULT_SETTINGS as DEFAULTS
 
 
 WriteMode = Literal["overwrite", "append", "skip_if_exists"]
@@ -18,7 +20,11 @@ class BeatmapFolderStore:
     3. 文件夹不存在时直接报错，由 PackageUpdater 负责先同步目录结构
     """
 
-    def __init__(self, target_root: str, order_filename: str = "order.txt"):
+    def __init__(
+        self,
+        target_root: str,
+        order_filename: str = DEFAULTS.file_management.order_filename,
+    ):
         self.target_root = Path(target_root)
         self.order_filename = order_filename
 
@@ -167,12 +173,16 @@ class BeatmapFolderStore:
     def write_failed_report(
         self,
         failed_cases: List[Tuple[str, str]],
-        failed_filename: str = "verify_failed.txt",
+        failed_filename: str | None = None,
     ) -> Path:
         """
         失败报告写在 target_root 根目录下。
         这不是某个谱面文件夹内的文件，所以不受 order.txt 单目录限制。
         """
+        failed_filename = (
+            failed_filename
+            or settings_namespace(DEFAULTS, processor="verify").failed_filename
+        )
         if not failed_filename or Path(failed_filename).name != failed_filename:
             raise ValueError(f"failed_filename 非法: {failed_filename}")
 

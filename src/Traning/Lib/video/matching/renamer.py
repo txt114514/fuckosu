@@ -1,70 +1,39 @@
 from __future__ import annotations
 
 import re
-import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Iterable
 
-if __package__ is None or __package__ == "":
-    sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
-
-from Traning.Lib.common.batch import (
-    read_config_values,
-)
-from Traning.conf.legacy_config import (
-    build_from_config_or_default,
-    ConfigReader,
-    VIDEO_PACKAGE_RENAMER_CONFIG_SPECS,
-)
-from Traning.state.process_status import ProcessStatusManager
+from Traning.conf import Settings
+from Traning.conf.legacy_config import assign_group, settings_namespace
 from Traning.Lib.beatmap.order import OrderFolderWalker
 from Traning.Lib.common.pathspec import filter_files, matches_name, suffix_spec
+from Traning.Lib.defaults import DEFAULT_SETTINGS as DEFAULTS
+from Traning.state.process_status import ProcessStatusManager
 
-DEFAULT_REPO_ROOT = Path(__file__).resolve().parents[5]
-DEFAULT_TARGET_ROOT = DEFAULT_REPO_ROOT / "training_package" / "match-completed_package"
-DEFAULT_VIDEO_ROOT = DEFAULT_REPO_ROOT / "training_package" / "video_package"
-DEFAULT_ORDER_FILENAME = "order.txt"
-DEFAULT_VIDEO_SUFFIXES = (".mp4", ".webm", ".mkv", ".avi", ".mov")
 
-# 默认值保留在当前文件；config.json 里的合法参数只用于覆盖这些默认值。
-
-# 视频文件名规则仍然固定在代码里，便于保持严格格式校验。
 VIDEO_TIME_PATTERN = re.compile(
     r"^osu_(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})_"
     r"(?P<hour>\d{2})-(?P<minute>\d{2})-(?P<second>\d{2})$"
 )
 
 
-def _load_video_package_renamer_config(config: ConfigReader) -> dict[str, object]:
-    # video_match 阶段只读取视频源目录、目标目录、order 文件名和允许的视频后缀。
-    return read_config_values(config, VIDEO_PACKAGE_RENAMER_CONFIG_SPECS)
-
-
-def build_video_package_renamer_from_config_or_default(
-    config_path: Path | None = None,
-) -> "VideoPackageRenamer":
-    return build_from_config_or_default(
-        VideoPackageRenamer,
-        [_load_video_package_renamer_config],
-        config_path=config_path,
-        default_builder=VideoPackageRenamer,
-    )
-
-
 class VideoPackageRenamer:
     def __init__(
         self,
-        video_root: str = str(DEFAULT_VIDEO_ROOT),
-        target_root: str = str(DEFAULT_TARGET_ROOT),
-        order_filename: str = DEFAULT_ORDER_FILENAME,
-        video_suffixes: Iterable[str] = DEFAULT_VIDEO_SUFFIXES,
+        settings: Settings = DEFAULTS,
         status_manager: ProcessStatusManager | None = None,
+        **overrides: object,
     ):
-        self.video_root = Path(video_root)
-        self.target_root = Path(target_root)
-        self.order_filename = order_filename
-        self.video_suffixes = {suffix.lower() for suffix in video_suffixes}
+        if not isinstance(settings, Settings):
+            overrides = {"video_root": settings, **overrides}
+            settings = DEFAULTS
+
+        config = settings_namespace(settings, processor="video_package", overrides=overrides)
+        assign_group(self, config, "video_package")
+        self.video_root = Path(self.video_root)
+        self.target_root = Path(self.target_root)
+        self.video_suffixes = {suffix.lower() for suffix in config.video_suffixes}
         self.video_file_spec = suffix_spec(self.video_suffixes)
         self.walker = OrderFolderWalker(
             target_root=str(self.target_root),
@@ -213,70 +182,3 @@ class VideoPackageRenamer:
 
 class VideoMatchRenamer(VideoPackageRenamer):
     """Task-aligned name for sequence-based video matching."""
-
-
-class VideoMatchProcessor:
-    """Video matching entry point used by the video/match task."""
-
-    def __init__(
-        self,
-        video_root: str = str(DEFAULT_VIDEO_ROOT),
-        target_root: str = str(DEFAULT_TARGET_ROOT),
-        order_filename: str = DEFAULT_ORDER_FILENAME,
-        audio_filename: str = "audio.mp3",
-        verify_filename: str = "verify.txt",
-        video_suffixes: Iterable[str] = DEFAULT_VIDEO_SUFFIXES,
-        use_audio_match_experiment: bool = True,
-        sample_rate: int = 8000,
-        envelope_hz: int = 100,
-        refine_hz: int = 1000,
-        refine_search_seconds: float = 1.5,
-        music_lowpass_hz: int = 1500,
-    ):
-        self.video_root = video_root
-        self.target_root = target_root
-        self.order_filename = order_filename
-        self.audio_filename = audio_filename
-        self.verify_filename = verify_filename
-        self.video_suffixes = tuple(video_suffixes)
-        self.use_audio_match_experiment = use_audio_match_experiment
-        self.sample_rate = sample_rate
-        self.envelope_hz = envelope_hz
-        self.refine_hz = refine_hz
-        self.refine_search_seconds = refine_search_seconds
-        self.music_lowpass_hz = music_lowpass_hz
-
-    def run(self) -> None:
-        if self.use_audio_match_experiment:
-            from Traning.Lib.audio.match import AudioMatchProcessor
-
-            AudioMatchProcessor(
-                video_root=self.video_root,
-                target_root=self.target_root,
-                order_filename=self.order_filename,
-                audio_filename=self.audio_filename,
-                verify_filename=self.verify_filename,
-                video_suffixes=self.video_suffixes,
-                sample_rate=self.sample_rate,
-                envelope_hz=self.envelope_hz,
-                refine_hz=self.refine_hz,
-                refine_search_seconds=self.refine_search_seconds,
-                music_lowpass_hz=self.music_lowpass_hz,
-            ).run(apply_matches=True, allow_fallback_videos=False)
-            return
-
-        VideoMatchRenamer(
-            video_root=self.video_root,
-            target_root=self.target_root,
-            order_filename=self.order_filename,
-            video_suffixes=self.video_suffixes,
-        ).run()
-
-
-def main():
-    renamer = build_video_package_renamer_from_config_or_default()
-    renamer.run()
-
-
-if __name__ == "__main__":
-    main()

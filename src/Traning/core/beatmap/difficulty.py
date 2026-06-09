@@ -17,8 +17,7 @@ def export_difficulty(settings: Settings) -> bool:
     BeatmapDifficultyProcessor(
         walker=store.walker,
         store=store,
-        difficulty_filename=settings.file_management.difficulty_filename,
-        failed_filename=settings.file_management.difficulty_failed_filename,
+        settings=settings,
     ).run(overwrite=settings.overwrite)
     logger.info("完成 difficulty_export ({:.2f}s)", perf_counter() - started_at)
     return True

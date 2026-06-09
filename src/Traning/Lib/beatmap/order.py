@@ -3,9 +3,15 @@ from __future__ import annotations
 from pathlib import Path
 from typing import List
 
+from Traning.Lib.defaults import DEFAULT_SETTINGS as DEFAULTS
+
 
 class OrderFolderWalker:
-    def __init__(self, target_root: str, order_filename: str = "order.txt"):
+    def __init__(
+        self,
+        target_root: str,
+        order_filename: str = DEFAULTS.file_management.order_filename,
+    ):
         self.target_root = Path(target_root)
         self.order_file = self.target_root / order_filename
 

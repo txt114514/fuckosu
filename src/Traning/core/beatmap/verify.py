@@ -4,7 +4,7 @@ from time import perf_counter
 
 from loguru import logger
 
-from Traning.Lib.beatmap.verify import BeatmapVerifyExporter
+from Traning.Lib.beatmap.verification import BeatmapVerifyExporter
 from Traning.Lib.beatmap.folder_store import BeatmapFolderStore
 from Traning.conf import Settings
 

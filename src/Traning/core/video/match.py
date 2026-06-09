@@ -4,7 +4,7 @@ from time import perf_counter
 
 from loguru import logger
 
-from Traning.Lib.video.match import VideoMatchProcessor
+from Traning.Lib.video.matching import VideoMatchProcessor
 from Traning.conf import Settings
 
 

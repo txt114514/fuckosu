@@ -1,4 +1,4 @@
-from Traning.Lib.audio.match import AudioMatchProcessor
+"""Audio package.
 
-
-__all__ = ["AudioMatchProcessor"]
+Call processors from their assembly subpackages, for example Traning.Lib.audio.matching.
+"""

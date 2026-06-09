@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import inspect
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Callable, Iterable, Mapping, TypeVar
 
 from loguru import logger
 
 from Traning.conf import Settings, load_settings
+from Traning.conf.field_groups import assign_group, forward_kwargs, group_values
 
 
 CONFIG_PATH = Path(__file__).resolve().parents[2] / "conf" / "config.yaml"
@@ -65,9 +67,9 @@ def load_process_steps_config_or_default(
         return tuple(default_steps)
 
 
-def _settings_kwargs(settings: Settings) -> dict[str, Any]:
+def settings_kwargs(settings: Settings, processor: str | None = None) -> dict[str, Any]:
     files = settings.file_management
-    return {
+    values = {
         "export_dir": str(files.export_dir),
         "target_root": str(files.target_root),
         "video_root": str(files.video_root),
@@ -80,6 +82,7 @@ def _settings_kwargs(settings: Settings) -> dict[str, Any]:
         "output_filename": files.output_filename,
         "video_suffixes": settings.file_formats.video_suffixes,
         "keyword": settings.file_formats.keyword,
+        "failed_filename": files.av_correspondence_failed_filename,
         "status_step": settings.progress.av_status_step,
         "required_steps": settings.progress.av_required_steps,
         "sample_rate": settings.av.sample_rate,
@@ -87,7 +90,11 @@ def _settings_kwargs(settings: Settings) -> dict[str, Any]:
         "refine_hz": settings.av.refine_hz,
         "refine_search_seconds": settings.av.refine_search_seconds,
         "music_lowpass_hz": settings.av.music_lowpass_hz,
+        "verify_correction_window_ms": settings.av.verify_correction_window_ms,
         "global_offset_ms": settings.global_offset_ms,
+        "top_k": settings.audio_match.top_k,
+        "match_status_step": settings.audio_match.match_status_step,
+        "ignore_patterns": settings.package.ignore_patterns,
         "use_audio_match_experiment": settings.video_clip.use_audio_match_experiment,
         "clip_failed_filename": files.clip_failed_filename,
         "clip_status_step": settings.clip.status_step,
@@ -106,9 +113,69 @@ def _settings_kwargs(settings: Settings) -> dict[str, Any]:
         "crop_bottom": settings.clip.crop_bottom,
     }
 
+    if processor == "clip":
+        values.update(
+            failed_filename=values["clip_failed_filename"],
+            status_step=values["clip_status_step"],
+            required_steps=values["clip_required_steps"],
+        )
+    elif processor == "verify":
+        values.update(failed_filename=values["verify_failed_filename"])
+
+    return values
+
+
+def _coerce_like(reference: Any, value: Any) -> Any:
+    if value is None or isinstance(value, type(reference)):
+        return value
+
+    if isinstance(reference, bool):
+        if isinstance(value, str):
+            return value.strip().lower() in {"1", "true", "yes", "on"}
+        return bool(value)
+
+    if isinstance(reference, tuple):
+        if isinstance(value, str):
+            return (value,)
+        return tuple(value)
+
+    if isinstance(reference, Path):
+        return Path(value)
+
+    return type(reference)(value)
+
+
+def settings_namespace(
+    settings: Settings,
+    processor: str | None = None,
+    overrides: Mapping[str, Any] | None = None,
+) -> SimpleNamespace:
+    values = settings_kwargs(settings, processor=processor)
+    for key, value in (overrides or {}).items():
+        values[key] = _coerce_like(values[key], value) if key in values else value
+    if processor == "clip":
+        values["failed_filename"] = values["clip_failed_filename"]
+        values["status_step"] = values["clip_status_step"]
+        values["required_steps"] = values["clip_required_steps"]
+    elif processor == "verify":
+        values["failed_filename"] = values["verify_failed_filename"]
+    elif processor == "difficulty":
+        values["failed_filename"] = values["difficulty_failed_filename"]
+    return SimpleNamespace(**values)
+
+
+def _settings_kwargs(settings: Settings) -> dict[str, Any]:
+    return settings_kwargs(settings)
+
 
 def _filter_builder_kwargs(builder: Callable[..., T], config: Mapping[str, Any]) -> dict[str, Any]:
     signature = inspect.signature(builder)
+    if any(
+        parameter.kind is inspect.Parameter.VAR_KEYWORD
+        for parameter in signature.parameters.values()
+    ):
+        return dict(config)
+
     accepted = {
         name
         for name, parameter in signature.parameters.items()

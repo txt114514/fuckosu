@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-import os
 import traceback
-from pathlib import Path
 from typing import Callable
 
 from loguru import logger
 
-os.environ.setdefault("PREFECT_HOME", str(Path(__file__).resolve().parents[3] / ".prefect"))
+from Traning.conf import ensure_prefect_home
+
+ensure_prefect_home()
 
 from prefect import flow
 

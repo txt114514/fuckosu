@@ -1,21 +1,14 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Iterable, List
+from typing import List
 
 import pathspec
 
 from Traning.Lib.beatmap.order import OrderFolderWalker
-
-
-DEFAULT_IGNORE_PATTERNS = (
-    "__pycache__/",
-    ".pytest_cache/",
-    ".mypy_cache/",
-    ".ruff_cache/",
-    "temp/",
-    "tmp/",
-)
+from Traning.conf import Settings
+from Traning.conf.legacy_config import settings_namespace
+from Traning.Lib.defaults import DEFAULT_SETTINGS as DEFAULTS
 
 
 class PackageUpdater:
@@ -28,14 +21,18 @@ class PackageUpdater:
 
     def __init__(
         self,
-        target_root: str,
-        order_filename: str = "order.txt",
-        ignore_patterns: Iterable[str] = DEFAULT_IGNORE_PATTERNS,
+        target_root: str | Settings,
+        **overrides: object,
     ):
-        self.target_root = Path(target_root)
-        self.order_filename = order_filename
-        self.order_file = self.target_root / order_filename
-        self.ignore_spec = pathspec.PathSpec.from_lines("gitwildmatch", ignore_patterns)
+        settings = target_root if isinstance(target_root, Settings) else DEFAULTS
+        if not isinstance(target_root, Settings):
+            overrides = {"target_root": target_root, **overrides}
+
+        config = settings_namespace(settings, processor="package", overrides=overrides)
+        self.target_root = Path(config.target_root)
+        self.order_filename = config.order_filename
+        self.order_file = self.target_root / self.order_filename
+        self.ignore_spec = pathspec.PathSpec.from_lines("gitwildmatch", config.ignore_patterns)
 
         self.target_root.mkdir(parents=True, exist_ok=True)
         if not self.order_file.exists():

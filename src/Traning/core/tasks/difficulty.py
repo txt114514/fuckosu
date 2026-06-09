@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import os
-from pathlib import Path
+from Traning.conf import ensure_prefect_home
 
-os.environ.setdefault("PREFECT_HOME", str(Path(__file__).resolve().parents[3] / ".prefect"))
+ensure_prefect_home()
 
 from prefect import task
 

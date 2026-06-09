@@ -8,7 +8,12 @@ from Traning.Lib.beatmap.folder_store import (
     BeatmapFolderStore,
     WriteMode,
 )
+from Traning.Lib.beatmap.difficulty_batch import DifficultyBatchMixin
+from Traning.Lib.beatmap.osu_metadata import read_overall_difficulty
 from Traning.Lib.beatmap.order import OrderFolderWalker
+from Traning.conf import Settings
+from Traning.conf.legacy_config import settings_namespace
+from Traning.Lib.defaults import DEFAULT_SETTINGS as DEFAULTS
 from Traning.state.process_status import (
     ProcessStatusManager,
 )
@@ -20,19 +25,24 @@ class DifficultyEntry:
     difficulty_value: float
 
 
-class DifficultyFileManager:
+class DifficultyFileManager(DifficultyBatchMixin):
     def __init__(
         self,
         store: BeatmapFolderStore,
         walker: OrderFolderWalker | None = None,
-        difficulty_filename: str = "difficulty.txt",
-        failed_filename: str = "difficulty_failed.txt",
+        settings: Settings = DEFAULTS,
         status_manager: ProcessStatusManager | None = None,
+        **overrides: object,
     ):
+        if not isinstance(settings, Settings):
+            overrides = {"difficulty_filename": settings, **overrides}
+            settings = DEFAULTS
+
+        config = settings_namespace(settings, processor="difficulty", overrides=overrides)
         self.store = store
         self.walker = walker or store.walker
-        self.difficulty_filename = difficulty_filename
-        self.failed_filename = failed_filename
+        self.difficulty_filename = config.difficulty_filename
+        self.failed_filename = config.failed_filename
         self.status_manager = status_manager or ProcessStatusManager(
             target_root=str(store.target_root),
             order_filename=store.order_filename,
@@ -42,29 +52,6 @@ class DifficultyFileManager:
         self.skip_count = 0
         self.fail_count = 0
         self.failed_cases: List[tuple[str, str]] = []
-
-    def _extract_difficulty_from_osu(self, osu_path: Path) -> float:
-        in_difficulty_section = False
-
-        with osu_path.open("r", encoding="utf-8-sig") as f:
-            for raw_line in f:
-                line = raw_line.strip()
-
-                if not line or line.startswith("//"):
-                    continue
-
-                if line.startswith("[") and line.endswith("]"):
-                    in_difficulty_section = (line == "[Difficulty]")
-                    continue
-
-                if not in_difficulty_section or ":" not in line:
-                    continue
-
-                key, value = line.split(":", 1)
-                if key.strip() == "OverallDifficulty":
-                    return float(value.strip())
-
-        raise ValueError(f"{osu_path} 缺少 OverallDifficulty")
 
     def write_difficulty(
         self,
@@ -106,7 +93,7 @@ class DifficultyFileManager:
             self.skip_count += 1
             return "skip"
 
-        difficulty_value = self._extract_difficulty_from_osu(osu_files[0])
+        difficulty_value = read_overall_difficulty(osu_files[0])
         write_mode: WriteMode = "overwrite" if overwrite else "skip_if_exists"
 
         result = self.write_difficulty(
@@ -165,40 +152,6 @@ class DifficultyFileManager:
             )
 
         return matched_entries
-
-    def run(self, overwrite: bool = False):
-        folder_names = self.walker.read_folder_names()
-
-        for folder_name in folder_names:
-            try:
-                result = self.export_one(folder_name, overwrite=overwrite)
-                if result == "success":
-                    print(f"[完成] {folder_name}")
-                else:
-                    print(f"[跳过] {folder_name}")
-            except Exception as e:
-                self.fail_count += 1
-                self.failed_cases.append((folder_name, str(e)))
-                if self.store.folder_exists(folder_name):
-                    self.status_manager.ensure_status_file(folder_name)
-                    self.status_manager.mark_step_pending(
-                        folder_name,
-                        "difficulty_exported",
-                        detail={"error": str(e)},
-                    )
-                print(f"[失败] {folder_name}: {e}")
-
-        failed_path = self.store.write_failed_report(
-            self.failed_cases,
-            failed_filename=self.failed_filename,
-        )
-
-        print()
-        print(
-            f"处理完成：成功 {self.success_count} 个，跳过 {self.skip_count} 个，失败 {self.fail_count} 个"
-        )
-        print(f"失败名单：{failed_path}")
-
 
 class BeatmapDifficultyProcessor(DifficultyFileManager):
     """Task-aligned name for the beatmap difficulty export processor."""

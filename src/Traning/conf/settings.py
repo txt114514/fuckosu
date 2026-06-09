@@ -69,6 +69,23 @@ class AVSettings(BaseModel):
     refine_hz: int = 1000
     refine_search_seconds: float = 1.5
     music_lowpass_hz: int = 1500
+    verify_correction_window_ms: float = 120.0
+
+
+class AudioMatchSettings(BaseModel):
+    top_k: int = 3
+    match_status_step: str = "video_matched"
+
+
+class PackageSettings(BaseModel):
+    ignore_patterns: tuple[str, ...] = (
+        "__pycache__/",
+        ".pytest_cache/",
+        ".mypy_cache/",
+        ".ruff_cache/",
+        "temp/",
+        "tmp/",
+    )
 
 
 class ClipSettings(BaseModel):
@@ -109,6 +126,8 @@ class Settings(BaseSettings):
     file_management: FileManagementSettings = Field(default_factory=FileManagementSettings)
     file_formats: FileFormatSettings = Field(default_factory=FileFormatSettings)
     av: AVSettings = Field(default_factory=AVSettings)
+    audio_match: AudioMatchSettings = Field(default_factory=AudioMatchSettings)
+    package: PackageSettings = Field(default_factory=PackageSettings)
     clip: ClipSettings = Field(default_factory=ClipSettings)
     progress: ProgressSettings = Field(default_factory=ProgressSettings)
 
@@ -158,6 +177,7 @@ def _extract_nested(raw: dict[str, Any]) -> dict[str, Any]:
 
     extracted = dict(raw)
     extracted["av"] = parameters.get("av_correspondence", {})
+    extracted["audio_match"] = parameters.get("audio_match", {})
     extracted["clip"] = {
         **parameters.get("clip", {}),
         "status_step": status_steps.get("clip", "video_processed"),
