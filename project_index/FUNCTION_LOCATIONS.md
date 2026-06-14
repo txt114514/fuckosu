@@ -2,83 +2,35 @@
 
 > 自动生成文件，请勿手工修改。运行 `python project_index/build_index.py` 重建。
 
-快速位置表：`343` 个命名函数/方法，附带 `70` 个类定义。
+快速位置表：`380` 个命名函数/方法，附带 `72` 个类定义。
 格式为 `起止行  类型  限定名`；路径按模块分组。
 
 快速搜索：`rg -n "符号名" project_index/FUNCTION_LOCATIONS.md`。
 
-## `src/Traning/Lib/audio/matching/matching.py`
+## `src/before_traning/Lib/beatmap/folder_store.py`
 
-- `30-31` `F` `_load_audio_match_experiment_config`
-- `34-42` `F` `build_audio_match_experiment_from_config_or_default`
-- `45-85` `C` `AudioMatchExperiment`
-- `50-85` `M` `AudioMatchExperiment.__init__`
-- `88-89` `C` `AudioMatchProcessor`
-- `92-94` `F` `main`
+- `18-242` `C` `BeatmapFolderStore`
+- `26-40` `M` `BeatmapFolderStore.__init__`
+- `42-50` `M` `BeatmapFolderStore._normalize_folder_name`
+- `52-53` `M` `BeatmapFolderStore._registered_names`
+- `55-57` `M` `BeatmapFolderStore.is_registered`
+- `59-63` `M` `BeatmapFolderStore._assert_registered`
+- `65-68` `M` `BeatmapFolderStore.get_folder_path`
+- `70-72` `M` `BeatmapFolderStore.folder_exists`
+- `74-80` `M` `BeatmapFolderStore._require_existing_folder`
+- `82-85` `M` `BeatmapFolderStore.find_files`
+- `87-88` `M` `BeatmapFolderStore.find_osu_files`
+- `90-95` `M` `BeatmapFolderStore.get_file_path`
+- `97-98` `M` `BeatmapFolderStore.file_exists`
+- `100-136` `M` `BeatmapFolderStore.write_text`
+- `138-155` `M` `BeatmapFolderStore.write_lines`
+- `157-168` `M` `BeatmapFolderStore.append_line`
+- `170-174` `M` `BeatmapFolderStore.read_text`
+- `176-187` `M` `BeatmapFolderStore.create_output_directory`
+- `189-207` `M` `BeatmapFolderStore.recover_atomic_outputs`
+- `210-242` `M` `BeatmapFolderStore.atomic_output_folder`
 
-## `src/Traning/Lib/audio/matching/preflight.py`
-
-- `9-97` `C` `AudioMatchPreflightMixin`
-- `10-15` `M` `AudioMatchPreflightMixin._folder_has_video`
-- `17-45` `M` `AudioMatchPreflightMixin._sync_video_matched_status`
-- `47-62` `M` `AudioMatchPreflightMixin._pending_folder_names`
-- `64-74` `M` `AudioMatchPreflightMixin._candidate_folder_names`
-- `76-97` `M` `AudioMatchPreflightMixin._candidate_videos`
-
-## `src/Traning/Lib/audio/matching/steps.py`
-
-- `12-194` `C` `AudioMatchStepsMixin`
-- `13-17` `M` `AudioMatchStepsMixin._extract_samples`
-- `19-32` `M` `AudioMatchStepsMixin._build_alignment_features`
-- `34-69` `M` `AudioMatchStepsMixin._estimate_offset_from_features`
-- `71-79` `M` `AudioMatchStepsMixin._result_sort_key`
-- `81-173` `M` `AudioMatchStepsMixin._score_pairs`
-- `175-194` `M` `AudioMatchStepsMixin._select_greedy_matches`
-
-## `src/Traning/Lib/audio/matching/wrapup.py`
-
-- `9-160` `C` `AudioMatchWrapUpMixin`
-- `10-26` `M` `AudioMatchWrapUpMixin._print_greedy_matches`
-- `28-133` `M` `AudioMatchWrapUpMixin._apply_matches`
-- `135-160` `M` `AudioMatchWrapUpMixin.run`
-
-## `src/Traning/Lib/beatmap/difficulty.py`
-
-- `18-20` `C` `DifficultyEntry`
-- `23-134` `C` `DifficultyFileManager`
-- `24-42` `M` `DifficultyFileManager.__init__`
-- `44-49` `M` `DifficultyFileManager.write_difficulty`
-- `51-55` `M` `DifficultyFileManager.read_difficulty`
-- `57-103` `M` `DifficultyFileManager.export_one`
-- `105-134` `M` `DifficultyFileManager.list_difficulties`
-- `137-138` `C` `BeatmapDifficultyProcessor`
-
-## `src/Traning/Lib/beatmap/difficulty_batch.py`
-
-- `6-32` `C` `DifficultyBatchMixin`
-- `7-32` `M` `DifficultyBatchMixin.run`
-
-## `src/Traning/Lib/beatmap/folder_store.py`
-
-- `14-170` `C` `BeatmapFolderStore`
-- `22-36` `M` `BeatmapFolderStore.__init__`
-- `38-46` `M` `BeatmapFolderStore._normalize_folder_name`
-- `48-49` `M` `BeatmapFolderStore._registered_names`
-- `51-53` `M` `BeatmapFolderStore.is_registered`
-- `55-59` `M` `BeatmapFolderStore._assert_registered`
-- `61-64` `M` `BeatmapFolderStore.get_folder_path`
-- `66-68` `M` `BeatmapFolderStore.folder_exists`
-- `70-76` `M` `BeatmapFolderStore._require_existing_folder`
-- `78-81` `M` `BeatmapFolderStore.find_files`
-- `83-84` `M` `BeatmapFolderStore.find_osu_files`
-- `86-91` `M` `BeatmapFolderStore.get_file_path`
-- `93-94` `M` `BeatmapFolderStore.file_exists`
-- `96-132` `M` `BeatmapFolderStore.write_text`
-- `134-151` `M` `BeatmapFolderStore.write_lines`
-- `153-164` `M` `BeatmapFolderStore.append_line`
-- `166-170` `M` `BeatmapFolderStore.read_text`
-
-## `src/Traning/Lib/beatmap/hit_objects.py`
+## `src/before_traning/Lib/beatmap/hit_objects.py`
 
 - `8-11` `C` `HitObject`
 - `13-17` `C` `Circle`
@@ -88,90 +40,43 @@
 - `27-29` `C` `Spinner`
 - `28-29` `M` `Spinner.__post_init__`
 
-## `src/Traning/Lib/beatmap/importing/entry.py`
+## `src/before_traning/Lib/beatmap/manifest.py`
 
-- `8-16` `C` `OsuEntry`
+- `28-32` `C` `ManifestEntry`
+- `35-393` `C` `PackageManifest`
+- `38-56` `M` `PackageManifest.__init__`
+- `58-68` `M` `PackageManifest._ensure_schema`
+- `70-73` `M` `PackageManifest._all_items`
+- `75-81` `M` `PackageManifest._normalize_source_name`
+- `83-91` `M` `PackageManifest._next_folder_number`
+- `93-94` `M` `PackageManifest._folder_name`
+- `96-101` `M` `PackageManifest._legacy_osu_filename`
+- `103-152` `M` `PackageManifest._rename_legacy_folders`
+- `154-167` `M` `PackageManifest._restore_legacy_folders`
+- `169-211` `M` `PackageManifest._migrate_legacy_order`
+- `213-234` `M` `PackageManifest._migrate_legacy_difficulty_files`
+- `236-248` `M` `PackageManifest.export_table`
+- `250-285` `M` `PackageManifest.replace`
+- `287-294` `M` `PackageManifest.read_folder_names`
+- `296-297` `M` `PackageManifest.read_all_folder_names`
+- `299-305` `M` `PackageManifest.source_name_for`
+- `307-320` `M` `PackageManifest.set_difficulty`
+- `322-329` `M` `PackageManifest.difficulty_for`
+- `331-367` `M` `PackageManifest.save_beatmap_data`
+- `369-390` `M` `PackageManifest.beatmap_data_for`
+- `392-393` `M` `PackageManifest.is_active`
+- `396-414` `C` `ManifestFolderWalker`
+- `397-408` `M` `ManifestFolderWalker.__init__`
+- `410-411` `M` `ManifestFolderWalker.read_folder_names`
+- `413-414` `M` `ManifestFolderWalker.source_name_for`
 
-## `src/Traning/Lib/beatmap/importing/importing.py`
-
-- `27-28` `F` `_load_osu_osz_processor_config`
-- `31-39` `F` `build_osu_osz_processor_from_config_or_default`
-- `42-50` `F` `build_beatmap_import_processor_from_config_or_default`
-- `53-82` `C` `OsuOszProcessor`
-- `54-82` `M` `OsuOszProcessor.__init__`
-- `85-86` `C` `BeatmapImportProcessor`
-- `89-91` `F` `main`
-
-## `src/Traning/Lib/beatmap/importing/scanner.py`
-
-- `13-113` `C` `OszScannerMixin`
-- `14-19` `M` `OszScannerMixin._is_target_osu`
-- `21-34` `M` `OszScannerMixin._read_audio_bytes`
-- `36-62` `M` `OszScannerMixin._scan_single_osz`
-- `64-113` `M` `OszScannerMixin._scan_all_entries_in_time_order`
-
-## `src/Traning/Lib/beatmap/importing/wrapup.py`
-
-- `4-28` `C` `OszImportWrapUpMixin`
-- `5-28` `M` `OszImportWrapUpMixin.run`
-
-## `src/Traning/Lib/beatmap/importing/writer.py`
-
-- `7-67` `C` `OszImportWriterMixin`
-- `8-22` `M` `OszImportWriterMixin._rebuild_manifest`
-- `24-67` `M` `OszImportWriterMixin._sync_folders_and_copy_files`
-
-## `src/Traning/Lib/beatmap/manifest.py`
-
-- `21-25` `C` `ManifestEntry`
-- `28-322` `C` `PackageManifest`
-- `31-48` `M` `PackageManifest.__init__`
-- `50-60` `M` `PackageManifest._ensure_schema`
-- `62-65` `M` `PackageManifest._all_items`
-- `67-73` `M` `PackageManifest._normalize_source_name`
-- `75-83` `M` `PackageManifest._next_folder_number`
-- `85-86` `M` `PackageManifest._folder_name`
-- `88-93` `M` `PackageManifest._legacy_osu_filename`
-- `95-144` `M` `PackageManifest._rename_legacy_folders`
-- `146-159` `M` `PackageManifest._restore_legacy_folders`
-- `161-203` `M` `PackageManifest._migrate_legacy_order`
-- `205-226` `M` `PackageManifest._migrate_legacy_difficulty_files`
-- `228-238` `M` `PackageManifest.export_table`
-- `240-275` `M` `PackageManifest.replace`
-- `277-284` `M` `PackageManifest.read_folder_names`
-- `286-287` `M` `PackageManifest.read_all_folder_names`
-- `289-295` `M` `PackageManifest.source_name_for`
-- `297-310` `M` `PackageManifest.set_difficulty`
-- `312-319` `M` `PackageManifest.difficulty_for`
-- `321-322` `M` `PackageManifest.is_active`
-- `325-343` `C` `ManifestFolderWalker`
-- `326-337` `M` `ManifestFolderWalker.__init__`
-- `339-340` `M` `ManifestFolderWalker.read_folder_names`
-- `342-343` `M` `ManifestFolderWalker.source_name_for`
-
-## `src/Traning/Lib/beatmap/osu_metadata.py`
+## `src/before_traning/Lib/beatmap/osu_metadata.py`
 
 - `6-31` `F` `read_section_key`
 - `34-35` `F` `read_audio_filename`
 - `38-39` `F` `read_overall_difficulty`
 
-## `src/Traning/Lib/beatmap/package.py`
-
-- `14-101` `C` `PackageUpdater`
-- `22-42` `M` `PackageUpdater.__init__`
-- `44-45` `M` `PackageUpdater.load_manifest_folder_names`
-- `47-48` `M` `PackageUpdater.load_registered_names`
-- `50-51` `M` `PackageUpdater.replace_manifest`
-- `53-54` `M` `PackageUpdater.is_registered`
-- `56-71` `M` `PackageUpdater.create_folder_if_registered`
-- `73-83` `M` `PackageUpdater.sync_folders_from_manifest`
-- `85-101` `M` `PackageUpdater.find_unregistered_existing_folders`
-
-## `src/Traning/Lib/beatmap/timing_points.py`
-
-- `7-15` `C` `OsuOriginalTimingPoint`
-
-## `src/Traning/Lib/beatmap/verification/parser.py`
+## `src/before_traning/Lib/beatmap/osu_parser.py`
 
 - `10-212` `C` `VerifyOsuParser`
 - `11-35` `M` `VerifyOsuParser.parse_sections`
@@ -182,28 +87,40 @@
 - `172-188` `M` `VerifyOsuParser.objects_to_lines`
 - `190-212` `M` `VerifyOsuParser.hit_object_to_dict`
 
-## `src/Traning/Lib/beatmap/verification/steps.py`
+## `src/before_traning/Lib/beatmap/osz.py`
 
-- `6-73` `C` `VerifyStepsMixin`
-- `7-73` `M` `VerifyStepsMixin.process_one`
+- `12-20` `C` `OsuEntry`
+- `23-66` `F` `read_osz_entry`
 
-## `src/Traning/Lib/beatmap/verification/verification.py`
+## `src/before_traning/Lib/beatmap/package.py`
 
-- `27-28` `F` `_load_verify_exporter_config`
-- `31-48` `C` `VerifyExporter`
-- `32-48` `M` `VerifyExporter.__init__`
-- `51-52` `C` `BeatmapVerifyExporter`
-- `55-71` `F` `_build_verify_exporter_from_config`
-- `74-82` `F` `build_verify_exporter_from_config_or_default`
-- `85-88` `F` `build_beatmap_verify_exporter_from_config_or_default`
-- `91-93` `F` `main`
+- `12-98` `C` `PackageUpdater`
+- `20-39` `M` `PackageUpdater.__init__`
+- `41-42` `M` `PackageUpdater.load_manifest_folder_names`
+- `44-45` `M` `PackageUpdater.load_registered_names`
+- `47-48` `M` `PackageUpdater.replace_manifest`
+- `50-51` `M` `PackageUpdater.is_registered`
+- `53-68` `M` `PackageUpdater.create_folder_if_registered`
+- `70-80` `M` `PackageUpdater.sync_folders_from_manifest`
+- `82-98` `M` `PackageUpdater.find_unregistered_existing_folders`
 
-## `src/Traning/Lib/beatmap/verification/wrapup.py`
+## `src/before_traning/Lib/beatmap/standard.py`
 
-- `6-14` `C` `VerifyWrapUpMixin`
-- `7-14` `M` `VerifyWrapUpMixin.handle_failure`
+- `21-33` `C` `ParsedStandardBeatmap`
+- `32-33` `M` `ParsedStandardBeatmap.approach_preempt_ms`
+- `36-43` `F` `approach_preempt_ms`
+- `46-90` `F` `parse_standard_beatmap`
+- `93-97` `F` `parse_standard_hit_objects`
+- `100-116` `F` `_beatmap_to_payload`
+- `119-151` `F` `_hit_object_from_payload`
+- `154-173` `F` `_beatmap_from_payload`
+- `176-207` `F` `load_standard_beatmap`
 
-## `src/Traning/Lib/common/batch.py`
+## `src/before_traning/Lib/beatmap/timing_points.py`
+
+- `7-15` `C` `OsuOriginalTimingPoint`
+
+## `src/before_traning/Lib/common/batch.py`
 
 - `36-39` `C` `ConfigValueSpec`
 - `46-54` `F` `_normalize_config_path`
@@ -234,7 +151,7 @@
 - `218-222` `M` `FolderBatchProcessor._print_summary`
 - `224-244` `M` `FolderBatchProcessor.run`
 
-## `src/Traning/Lib/common/failures.py`
+## `src/before_traning/Lib/common/failures.py`
 
 - `11-21` `F` `_error_traceback`
 - `24-29` `F` `callable_location`
@@ -244,7 +161,7 @@
 - `73-77` `F` `format_failure`
 - `80-81` `F` `format_exception`
 
-## `src/Traning/Lib/common/pathspec.py`
+## `src/before_traning/Lib/common/pathspec.py`
 
 - `9-15` `F` `suffix_pattern`
 - `18-19` `F` `suffix_patterns`
@@ -253,77 +170,94 @@
 - `30-31` `F` `matches_name`
 - `34-35` `F` `filter_files`
 
-## `src/Traning/Lib/tools/ffmpeg.py`
+## `src/before_traning/Lib/common/processing.py`
 
-- `38-42` `F` `_command_error_text`
-- `45-51` `F` `_run_command`
-- `54-57` `F` `run_ffmpeg`
-- `60-82` `F` `build_extract_wav_args`
-- `85-104` `F` `build_trim_video_args`
-- `107-126` `F` `build_segment_video_args`
-- `129-148` `F` `build_crop_video_args`
-- `151-168` `F` `run_ffprobe_json`
-- `171-193` `F` `get_audio_stream_start_time`
-- `196-216` `F` `get_media_duration_seconds`
-- `219-240` `F` `get_video_size`
+- `16-24` `C` `FolderStoreLike`
+- `17-18` `M` `FolderStoreLike.folder_exists`
+- `20-21` `M` `FolderStoreLike.file_exists`
+- `23-24` `M` `FolderStoreLike.find_files`
+- `27-50` `C` `StatusManagerLike`
+- `30-31` `M` `StatusManagerLike.ensure_status_file`
+- `33-34` `M` `StatusManagerLike.is_step_done`
+- `36-42` `M` `StatusManagerLike.mark_step_done`
+- `44-50` `M` `StatusManagerLike.mark_step_pending`
+- `53-62` `F` `matching_files`
+- `66-174` `C` `ProcessingGuard`
+- `72-79` `M` `ProcessingGuard.__post_init__`
+- `81-98` `M` `ProcessingGuard.prepare_folder`
+- `100-109` `M` `ProcessingGuard.ensure_required_steps`
+- `111-119` `M` `ProcessingGuard.output_files_exist`
+- `121-137` `M` `ProcessingGuard.is_complete`
+- `139-143` `M` `ProcessingGuard.step_done`
+- `145-157` `M` `ProcessingGuard.reconcile_existing`
+- `159-164` `M` `ProcessingGuard.mark_done`
+- `166-174` `M` `ProcessingGuard.record_failure`
 
-## `src/Traning/Lib/video/av_processing/av_processing.py`
+## `src/before_traning/Lib/common/sequence.py`
 
-- `27-28` `F` `_load_av_correspondence_processor_config`
-- `31-39` `F` `build_av_correspondence_processor_from_config_or_default`
-- `42-84` `C` `AVCorrespondenceProcessor`
-- `48-84` `M` `AVCorrespondenceProcessor.__init__`
-- `87-88` `C` `VideoAVProcessor`
-- `91-93` `F` `main`
+- `4-17` `F` `format_sequence_name`
 
-## `src/Traning/Lib/video/av_processing/preflight.py`
+## `src/before_traning/Lib/tasks/flows.py`
 
-- `11-109` `C` `AVPreflightMixin`
-- `12-28` `M` `AVPreflightMixin._validate_config`
-- `30-39` `M` `AVPreflightMixin._ensure_status_steps_registered`
-- `41-59` `M` `AVPreflightMixin._resolve_source_video_path`
-- `61-65` `M` `AVPreflightMixin._resolve_song_audio_path`
-- `67-68` `M` `AVPreflightMixin._resolve_verify_path`
-- `70-97` `M` `AVPreflightMixin._sync_output_status`
-- `99-109` `M` `AVPreflightMixin._ensure_required_steps_done`
+- `18-125` `C` `TaskPipeline`
+- `19-34` `M` `TaskPipeline.__init__`
+- `36-50` `M` `TaskPipeline._call_stage`
+- `52-74` `M` `TaskPipeline._run`
+- `76-87` `M` `TaskPipeline._run_prefect`
+- `89-100` `M` `TaskPipeline.run_prefect`
+- `102-114` `M` `TaskPipeline.run_direct`
+- `116-125` `M` `TaskPipeline.__call__`
+- `128-140` `F` `build_task_pipeline`
 
-## `src/Traning/Lib/video/av_processing/steps.py`
+## `src/before_traning/Lib/tasks/tasks.py`
 
-- `15-412` `C` `AVCoreStepsMixin`
-- `16-24` `M` `AVCoreStepsMixin._extract_audio_to_wav`
-- `26-46` `M` `AVCoreStepsMixin._load_wav_samples`
-- `48-54` `M` `AVCoreStepsMixin._normalize_series`
-- `56-81` `M` `AVCoreStepsMixin._build_feature_series`
-- `83-95` `M` `AVCoreStepsMixin._lowpass_samples`
-- `97-103` `M` `AVCoreStepsMixin._build_music_refine_series`
-- `105-132` `M` `AVCoreStepsMixin._estimate_best_start_frame`
-- `134-180` `M` `AVCoreStepsMixin._estimate_offset_seconds`
-- `182-195` `M` `AVCoreStepsMixin._parse_verify_hit_times_ms`
-- `197-210` `M` `AVCoreStepsMixin._build_verify_click_train`
-- `212-261` `M` `AVCoreStepsMixin._estimate_verify_adjustment_seconds`
-- `263-285` `M` `AVCoreStepsMixin._validate_trim_window`
-- `287-301` `M` `AVCoreStepsMixin._trim_video`
-- `303-412` `M` `AVCoreStepsMixin.process_one`
+- `13-16` `F` `require_success`
+- `20-32` `C` `TaskSpec`
+- `28-32` `M` `TaskSpec.default_enabled`
+- `36-38` `C` `RegisteredTask`
+- `41-50` `F` `_build_prefect_task`
+- `42-43` `N` `_build_prefect_task.run_registered_task`
+- `53-113` `C` `TaskRegistry`
+- `54-76` `M` `TaskRegistry.__init__`
+- `79-80` `M` `TaskRegistry.registered`
+- `82-113` `M` `TaskRegistry.select`
 
-## `src/Traning/Lib/video/av_processing/wrapup.py`
+## `src/before_traning/Lib/tools/ffmpeg.py`
 
-- `6-74` `C` `AVWrapUpMixin`
-- `7-11` `M` `AVWrapUpMixin._update_progress`
-- `13-14` `M` `AVWrapUpMixin.progress_message`
-- `16-58` `M` `AVWrapUpMixin._build_done_detail`
-- `60-65` `M` `AVWrapUpMixin._mark_done`
-- `67-74` `M` `AVWrapUpMixin.handle_failure`
+- `42-46` `F` `_command_error_text`
+- `49-55` `F` `_run_command`
+- `58-61` `F` `run_ffmpeg`
+- `64-86` `F` `build_extract_wav_args`
+- `89-104` `F` `extract_wav`
+- `107-126` `F` `build_trim_video_args`
+- `129-148` `F` `trim_video`
+- `151-170` `F` `build_segment_video_args`
+- `173-192` `F` `segment_video`
+- `195-214` `F` `build_crop_video_args`
+- `217-236` `F` `crop_video`
+- `239-256` `F` `run_ffprobe_json`
+- `259-281` `F` `get_audio_stream_start_time`
+- `284-304` `F` `get_media_duration_seconds`
+- `307-328` `F` `get_video_size`
 
-## `src/Traning/Lib/video/clipping/clipping.py`
+## `src/before_traning/Lib/video/av_processing/steps.py`
 
-- `24-36` `F` `build_fixed_region_video_crop_processor_from_config_or_default`
-- `39-112` `C` `FixedRegionVideoCropProcessor`
-- `47-52` `M` `FixedRegionVideoCropProcessor.from_settings`
-- `54-112` `M` `FixedRegionVideoCropProcessor.__init__`
-- `115-116` `C` `VideoClipProcessor`
-- `119-121` `F` `main`
+- `13-295` `C` `AVCoreStepsMixin`
+- `14-20` `M` `AVCoreStepsMixin._extract_audio_to_wav`
+- `22-42` `M` `AVCoreStepsMixin._load_wav_samples`
+- `44-50` `M` `AVCoreStepsMixin._normalize_series`
+- `52-77` `M` `AVCoreStepsMixin._build_feature_series`
+- `79-91` `M` `AVCoreStepsMixin._lowpass_samples`
+- `93-99` `M` `AVCoreStepsMixin._build_music_refine_series`
+- `101-128` `M` `AVCoreStepsMixin._estimate_best_start_frame`
+- `130-176` `M` `AVCoreStepsMixin._estimate_offset_seconds`
+- `178-191` `M` `AVCoreStepsMixin._parse_verify_hit_times_ms`
+- `193-206` `M` `AVCoreStepsMixin._build_verify_click_train`
+- `208-257` `M` `AVCoreStepsMixin._estimate_verify_adjustment_seconds`
+- `259-281` `M` `AVCoreStepsMixin._validate_trim_window`
+- `283-295` `M` `AVCoreStepsMixin._trim_video`
 
-## `src/Traning/Lib/video/clipping/geometry.py`
+## `src/before_traning/Lib/video/clipping/geometry.py`
 
 - `8-95` `C` `ClipGeometryMixin`
 - `9-10` `M` `ClipGeometryMixin.get_video_size`
@@ -332,105 +266,57 @@
 - `77-92` `M` `ClipGeometryMixin._validate_crop_bounds`
 - `94-95` `M` `ClipGeometryMixin.describe_crop_for_video`
 
-## `src/Traning/Lib/video/clipping/preflight.py`
+## `src/before_traning/Lib/video/segment_dataset.py`
 
-- `4-32` `C` `ClipPreflightMixin`
-- `5-14` `M` `ClipPreflightMixin._ensure_status_steps_registered`
-- `16-32` `M` `ClipPreflightMixin._ensure_folder_ready`
+- `67-192` `C` `SegmentDatasetManifest`
+- `68-80` `M` `SegmentDatasetManifest.__init__`
+- `82-89` `M` `SegmentDatasetManifest._records`
+- `91-95` `M` `SegmentDatasetManifest.read_rows`
+- `97-129` `M` `SegmentDatasetManifest.replace_folder`
+- `131-145` `M` `SegmentDatasetManifest.write_table`
+- `147-152` `M` `SegmentDatasetManifest.export_table`
+- `154-174` `M` `SegmentDatasetManifest.import_existing_table`
+- `176-192` `M` `SegmentDatasetManifest.output_complete`
+- `195-199` `F` `write_json_file`
 
-## `src/Traning/Lib/video/clipping/steps.py`
+## `src/before_traning/Lib/video/segmentation/planner.py`
 
-- `9-47` `C` `ClipStepsMixin`
-- `10-29` `M` `ClipStepsMixin._crop_video_in_place`
-- `31-47` `M` `ClipStepsMixin.process_one`
+- `40-74` `C` `SegmentPlan`
+- `57-58` `M` `SegmentPlan.duration_seconds`
+- `61-62` `M` `SegmentPlan.pre_context_seconds`
+- `65-66` `M` `SegmentPlan.post_context_seconds`
+- `69-70` `M` `SegmentPlan.clip_start_ms`
+- `73-74` `M` `SegmentPlan.clip_end_ms`
+- `77-89` `F` `circle_radius_from_size`
+- `92-103` `F` `circle_overlap_ratio`
+- `106-125` `F` `_slider_polyline`
+- `128-135` `F` `_object_polyline`
+- `138-156` `F` `_point_to_segment_distance`
+- `159-167` `F` `_orientation`
+- `170-192` `F` `_segments_intersect`
+- `195-247` `F` `_polyline_distance`
+- `250-260` `F` `hit_objects_overlap_ratio`
+- `263-332` `F` `group_hit_objects`
+- `335-355` `F` `classify_hit_group`
+- `358-411` `F` `_build_plan`
+- `414-473` `F` `build_segment_plans`
+- `476-589` `F` `build_long_sequence_plans`
+- `506-527` `N` `build_long_sequence_plans.combined_plan`
+- `529-548` `N` `build_long_sequence_plans.flush`
 
-## `src/Traning/Lib/video/clipping/wrapup.py`
+## `src/before_traning/Lib/video/segmentation/segmentation.py`
 
-- `8-71` `C` `ClipWrapUpMixin`
-- `9-10` `M` `ClipWrapUpMixin.progress_message`
-- `12-20` `M` `ClipWrapUpMixin._reference_detail`
-- `22-37` `M` `ClipWrapUpMixin._mark_cropping`
-- `39-58` `M` `ClipWrapUpMixin._mark_done`
-- `60-71` `M` `ClipWrapUpMixin.handle_failure`
+- `14-20` `C` `SegmentPlanCollection`
+- `19-20` `M` `SegmentPlanCollection.all`
+- `23-65` `F` `plan_video_segments`
 
-## `src/Traning/Lib/video/matching/builders.py`
-
-- `14-15` `F` `_load_video_package_renamer_config`
-- `18-26` `F` `build_video_package_renamer_from_config_or_default`
-
-## `src/Traning/Lib/video/matching/matching.py`
-
-- `9-39` `C` `VideoMatchProcessor`
-- `12-23` `M` `VideoMatchProcessor.__init__`
-- `25-39` `M` `VideoMatchProcessor.run`
-
-## `src/Traning/Lib/video/matching/renamer.py`
-
-- `22-187` `C` `VideoPackageRenamer`
-- `23-46` `M` `VideoPackageRenamer.__init__`
-- `48-52` `M` `VideoPackageRenamer._folder_has_video`
-- `54-69` `M` `VideoPackageRenamer._parse_video_time`
-- `71-82` `M` `VideoPackageRenamer._list_videos_in_time_order`
-- `84-115` `M` `VideoPackageRenamer._pending_folder_names`
-- `117-142` `M` `VideoPackageRenamer._build_rename_plan`
-- `144-187` `M` `VideoPackageRenamer.run`
-- `190-191` `C` `VideoMatchRenamer`
-
-## `src/Traning/Lib/video/segmentation/planner.py`
-
-- `35-47` `C` `ParsedStandardBeatmap`
-- `46-47` `M` `ParsedStandardBeatmap.approach_preempt_ms`
-- `51-83` `C` `SegmentPlan`
-- `66-67` `M` `SegmentPlan.duration_seconds`
-- `70-71` `M` `SegmentPlan.pre_context_seconds`
-- `74-75` `M` `SegmentPlan.post_context_seconds`
-- `78-79` `M` `SegmentPlan.clip_start_ms`
-- `82-83` `M` `SegmentPlan.clip_end_ms`
-- `86-123` `F` `parse_standard_beatmap`
-- `126-127` `F` `parse_standard_hit_objects`
-- `130-137` `F` `approach_preempt_ms`
-- `140-152` `F` `circle_radius_from_size`
-- `155-166` `F` `circle_overlap_ratio`
-- `169-188` `F` `_slider_polyline`
-- `191-198` `F` `_object_polyline`
-- `201-219` `F` `_point_to_segment_distance`
-- `222-230` `F` `_orientation`
-- `233-255` `F` `_segments_intersect`
-- `258-310` `F` `_polyline_distance`
-- `313-323` `F` `hit_objects_overlap_ratio`
-- `326-395` `F` `group_hit_objects`
-- `398-418` `F` `classify_hit_group`
-- `421-510` `F` `build_segment_plans`
-
-## `src/Traning/Lib/video/segmentation/segmentation.py`
-
-- `76-579` `C` `VideoSegmentationProcessor`
-- `77-118` `M` `VideoSegmentationProcessor.__init__`
-- `120-132` `M` `VideoSegmentationProcessor._recover_interrupted_outputs`
-- `134-142` `M` `VideoSegmentationProcessor._sync_manifest_table`
-- `144-154` `M` `VideoSegmentationProcessor._ensure_status_steps_registered`
-- `156-157` `M` `VideoSegmentationProcessor.progress_message`
-- `159-160` `M` `VideoSegmentationProcessor._output_directory`
-- `162-185` `M` `VideoSegmentationProcessor._output_complete`
-- `187-194` `M` `VideoSegmentationProcessor._ensure_required_steps_done`
-- `196-200` `M` `VideoSegmentationProcessor._segment_directory_name`
-- `202-208` `M` `VideoSegmentationProcessor._overlap_merge_window_ms`
-- `210-223` `M` `VideoSegmentationProcessor._write_segment`
-- `225-240` `M` `VideoSegmentationProcessor._serialize_hit_object`
-- `242-300` `M` `VideoSegmentationProcessor._write_beatmap_data`
-- `302-317` `M` `VideoSegmentationProcessor._write_segment_table`
-- `319-323` `M` `VideoSegmentationProcessor._remove_output_path`
-- `325-465` `M` `VideoSegmentationProcessor._build_output`
-- `467-570` `M` `VideoSegmentationProcessor.process_one`
-- `572-579` `M` `VideoSegmentationProcessor.handle_failure`
-
-## `src/Traning/conf/field_groups.py`
+## `src/before_traning/conf/field_groups.py`
 
 - `72-73` `F` `group_values`
 - `76-78` `F` `assign_group`
 - `81-82` `F` `forward_kwargs`
 
-## `src/Traning/conf/legacy_config.py`
+## `src/before_traning/conf/legacy_config.py`
 
 - `20-21` `C` `CheckDataConfigError`
 - `24-37` `C` `ConfigReader`
@@ -448,11 +334,11 @@
 - `177-183` `F` `build_from_config`
 - `186-200` `F` `build_from_config_or_default`
 
-## `src/Traning/conf/runtime.py`
+## `src/before_traning/conf/runtime.py`
 
 - `9-12` `F` `ensure_prefect_home`
 
-## `src/Traning/conf/settings.py`
+## `src/before_traning/conf/settings.py`
 
 - `16-17` `C` `SettingsError`
 - `20-22` `C` `RuntimeSettings`
@@ -465,127 +351,252 @@
 - `71-73` `C` `AudioMatchSettings`
 - `76-84` `C` `PackageSettings`
 - `87-95` `C` `ClipSettings`
-- `98-135` `C` `SegmentSettings`
-- `109-112` `M` `SegmentSettings._nonnegative_interval`
-- `116-119` `M` `SegmentSettings._approach_ratio`
-- `123-126` `M` `SegmentSettings._overlap_ratio`
-- `130-135` `M` `SegmentSettings._nonnegative_context`
-- `138-150` `C` `ProgressSettings`
-- `153-186` `C` `Settings`
-- `173-174` `M` `Settings.target_root`
-- `177-178` `M` `Settings.overwrite`
-- `181-182` `M` `Settings.continue_on_error`
-- `185-186` `M` `Settings.global_offset_ms`
-- `189-199` `F` `_resolve_paths`
-- `202-237` `F` `_extract_nested`
-- `240-257` `F` `_read_config`
-- `260-266` `F` `load_settings`
+- `98-158` `C` `SegmentSettings`
+- `112-117` `M` `SegmentSettings._nonnegative_interval`
+- `121-124` `M` `SegmentSettings._long_sequence_object_limit`
+- `128-131` `M` `SegmentSettings._approach_ratio`
+- `135-138` `M` `SegmentSettings._overlap_ratio`
+- `144-149` `M` `SegmentSettings._nonnegative_context`
+- `153-158` `M` `SegmentSettings._positive_duration`
+- `161-173` `C` `ProgressSettings`
+- `176-209` `C` `Settings`
+- `196-197` `M` `Settings.target_root`
+- `200-201` `M` `Settings.overwrite`
+- `204-205` `M` `Settings.continue_on_error`
+- `208-209` `M` `Settings.global_offset_ms`
+- `212-222` `F` `_resolve_paths`
+- `225-260` `F` `_extract_nested`
+- `263-280` `F` `_read_config`
+- `283-289` `F` `load_settings`
 
-## `src/Traning/core/beatmap/difficulty.py`
+## `src/before_traning/core/audio/matching/matching.py`
 
-- `13-23` `F` `export_difficulty`
+- `30-31` `F` `_load_audio_match_experiment_config`
+- `34-42` `F` `build_audio_match_experiment_from_config_or_default`
+- `45-85` `C` `AudioMatchExperiment`
+- `50-85` `M` `AudioMatchExperiment.__init__`
+- `88-89` `C` `AudioMatchProcessor`
+- `92-94` `F` `main`
 
-## `src/Traning/core/beatmap/importer.py`
+## `src/before_traning/core/audio/matching/preflight.py`
 
-- `11-22` `F` `import_beatmaps`
+- `9-97` `C` `AudioMatchPreflightMixin`
+- `10-15` `M` `AudioMatchPreflightMixin._folder_has_video`
+- `17-45` `M` `AudioMatchPreflightMixin._sync_video_matched_status`
+- `47-62` `M` `AudioMatchPreflightMixin._pending_folder_names`
+- `64-74` `M` `AudioMatchPreflightMixin._candidate_folder_names`
+- `76-97` `M` `AudioMatchPreflightMixin._candidate_videos`
 
-## `src/Traning/core/beatmap/pipeline.py`
+## `src/before_traning/core/audio/matching/steps.py`
 
-- `9-14` `F` `prepare_beatmaps`
+- `12-194` `C` `AudioMatchStepsMixin`
+- `13-17` `M` `AudioMatchStepsMixin._extract_samples`
+- `19-32` `M` `AudioMatchStepsMixin._build_alignment_features`
+- `34-69` `M` `AudioMatchStepsMixin._estimate_offset_from_features`
+- `71-79` `M` `AudioMatchStepsMixin._result_sort_key`
+- `81-173` `M` `AudioMatchStepsMixin._score_pairs`
+- `175-194` `M` `AudioMatchStepsMixin._select_greedy_matches`
 
-## `src/Traning/core/beatmap/verify.py`
+## `src/before_traning/core/audio/matching/wrapup.py`
 
-- `12-16` `F` `build_store`
-- `19-28` `F` `export_verify`
+- `9-160` `C` `AudioMatchWrapUpMixin`
+- `10-26` `M` `AudioMatchWrapUpMixin._print_greedy_matches`
+- `28-133` `M` `AudioMatchWrapUpMixin._apply_matches`
+- `135-160` `M` `AudioMatchWrapUpMixin.run`
 
-## `src/Traning/core/flows/pipeline.py`
+## `src/before_traning/core/beatmap/beatmap.py`
 
-- `39-45` `C` `PipelineStage`
-- `108-116` `F` `_call_stage`
-- `119-120` `F` `_enabled`
-- `123-144` `F` `_run_stages`
-- `148-171` `F` `train_pipeline`
-- `174-197` `F` `train_pipeline_direct`
-- `200-245` `C` `TemporaryTrainingRunner`
-- `201-202` `M` `TemporaryTrainingRunner.__init__`
-- `204-245` `M` `TemporaryTrainingRunner.run`
+- `21-22` `F` `run_beatmap`
 
-## `src/Traning/core/tasks/__init__.py`
+## `src/before_traning/core/beatmap/difficulty.py`
 
-- `4-7` `F` `require_success`
+- `18-20` `C` `DifficultyEntry`
+- `23-115` `C` `BeatmapDifficultyProcessor`
+- `24-43` `M` `BeatmapDifficultyProcessor.__init__`
+- `45-50` `M` `BeatmapDifficultyProcessor.write_difficulty`
+- `52-56` `M` `BeatmapDifficultyProcessor.read_difficulty`
+- `58-90` `M` `BeatmapDifficultyProcessor.process_one`
+- `92-93` `M` `BeatmapDifficultyProcessor.handle_failure`
+- `95-115` `M` `BeatmapDifficultyProcessor.list_difficulties`
+- `121-131` `F` `export_difficulty`
 
-## `src/Traning/core/tasks/av.py`
+## `src/before_traning/core/beatmap/importer.py`
 
-- `15-16` `F` `av_correspondence_task`
+- `21-183` `C` `BeatmapImportProcessor`
+- `22-52` `M` `BeatmapImportProcessor.__init__`
+- `54-59` `M` `BeatmapImportProcessor._scan_single_osz`
+- `61-111` `M` `BeatmapImportProcessor._scan_entries`
+- `113-127` `M` `BeatmapImportProcessor._rebuild_manifest`
+- `129-161` `M` `BeatmapImportProcessor._write_entries`
+- `163-183` `M` `BeatmapImportProcessor.run`
+- `189-192` `F` `build_beatmap_import_processor_from_config_or_default`
+- `195-198` `F` `build_osu_osz_processor_from_config_or_default`
+- `201-206` `F` `import_beatmaps`
 
-## `src/Traning/core/tasks/clip.py`
+## `src/before_traning/core/beatmap/pipeline.py`
 
-- `15-16` `F` `crop_video_task`
+- `108-112` `F` `prepare_beatmaps`
+- `115-163` `C` `TemporaryTrainingRunner`
+- `116-117` `M` `TemporaryTrainingRunner.__init__`
+- `119-163` `M` `TemporaryTrainingRunner.run`
 
-## `src/Traning/core/tasks/difficulty.py`
+## `src/before_traning/core/beatmap/verify.py`
 
-- `15-16` `F` `export_difficulty_task`
+- `17-21` `F` `build_store`
+- `24-87` `C` `BeatmapVerifyExporter`
+- `25-45` `M` `BeatmapVerifyExporter.__init__`
+- `47-84` `M` `BeatmapVerifyExporter.process_one`
+- `86-87` `M` `BeatmapVerifyExporter.handle_failure`
+- `93-97` `F` `build_verify_exporter_from_config_or_default`
+- `100-103` `F` `build_beatmap_verify_exporter_from_config_or_default`
+- `106-113` `F` `export_verify`
 
-## `src/Traning/core/tasks/importer.py`
+## `src/before_traning/core/video/__init__.py`
 
-- `15-16` `F` `import_beatmaps_task`
+- `8-11` `F` `prepare_videos`
 
-## `src/Traning/core/tasks/match.py`
-
-- `15-16` `F` `match_videos_task`
-
-## `src/Traning/core/tasks/segment.py`
-
-- `15-16` `F` `segment_videos_task`
-
-## `src/Traning/core/tasks/verify.py`
-
-- `15-16` `F` `export_verify_task`
-
-## `src/Traning/core/video/av.py`
+## `src/before_traning/core/video/av.py`
 
 - `13-32` `F` `av_correspondence`
 
-## `src/Traning/core/video/clip.py`
+## `src/before_traning/core/video/av_processing/av_processing.py`
+
+- `28-29` `F` `_load_av_correspondence_processor_config`
+- `32-40` `F` `build_av_correspondence_processor_from_config_or_default`
+- `43-86` `C` `AVCorrespondenceProcessor`
+- `50-86` `M` `AVCorrespondenceProcessor.__init__`
+- `89-90` `C` `VideoAVProcessor`
+- `93-95` `F` `main`
+
+## `src/before_traning/core/video/av_processing/preflight.py`
+
+- `11-109` `C` `AVPreflightMixin`
+- `12-28` `M` `AVPreflightMixin._validate_config`
+- `30-39` `M` `AVPreflightMixin._ensure_status_steps_registered`
+- `41-59` `M` `AVPreflightMixin._resolve_source_video_path`
+- `61-65` `M` `AVPreflightMixin._resolve_song_audio_path`
+- `67-68` `M` `AVPreflightMixin._resolve_verify_path`
+- `70-97` `M` `AVPreflightMixin._sync_output_status`
+- `99-109` `M` `AVPreflightMixin._ensure_required_steps_done`
+
+## `src/before_traning/core/video/av_processing/steps.py`
+
+- `9-137` `C` `AVProcessStepsMixin`
+- `10-137` `M` `AVProcessStepsMixin.process_one`
+
+## `src/before_traning/core/video/av_processing/wrapup.py`
+
+- `6-74` `C` `AVWrapUpMixin`
+- `7-11` `M` `AVWrapUpMixin._update_progress`
+- `13-14` `M` `AVWrapUpMixin.progress_message`
+- `16-58` `M` `AVWrapUpMixin._build_done_detail`
+- `60-65` `M` `AVWrapUpMixin._mark_done`
+- `67-74` `M` `AVWrapUpMixin.handle_failure`
+
+## `src/before_traning/core/video/clip.py`
 
 - `11-16` `F` `crop_video`
 
-## `src/Traning/core/video/match.py`
+## `src/before_traning/core/video/clipping/clipping.py`
+
+- `24-36` `F` `build_fixed_region_video_crop_processor_from_config_or_default`
+- `39-112` `C` `FixedRegionVideoCropProcessor`
+- `47-52` `M` `FixedRegionVideoCropProcessor.from_settings`
+- `54-112` `M` `FixedRegionVideoCropProcessor.__init__`
+- `115-116` `C` `VideoClipProcessor`
+- `119-121` `F` `main`
+
+## `src/before_traning/core/video/clipping/preflight.py`
+
+- `4-32` `C` `ClipPreflightMixin`
+- `5-14` `M` `ClipPreflightMixin._ensure_status_steps_registered`
+- `16-32` `M` `ClipPreflightMixin._ensure_folder_ready`
+
+## `src/before_traning/core/video/clipping/steps.py`
+
+- `9-45` `C` `ClipStepsMixin`
+- `10-27` `M` `ClipStepsMixin._crop_video_in_place`
+- `29-45` `M` `ClipStepsMixin.process_one`
+
+## `src/before_traning/core/video/clipping/wrapup.py`
+
+- `8-71` `C` `ClipWrapUpMixin`
+- `9-10` `M` `ClipWrapUpMixin.progress_message`
+- `12-20` `M` `ClipWrapUpMixin._reference_detail`
+- `22-37` `M` `ClipWrapUpMixin._mark_cropping`
+- `39-58` `M` `ClipWrapUpMixin._mark_done`
+- `60-71` `M` `ClipWrapUpMixin.handle_failure`
+
+## `src/before_traning/core/video/match.py`
 
 - `11-33` `F` `match_videos`
 
-## `src/Traning/core/video/pipeline.py`
+## `src/before_traning/core/video/matching/builders.py`
 
-- `10-16` `F` `prepare_videos`
+- `14-15` `F` `_load_video_package_renamer_config`
+- `18-26` `F` `build_video_package_renamer_from_config_or_default`
 
-## `src/Traning/core/video/segment.py`
+## `src/before_traning/core/video/matching/matching.py`
 
-- `11-16` `F` `segment_videos`
+- `9-39` `C` `VideoMatchProcessor`
+- `12-23` `M` `VideoMatchProcessor.__init__`
+- `25-39` `M` `VideoMatchProcessor.run`
 
-## `src/Traning/main.py`
+## `src/before_traning/core/video/matching/renamer.py`
+
+- `22-187` `C` `VideoPackageRenamer`
+- `23-46` `M` `VideoPackageRenamer.__init__`
+- `48-52` `M` `VideoPackageRenamer._folder_has_video`
+- `54-69` `M` `VideoPackageRenamer._parse_video_time`
+- `71-82` `M` `VideoPackageRenamer._list_videos_in_time_order`
+- `84-115` `M` `VideoPackageRenamer._pending_folder_names`
+- `117-142` `M` `VideoPackageRenamer._build_rename_plan`
+- `144-187` `M` `VideoPackageRenamer.run`
+- `190-191` `C` `VideoMatchRenamer`
+
+## `src/before_traning/core/video/pipeline.py`
+
+- `10-14` `F` `prepare_videos`
+
+## `src/before_traning/core/video/segment.py`
+
+- `50-57` `F` `_overlap_merge_window_ms`
+- `60-63` `F` `_output_directory_name`
+- `66-71` `F` `_segment_directory_name`
+- `74-150` `F` `_beatmap_payload`
+- `153-240` `F` `_segment_row`
+- `243-488` `C` `VideoSegmentationProcessor`
+- `244-289` `M` `VideoSegmentationProcessor.__init__`
+- `291-297` `M` `VideoSegmentationProcessor.progress_message`
+- `299-479` `M` `VideoSegmentationProcessor.process_one`
+- `481-488` `M` `VideoSegmentationProcessor.handle_failure`
+- `491-498` `F` `segment_videos`
+
+## `src/before_traning/main.py`
 
 - `25-26` `F` `_resolve`
 - `29-30` `F` `_skip`
 - `33-60` `F` `_settings`
 - `63-72` `F` `_render`
-- `75-84` `F` `_run`
-- `88-132` `F` `run_command`
-- `136-152` `F` `verify_command`
-- `156-176` `F` `match_command`
-- `180-197` `F` `clip_command`
-- `201-217` `F` `segment_command`
-- `221-223` `F` `default_command`
-- `226-234` `F` `main`
+- `75-83` `F` `_run`
+- `87-131` `F` `run_command`
+- `135-151` `F` `verify_command`
+- `155-175` `F` `match_command`
+- `179-196` `F` `clip_command`
+- `200-216` `F` `segment_command`
+- `220-222` `F` `default_command`
+- `225-233` `F` `main`
 
-## `src/Traning/state/__init__.py`
+## `src/before_traning/state/__init__.py`
 
 - `7-12` `F` `__getattr__`
 
-## `src/Traning/state/manifest_schema.py`
+## `src/before_traning/state/manifest_schema.py`
 
 - `9-24` `C` `PackageManifestItem`
+- `27-39` `C` `BeatmapDataRecord`
 
-## `src/Traning/state/process_status.py`
+## `src/before_traning/state/process_status.py`
 
 - `25-208` `C` `ProcessStatusManager`
 - `26-48` `M` `ProcessStatusManager.__init__`
@@ -609,7 +620,11 @@
 - `198-204` `M` `ProcessStatusManager.mark_step_pending`
 - `206-208` `M` `ProcessStatusManager.get_steps_summary`
 
-## `src/Traning/state/status_schema.py`
+## `src/before_traning/state/segment_schema.py`
+
+- `9-27` `C` `SegmentDatasetItem`
+
+## `src/before_traning/state/status_schema.py`
 
 - `22-34` `C` `ProcessStepStatus`
 - `37-56` `F` `normalize_process_steps`

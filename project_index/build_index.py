@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build compact, deterministic indexes for the Traning Python package."""
+"""Build compact, deterministic indexes for the before_traning Python package."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from typing import Iterable
 
 
 WORKSPACE = Path(__file__).resolve().parents[1]
-SOURCE_ROOT = WORKSPACE / "src" / "Traning"
+SOURCE_ROOT = WORKSPACE / "src" / "before_traning"
 SEMANTIC_INDEX = Path(__file__).with_name("FUNCTION_INDEX.md")
 LOCATION_INDEX = Path(__file__).with_name("FUNCTION_LOCATIONS.md")
 
@@ -24,64 +24,64 @@ GENERATED_NOTICE = (
 ROLE_OVERRIDES = {
     "main.py": "Typer CLI 入口；合并命令行覆盖项，选择 direct/Prefect runner，并渲染阶段结果。",
     "conf/settings.py": "Pydantic 配置模型与 YAML/JSON 加载；解析相对路径并兼容旧配置层级。",
+    "conf/defaults.py": "创建全局默认 Settings 实例，供兼容 core 构造器使用。",
+    "conf/artifacts.py": "保存固定训练前产物文件名契约。",
     "conf/legacy_config.py": "旧 builder API 的兼容层；把 Settings 展平、覆盖并按构造函数签名转发。",
     "conf/field_groups.py": "集中声明处理器字段组，负责批量赋值和处理器之间的参数转发。",
     "conf/runtime.py": "把 Prefect home 固定到仓库内可写目录。",
-    "state/manifest_schema.py": "SQLModel 训练包 manifest 表；保存内部目录 ID、原谱面名和处理顺序。",
+    "state/manifest_schema.py": "SQLModel 训练包 manifest 与谱面解析缓存表。",
+    "state/segment_schema.py": "SQLModel 视频片段数据集索引表。",
     "state/status_schema.py": "独立的 SQLModel 状态表、处理步骤规范化和 detail JSON 编解码。",
     "state/process_status.py": "按谱面文件夹读写 SQLite 处理状态，并迁移旧 process_status.json。",
-    "core/flows/pipeline.py": "用统一阶段表驱动七阶段 Prefect/direct 编排，并处理继续执行策略。",
-    "core/beatmap/importer.py": "谱面导入业务入口；把 Settings 映射到 BeatmapImportProcessor。",
-    "core/beatmap/verify.py": "verify.txt 导出业务入口，并构建受 manifest 约束的文件存储。",
-    "core/beatmap/difficulty.py": "读取谱面难度并写入 SQLite manifest 的业务入口。",
-    "core/beatmap/pipeline.py": "顺序组合谱面导入、校验导出和难度导出。",
+    "core/beatmap/beatmap.py": "谱面阶段统一公开入口；集中导出三个处理器、阶段函数和 pipeline API。",
+    "core/beatmap/importer.py": "完整谱面导入实施；扫描 .osz、更新 manifest、写文件和导入状态。",
+    "core/beatmap/verify.py": "完整 verify 实施；调用 ProcessingGuard、标准谱面缓存并导出 verify.txt。",
+    "core/beatmap/difficulty.py": "完整难度实施；调用 ProcessingGuard、读取难度并更新 SQLite manifest。",
+    "core/beatmap/pipeline.py": "声明七阶段注册表与统一 Pipeline API，并用分组表选择谱面/视频阶段。",
     "core/video/match.py": "视频匹配业务入口；处理“全部已有视频”的正常跳过情况。",
     "core/video/av.py": "AV 对齐业务入口；把音频算法和状态参数传给 VideoAVProcessor。",
     "core/video/clip.py": "固定区域裁剪业务入口。",
-    "core/video/segment.py": "最终谱面视频切分业务入口。",
+    "core/video/segment.py": "最终谱面视频切分处理器；映射设置、调度分类、生成产物并更新状态。",
     "core/video/pipeline.py": "顺序组合视频匹配、AV 对齐、裁剪和谱面切分。",
     "core/audio/match.py": "重导出音频匹配处理器，作为 core 层稳定入口。",
-    "Lib/defaults.py": "创建全局默认 Settings 实例，供兼容构造器使用。",
+    "core/video/matching/builders.py": "视频顺序匹配器的兼容配置 builder。",
+    "core/video/matching/matching.py": "视频匹配策略入口；在音频匹配与时间顺序重命名之间切换。",
+    "core/video/matching/renamer.py": "按录像时间与 manifest 顺序移动视频，并支持异常回滚。",
+    "core/audio/matching/preflight.py": "同步视频匹配状态，收集待匹配文件夹和候选视频。",
+    "core/audio/matching/steps.py": "调用 AV 信号 API 计算视频/歌曲配对得分并做一对一选择。",
+    "core/audio/matching/wrapup.py": "应用音频匹配结果，移动视频、回写状态并支持回滚。",
+    "core/audio/matching/matching.py": "组合音频匹配处理器，并注入 AV 对齐算法能力。",
+    "core/video/av_processing/preflight.py": "校验 AV 参数/状态步骤并定位阶段输入输出。",
+    "core/video/av_processing/steps.py": "执行单文件夹 AV 对齐阶段和状态推进。",
+    "core/video/av_processing/wrapup.py": "记录 AV 阶段进度、完成细节和失败状态。",
+    "core/video/av_processing/av_processing.py": "组合 AV 处理器并初始化配置、存储和状态依赖。",
+    "core/video/clipping/preflight.py": "校验裁剪状态步骤和单文件夹前置条件。",
+    "core/video/clipping/steps.py": "调用通用 crop_video API 执行单文件夹原地裁剪。",
+    "core/video/clipping/wrapup.py": "记录裁剪进度、实际坐标和失败状态。",
+    "core/video/clipping/clipping.py": "组合固定区域裁剪处理器并校验阶段配置。",
     "Lib/common/pathspec.py": "统一后缀到 gitwildmatch PathSpec 的转换与文件过滤。",
+    "Lib/common/sequence.py": "统一生成带定宽数字的稳定序列名称。",
     "Lib/common/batch.py": "配置规格辅助函数与文件夹批处理模板。",
     "Lib/common/failures.py": "统一提取异常类型、报错函数和模块，并生成状态 detail 与控制台文本。",
-    "Lib/tools/ffmpeg.py": "构造并执行 ffmpeg/ffprobe 命令，读取流起点、媒体时长和视频尺寸。",
-    "Lib/beatmap/manifest.py": "SQLite manifest 仓储；分配稳定内部目录 ID、迁移旧 order.txt 并导出对照表。",
+    "Lib/common/processing.py": "通用目录/文件检查、前置步骤检查、完成态对齐和失败状态回写 API。",
+    "Lib/tasks/tasks.py": "通用 task 规格、注册器和循环 Prefect task 生成 API。",
+    "Lib/tasks/flows.py": "通用 direct/Prefect 循环执行 Pipeline API 与构建函数。",
+    "Lib/tools/ffmpeg.py": "提供 ffmpeg/ffprobe 参数构造与音频提取、裁切、分段、裁剪高层 API。",
+    "Lib/beatmap/manifest.py": "SQLite manifest 仓储；管理内部目录、谱面缓存和可读对照表。",
     "Lib/beatmap/order.py": "旧 OrderFolderWalker 的兼容导出；业务代码使用 ManifestFolderWalker。",
     "Lib/beatmap/package.py": "通过 SQLite manifest 创建和同步允许使用的内部谱面目录。",
-    "Lib/beatmap/folder_store.py": "受 SQLite manifest 约束的谱面目录文件读写。",
+    "Lib/beatmap/folder_store.py": "受 manifest 约束的源文件读写、输出目录创建和原子目录替换。",
     "Lib/beatmap/osu_metadata.py": "从 .osu 指定 section 读取 AudioFilename 和 OverallDifficulty。",
+    "Lib/beatmap/osu_parser.py": "解析 .osu sections、timing points 和 HitObjects，并生成结构化对象。",
+    "Lib/beatmap/osz.py": "解压单个 .osz 并读取目标 .osu 与音频字节。",
+    "Lib/beatmap/standard.py": "解析或从 manifest SQLite 缓存读取完整 osu!standard 谱面。",
     "Lib/beatmap/hit_objects.py": "Circle、Slider、Spinner 的轻量数据模型。",
     "Lib/beatmap/timing_points.py": "osu 原始 timing point 数据模型。",
-    "Lib/beatmap/difficulty.py": "单谱面难度读取、manifest 存储与按区间查询。",
-    "Lib/beatmap/difficulty_batch.py": "难度导出的批处理循环、计数、状态回写和整体结果返回。",
-    "Lib/beatmap/importing/entry.py": "单个 .osz 扫描结果的数据模型。",
-    "Lib/beatmap/importing/scanner.py": "解压 .osz，筛选目标 .osu/.mp3，并按导出时间建立导入项。",
-    "Lib/beatmap/importing/writer.py": "更新 manifest、分配内部编号并写入谱面/音频及状态。",
-    "Lib/beatmap/importing/wrapup.py": "串联谱面扫描、写入、额外目录告警和汇总输出。",
-    "Lib/beatmap/importing/importing.py": "组合谱面导入 mixin，初始化路径规格、包管理器和状态管理器。",
-    "Lib/beatmap/verification/parser.py": "解析 .osu sections、timing points 和 hit objects，并统一生成文本或结构化对象数据。",
-    "Lib/beatmap/verification/steps.py": "单文件夹 verify.txt 导出和 verify_exported 状态更新。",
-    "Lib/beatmap/verification/wrapup.py": "verify 导出失败时回写 pending 状态。",
-    "Lib/beatmap/verification/verification.py": "组合 verify 导出处理器及兼容 builder/脚本入口。",
-    "Lib/video/matching/builders.py": "视频顺序匹配器的兼容配置 builder。",
-    "Lib/video/matching/matching.py": "视频匹配策略入口；在音频匹配与时间顺序重命名之间切换。",
-    "Lib/video/matching/renamer.py": "按录像时间与 manifest 顺序一一对应移动视频，并支持异常回滚。",
-    "Lib/audio/matching/preflight.py": "同步已存在视频的状态，收集待匹配文件夹和候选视频。",
-    "Lib/audio/matching/steps.py": "提取音频特征、计算视频/歌曲配对得分并做贪心一对一选择。",
-    "Lib/audio/matching/wrapup.py": "展示和应用音频匹配结果，移动视频、回写状态并支持回滚。",
-    "Lib/audio/matching/matching.py": "组合音频匹配处理器，并复用 AV 对齐器的信号处理能力。",
-    "Lib/video/av_processing/preflight.py": "校验 AV 参数/状态步骤，定位源视频、音频、verify 和输出文件。",
-    "Lib/video/av_processing/steps.py": "AV 核心算法：提取采样、粗细相关、hit 校正、窗口校验和视频裁切。",
-    "Lib/video/av_processing/wrapup.py": "记录 AV 阶段进度、完成细节和失败状态。",
-    "Lib/video/av_processing/av_processing.py": "组合 AV 处理器，初始化文件存储、算法参数和状态管理器。",
-    "Lib/video/clipping/preflight.py": "校验裁剪所需状态步骤和单文件夹前置条件。",
+    "Lib/video/av_processing/steps.py": "可复用 AV 信号算法：采样、粗细相关、hit 校正和裁切窗口计算。",
     "Lib/video/clipping/geometry.py": "按参考分辨率缩放裁剪矩形，并校验边界和编码偶数尺寸。",
-    "Lib/video/clipping/steps.py": "单文件夹原地裁剪，使用临时文件保证替换完整。",
-    "Lib/video/clipping/wrapup.py": "记录裁剪进度、参考坐标、实际坐标和失败状态。",
-    "Lib/video/clipping/clipping.py": "组合固定区域裁剪处理器并校验配置。",
-    "Lib/video/segmentation/planner.py": "复用 osu!standard 解析器和 slider 曲线 API，按 200ms 高优先级窗口或半缩圈时间+路径重合率聚组，并保证每个对象恰好归属一个片段。",
-    "Lib/video/segmentation/segmentation.py": "为每个训练样本目录生成 video.mp4、相对时间 beatmap.json、CSV 索引和状态。",
+    "Lib/video/segment_dataset.py": "用 SQLite 管理视频片段索引、导出 CSV 并校验数据集文件完整性。",
+    "Lib/video/segmentation/planner.py": "构建对象恰好归属一次的原子片段，并将完整原子片段组合为长序列维度，避免该维度内部重复 source_index。",
+    "Lib/video/segmentation/segmentation.py": "根据显式参数调用 planner，返回原子与长序列计划集合。",
 }
 
 SUMMARY_OVERRIDES = {
@@ -366,11 +366,11 @@ def parse_file(path: Path) -> tuple[ast.Module, list[Symbol]]:
 def local_dependencies(tree: ast.Module) -> tuple[str, ...]:
     dependencies: set[str] = set()
     for node in tree.body:
-        if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith("Traning"):
+        if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith("before_traning"):
             dependencies.add(node.module)
         elif isinstance(node, ast.Import):
             for alias in node.names:
-                if alias.name.startswith("Traning"):
+                if alias.name.startswith("before_traning"):
                     dependencies.add(alias.name)
     return tuple(sorted(dependencies))
 
@@ -380,12 +380,6 @@ def module_role(relative_path: str) -> str:
         return ROLE_OVERRIDES[relative_path]
     if relative_path.endswith("/__init__.py") or relative_path == "__init__.py":
         return "包导出边界；集中暴露该目录的稳定名称。"
-    if relative_path.endswith("core/tasks/__init__.py"):
-        return "Prefect task 包导出边界。"
-    if relative_path.startswith("core/tasks/"):
-        return "Prefect task 薄包装；调用同名 core 业务函数。"
-    if relative_path == "Lib/video/cut.py":
-        return "预留的空模块，目前没有实现。"
     return "Python 模块；具体职责见下方符号及调用。"
 
 

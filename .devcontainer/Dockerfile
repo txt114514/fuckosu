@@ -50,6 +50,6 @@ RUN pip install --no-cache-dir \
     pydantic-settings \
     sqlmodel \
     alembic \
-    pathspec
-
+    pathspec \
+    ruff
 CMD ["/bin/bash"]
