@@ -4,8 +4,8 @@ from types import SimpleNamespace
 from typing import Any
 
 
-TARGET_ORDER_FIELDS = ("target_root", "order_filename")
-VIDEO_TARGET_FIELDS = ("video_root", *TARGET_ORDER_FIELDS)
+TARGET_MANIFEST_FIELDS = ("target_root", "manifest_filename")
+VIDEO_TARGET_FIELDS = ("video_root", *TARGET_MANIFEST_FIELDS)
 AUDIO_VERIFY_FIELDS = ("audio_filename", "verify_filename")
 AV_TUNING_FIELDS = (
     "sample_rate",
@@ -26,7 +26,7 @@ CLIP_CROP_FIELDS = (
 
 PROCESSOR_FIELD_GROUPS: dict[str, tuple[str, ...]] = {
     "av": (
-        *TARGET_ORDER_FIELDS,
+        *TARGET_MANIFEST_FIELDS,
         *AUDIO_VERIFY_FIELDS,
         "output_filename",
         "status_step",
@@ -40,7 +40,7 @@ PROCESSOR_FIELD_GROUPS: dict[str, tuple[str, ...]] = {
     ),
     "beatmap_import": (
         "export_dir",
-        *TARGET_ORDER_FIELDS,
+        *TARGET_MANIFEST_FIELDS,
         "audio_filename",
     ),
     "clip_crop": CLIP_CROP_FIELDS,
@@ -55,7 +55,7 @@ PROCESSOR_FIELD_GROUPS: dict[str, tuple[str, ...]] = {
 
 FORWARD_FIELD_GROUPS: dict[str, tuple[str, ...]] = {
     "audio_match_to_av": (
-        *TARGET_ORDER_FIELDS,
+        *TARGET_MANIFEST_FIELDS,
         *AUDIO_VERIFY_FIELDS,
         *AV_TUNING_FIELDS,
         "video_suffixes",

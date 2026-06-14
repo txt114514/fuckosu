@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Iterable, List, Tuple, Literal
+from typing import Iterable, List, Literal
 
-from Traning.Lib.beatmap.order import OrderFolderWalker
+from Traning.Lib.beatmap.manifest import ManifestFolderWalker
 from Traning.Lib.common.pathspec import filter_files, gitwildmatch_spec
-from Traning.conf.legacy_config import settings_namespace
-from Traning.Lib.defaults import DEFAULT_SETTINGS as DEFAULTS
+from Traning.state.manifest_schema import MANIFEST_DB_FILENAME
 
 
 WriteMode = Literal["overwrite", "append", "skip_if_exists"]
@@ -15,7 +14,7 @@ WriteMode = Literal["overwrite", "append", "skip_if_exists"]
 class BeatmapFolderStore:
     """
     严格规则：
-    1. 只允许操作 order.txt 中已登记的文件夹
+    1. 只允许操作 SQLite manifest 中启用的内部文件夹
     2. 不负责创建文件夹
     3. 文件夹不存在时直接报错，由 PackageUpdater 负责先同步目录结构
     """
@@ -23,17 +22,17 @@ class BeatmapFolderStore:
     def __init__(
         self,
         target_root: str,
-        order_filename: str = DEFAULTS.file_management.order_filename,
+        manifest_filename: str = MANIFEST_DB_FILENAME,
     ):
         self.target_root = Path(target_root)
-        self.order_filename = order_filename
+        self.manifest_filename = manifest_filename
 
         if not self.target_root.exists():
             raise FileNotFoundError(f"目录不存在: {self.target_root}")
 
-        self.walker = OrderFolderWalker(
+        self.walker = ManifestFolderWalker(
             target_root=str(self.target_root),
-            order_filename=self.order_filename,
+            manifest_filename=self.manifest_filename,
         )
 
     def _normalize_folder_name(self, folder_name: str) -> str:
@@ -56,7 +55,7 @@ class BeatmapFolderStore:
     def _assert_registered(self, folder_name: str):
         if not self.is_registered(folder_name):
             raise PermissionError(
-                f"{folder_name} 未登记在 {self.target_root / self.order_filename} 中，不允许使用"
+                f"{folder_name} 未登记在 {self.target_root / self.manifest_filename} 中，不允许使用"
             )
 
     def get_folder_path(self, folder_name: str) -> Path:
@@ -72,7 +71,7 @@ class BeatmapFolderStore:
         folder = self.get_folder_path(folder_name)
         if not folder.exists():
             raise FileNotFoundError(
-                f"文件夹不存在: {folder}。请先调用 PackageUpdater.sync_folders_from_order()"
+                f"文件夹不存在: {folder}。请先调用 PackageUpdater.sync_folders_from_manifest()"
             )
         return folder
 
@@ -105,8 +104,8 @@ class BeatmapFolderStore:
         通用文本写入接口。
 
         参数:
-            folder_name: 必须已登记在 order.txt 中，且对应文件夹已存在
-            filename: 目标文件名，例如 verify.txt / difficulty.txt
+            folder_name: 必须已登记在 manifest 中，且对应文件夹已存在
+            filename: 目标文件名，例如 verify.txt
             content: 要写入的文本内容
             mode:
                 - overwrite: 覆盖写入
@@ -169,32 +168,3 @@ class BeatmapFolderStore:
         if not file_path.exists():
             raise FileNotFoundError(f"文件不存在: {file_path}")
         return file_path.read_text(encoding="utf-8")
-
-    def write_failed_report(
-        self,
-        failed_cases: List[Tuple[str, str]],
-        failed_filename: str | None = None,
-    ) -> Path:
-        """
-        失败报告写在 target_root 根目录下。
-        这不是某个谱面文件夹内的文件，所以不受 order.txt 单目录限制。
-        """
-        failed_filename = (
-            failed_filename
-            or settings_namespace(DEFAULTS, processor="verify").failed_filename
-        )
-        if not failed_filename or Path(failed_filename).name != failed_filename:
-            raise ValueError(f"failed_filename 非法: {failed_filename}")
-
-        failed_path = self.target_root / failed_filename
-
-        if not failed_cases:
-            failed_path.write_text("无失败项\n", encoding="utf-8")
-            return failed_path
-
-        chunks = []
-        for folder_name, err in failed_cases:
-            chunks.append(f"{folder_name}\n  {err}\n")
-
-        failed_path.write_text("\n".join(chunks) + "\n", encoding="utf-8")
-        return failed_path

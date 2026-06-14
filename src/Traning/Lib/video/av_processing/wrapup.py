@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from Traning.Lib.common.failures import exception_detail
+
 
 class AVWrapUpMixin:
     def _update_progress(self, folder_name: str, stage: str, detail: dict | None = None):
@@ -68,5 +70,5 @@ class AVWrapUpMixin:
             self.status_manager.mark_step_pending(
                 folder_name,
                 self.status_step,
-                detail={"stage": "failed", "error": str(error)},
+                detail=exception_detail(error, stage="failed"),
             )

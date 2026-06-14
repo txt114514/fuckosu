@@ -7,7 +7,8 @@ if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
 from Traning.Lib.beatmap.folder_store import BeatmapFolderStore
-from Traning.Lib.beatmap.order import OrderFolderWalker
+from Traning.Lib.beatmap.manifest import ManifestFolderWalker
+from Traning.Lib.artifacts import VERIFY_FILENAME
 from Traning.Lib.beatmap.verification.parser import VerifyOsuParser
 from Traning.Lib.beatmap.verification.steps import VerifyStepsMixin
 from Traning.Lib.beatmap.verification.wrapup import VerifyWrapUpMixin
@@ -30,25 +31,20 @@ def _load_verify_exporter_config(config: ConfigReader) -> dict[str, object]:
 class VerifyExporter(VerifyWrapUpMixin, VerifyStepsMixin, FolderBatchProcessor):
     def __init__(
         self,
-        walker: OrderFolderWalker,
+        walker: ManifestFolderWalker,
         store: BeatmapFolderStore,
         settings: Settings = DEFAULTS,
         status_manager: ProcessStatusManager | None = None,
         **overrides: object,
     ):
-        if not isinstance(settings, Settings):
-            overrides = {"verify_filename": settings, **overrides}
-            settings = DEFAULTS
-
-        config = settings_namespace(settings, processor="verify", overrides=overrides)
         self.walker = walker
         self.store = store
-        self.verify_filename = config.verify_filename
-        super().__init__(config.failed_filename)
+        self.verify_filename = VERIFY_FILENAME
+        super().__init__()
         self.parser = VerifyOsuParser()
         self.status_manager = status_manager or ProcessStatusManager(
             target_root=str(store.target_root),
-            order_filename=store.order_filename,
+            manifest_filename=store.manifest_filename,
         )
 
 
@@ -61,19 +57,17 @@ def _build_verify_exporter_from_config(
     **overrides: object,
 ) -> BeatmapVerifyExporter:
     config = settings_namespace(settings, processor="verify", overrides=overrides)
-    walker = OrderFolderWalker(
+    walker = ManifestFolderWalker(
         target_root=config.target_root,
-        order_filename=config.order_filename,
+        manifest_filename=config.manifest_filename,
     )
     store = BeatmapFolderStore(
         target_root=config.target_root,
-        order_filename=config.order_filename,
+        manifest_filename=config.manifest_filename,
     )
     return BeatmapVerifyExporter(
         walker=walker,
         store=store,
-        verify_filename=config.verify_filename,
-        failed_filename=config.failed_filename,
     )
 
 

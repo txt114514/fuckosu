@@ -6,7 +6,8 @@ from pathlib import Path
 
 from Traning.conf import Settings
 from Traning.conf.legacy_config import assign_group, settings_namespace
-from Traning.Lib.beatmap.order import OrderFolderWalker
+from Traning.Lib.beatmap.manifest import ManifestFolderWalker
+from Traning.Lib.common.failures import exception_detail, failure_detail
 from Traning.Lib.common.pathspec import filter_files, matches_name, suffix_spec
 from Traning.Lib.defaults import DEFAULT_SETTINGS as DEFAULTS
 from Traning.state.process_status import ProcessStatusManager
@@ -35,13 +36,13 @@ class VideoPackageRenamer:
         self.target_root = Path(self.target_root)
         self.video_suffixes = {suffix.lower() for suffix in config.video_suffixes}
         self.video_file_spec = suffix_spec(self.video_suffixes)
-        self.walker = OrderFolderWalker(
+        self.walker = ManifestFolderWalker(
             target_root=str(self.target_root),
-            order_filename=self.order_filename,
+            manifest_filename=self.manifest_filename,
         )
         self.status_manager = status_manager or ProcessStatusManager(
             target_root=str(self.target_root),
-            order_filename=self.order_filename,
+            manifest_filename=self.manifest_filename,
         )
 
     def _folder_has_video(self, folder_path: Path) -> bool:
@@ -101,12 +102,15 @@ class VideoPackageRenamer:
                 self.status_manager.mark_step_pending(
                     folder_name,
                     "video_matched",
-                    detail={"error": "状态显示已匹配视频，但文件夹中未找到视频文件"},
+                    detail=failure_detail(
+                        "状态显示已匹配视频，但文件夹中未找到视频文件",
+                        self._pending_folder_names,
+                    ),
                 )
             pending_names.append(folder_name)
 
         if not pending_names:
-            raise ValueError("order.txt 对应文件夹都已经存在视频文件，无需继续处理")
+            raise ValueError("manifest 中的文件夹都已经存在视频文件，无需继续处理")
 
         return pending_names
 
@@ -162,14 +166,17 @@ class VideoPackageRenamer:
                     detail={"video_path": str(destination_path)},
                 )
                 print(f"[完成] {original_path.name} -> {destination_path}")
-        except Exception:
+        except Exception as error:
             for folder_name, destination_path, original_path in reversed(completed_plan):
                 if destination_path.exists():
                     destination_path.rename(original_path)
                     self.status_manager.mark_step_pending(
                         folder_name,
                         "video_matched",
-                        detail={"error": "视频移动过程中发生异常，已回滚"},
+                        detail=exception_detail(
+                            error,
+                            recovery="视频移动过程中发生异常，已回滚",
+                        ),
                     )
             for temp_path, original_path in temp_plan:
                 if temp_path.exists():

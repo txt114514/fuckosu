@@ -13,3 +13,4 @@ class OsuEntry:
     audio_source_filename: str
     audio_bytes: bytes
     sort_key: tuple[int, str]
+    folder_name: str | None = None

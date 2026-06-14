@@ -8,8 +8,9 @@ from prefect import task
 
 from Traning.conf import Settings
 from Traning.core.video.av import av_correspondence
+from Traning.core.tasks import require_success
 
 
 @task(name="av_correspondence", retries=0)
 def av_correspondence_task(settings: Settings) -> bool:
-    return av_correspondence(settings)
+    return require_success("av_correspondence", av_correspondence(settings))

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from Traning.Lib.beatmap.importing.entry import OsuEntry
 from Traning.Lib.beatmap.osu_metadata import read_audio_filename
+from Traning.Lib.common.failures import format_exception
 from Traning.Lib.common.pathspec import filter_files, matches_name
 
 
@@ -85,7 +86,7 @@ class OszScannerMixin:
                 self.skip_count += 1
                 continue
             except Exception as e:
-                print(f"[失败] {osz_path.name}：扫描失败：{e}")
+                print(f"[失败] {osz_path.name}：扫描失败：{format_exception(e)}")
                 self.fail_count += 1
                 continue
 

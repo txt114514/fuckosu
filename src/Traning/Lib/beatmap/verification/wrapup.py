@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from Traning.Lib.common.failures import exception_detail
+
 
 class VerifyWrapUpMixin:
     def handle_failure(self, folder_name: str, error: Exception):
@@ -8,5 +10,5 @@ class VerifyWrapUpMixin:
             self.status_manager.mark_step_pending(
                 folder_name,
                 "verify_exported",
-                detail={"error": str(error)},
+                detail=exception_detail(error),
             )

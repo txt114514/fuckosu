@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List
+from typing import Any, List
 
-from Traning.Lib.beatmap.hit_objects import Circle, Slider, Spinner
+from Traning.Lib.beatmap.hit_objects import Circle, HitObject, Slider, Spinner
 from Traning.Lib.beatmap.timing_points import OsuOriginalTimingPoint
 
 
@@ -145,7 +145,16 @@ class VerifyOsuParser:
                 total_duration = one_slide_duration * slides
                 t_end = int(round(t_start + total_duration))
 
-                objects.append(Slider(t_start, t_end, path, slides))
+                objects.append(
+                    Slider(
+                        t_start,
+                        t_end,
+                        path,
+                        repeats=slides,
+                        curve_type=tokens[0],
+                        pixel_length=length,
+                    )
+                )
                 continue
 
             if type_flag & 8:
@@ -168,7 +177,8 @@ class VerifyOsuParser:
                 lines.append(f"Circle({obj.t_start}, {obj.t_end}, {obj.x}, {obj.y})")
             elif isinstance(obj, Slider):
                 lines.append(
-                    f"Slider({obj.t_start}, {obj.t_end}, {repr(obj.path)}, {obj.repeats})"
+                    f"Slider({obj.t_start}, {obj.t_end}, {repr(obj.path)}, "
+                    f"{obj.repeats}, {obj.curve_type!r}, {obj.pixel_length!r})"
                 )
             elif isinstance(obj, Spinner):
                 lines.append(f"Spinner({obj.t_start}, {obj.t_end})")
@@ -176,3 +186,27 @@ class VerifyOsuParser:
                 raise TypeError(f"未知对象类型: {type(obj)}")
 
         return lines
+
+    def hit_object_to_dict(
+        self,
+        hit_object: HitObject,
+        *,
+        time_offset_ms: int = 0,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "type": hit_object.type,
+            "start_ms": hit_object.t_start - time_offset_ms,
+            "end_ms": hit_object.t_end - time_offset_ms,
+        }
+        if isinstance(hit_object, Circle):
+            payload.update(x=hit_object.x, y=hit_object.y)
+        elif isinstance(hit_object, Slider):
+            payload.update(
+                path=[[x, y] for x, y in hit_object.path],
+                repeats=hit_object.repeats,
+                curve_type=hit_object.curve_type,
+                pixel_length=hit_object.pixel_length,
+            )
+        elif not isinstance(hit_object, Spinner):
+            raise TypeError(f"未知对象类型: {type(hit_object)}")
+        return payload

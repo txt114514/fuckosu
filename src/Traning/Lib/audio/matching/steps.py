@@ -6,6 +6,8 @@ from typing import Any
 
 import numpy as np
 
+from Traning.Lib.common.failures import exception_detail, format_failure
+
 
 class AudioMatchStepsMixin:
     def _extract_samples(self, source_path: Path, *, from_video: bool) -> np.ndarray:
@@ -108,7 +110,7 @@ class AudioMatchStepsMixin:
                             "video_path": str(video_path),
                             "video_name": video_path.name,
                             "folder_name": folder_name,
-                            "error": str(e),
+                            **exception_detail(e),
                         }
                     )
                     continue
@@ -150,7 +152,7 @@ class AudioMatchStepsMixin:
             if not scored_results:
                 print("  无可用候选，所有对比都失败了")
                 for item in video_results[: self.top_k]:
-                    print(f"  - {item['folder_name']}: {item['error']}")
+                    print(f"  - {item['folder_name']}: {format_failure(item)}")
                 continue
 
             for rank, result in enumerate(scored_results[: self.top_k], start=1):

@@ -10,7 +10,7 @@ from Traning.Lib.audio.matching.preflight import AudioMatchPreflightMixin
 from Traning.Lib.audio.matching.steps import AudioMatchStepsMixin
 from Traning.Lib.audio.matching.wrapup import AudioMatchWrapUpMixin
 from Traning.Lib.beatmap.folder_store import BeatmapFolderStore
-from Traning.Lib.beatmap.order import OrderFolderWalker
+from Traning.Lib.beatmap.manifest import ManifestFolderWalker
 from Traning.Lib.common.batch import read_config_values
 from Traning.Lib.common.pathspec import suffix_spec
 from Traning.Lib.defaults import DEFAULT_SETTINGS as DEFAULTS
@@ -67,17 +67,17 @@ class AudioMatchExperiment(
         self.target_root = Path(self.target_root)
         self.video_suffixes = {suffix.lower() for suffix in config.video_suffixes}
         self.video_file_spec = suffix_spec(self.video_suffixes)
-        self.walker = OrderFolderWalker(
+        self.walker = ManifestFolderWalker(
             target_root=str(self.target_root),
-            order_filename=self.order_filename,
+            manifest_filename=self.manifest_filename,
         )
         self.store = BeatmapFolderStore(
             target_root=str(self.target_root),
-            order_filename=self.order_filename,
+            manifest_filename=self.manifest_filename,
         )
         self.status_manager = status_manager or ProcessStatusManager(
             target_root=str(self.target_root),
-            order_filename=self.order_filename,
+            manifest_filename=self.manifest_filename,
         )
         aligner_kwargs = forward_kwargs(config, "audio_match_to_av")
         aligner_kwargs["target_root"] = str(self.target_root)

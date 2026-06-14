@@ -32,6 +32,7 @@ class VideoClipSettings(BaseModel):
     run_video_match: bool = True
     run_av_correspondence: bool = True
     run_clip_stage: bool = True
+    run_segment_stage: bool = True
     use_audio_match_experiment: bool = True
     global_offset_ms: float = 0.0
 
@@ -47,15 +48,10 @@ class FileManagementSettings(BaseModel):
     export_dir: Path = REPO_ROOT / "osu-lazer" / "exports"
     target_root: Path = REPO_ROOT / "training_package" / "match-completed_package"
     video_root: Path = REPO_ROOT / "training_package" / "video_package"
-    order_filename: str = "order.txt"
-    verify_filename: str = "verify.txt"
-    difficulty_filename: str = "difficulty.txt"
-    verify_failed_filename: str = "verify_failed.txt"
-    difficulty_failed_filename: str = "difficulty_failed.txt"
+    segment_root: Path = REPO_ROOT / "training_package" / "video_segments"
+    manifest_filename: str = ".package_manifest.sqlite"
     audio_filename: str = "audio.mp3"
     output_filename: str = "video_processed.mp4"
-    av_correspondence_failed_filename: str = "av_correspondence_failed.txt"
-    clip_failed_filename: str = "clip_failed.txt"
 
 
 class FileFormatSettings(BaseModel):
@@ -99,6 +95,46 @@ class ClipSettings(BaseModel):
     required_steps: tuple[str, ...] = ("av_corresponded",)
 
 
+class SegmentSettings(BaseModel):
+    approach_preempt_ratio: float = 0.5
+    post_context_seconds: float = 0.4
+    min_circle_overlap_ratio: float = 0.5
+    use_priority_merge: bool = True
+    priority_merge_window_ms: int = 200
+    status_step: str = "video_segmented"
+    required_steps: tuple[str, ...] = ("video_processed",)
+
+    @field_validator("priority_merge_window_ms")
+    @classmethod
+    def _nonnegative_interval(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError("segment interval milliseconds must be nonnegative")
+        return value
+
+    @field_validator("approach_preempt_ratio")
+    @classmethod
+    def _approach_ratio(cls, value: float) -> float:
+        if not 0.0 <= value <= 1.0 or value != value:
+            raise ValueError("approach_preempt_ratio must be between 0 and 1")
+        return value
+
+    @field_validator("min_circle_overlap_ratio")
+    @classmethod
+    def _overlap_ratio(cls, value: float) -> float:
+        if not 0.0 <= value <= 1.0 or value != value:
+            raise ValueError("min_circle_overlap_ratio must be between 0 and 1")
+        return value
+
+    @field_validator("post_context_seconds")
+    @classmethod
+    def _nonnegative_context(cls, value: float) -> float:
+        if value < 0 or value != value or value == float("inf"):
+            raise ValueError(
+                "post_context_seconds must be finite and nonnegative"
+            )
+        return value
+
+
 class ProgressSettings(BaseModel):
     process_steps: tuple[str, ...] = (
         "osu_imported",
@@ -108,6 +144,7 @@ class ProgressSettings(BaseModel):
         "video_matched",
         "av_corresponded",
         "video_processed",
+        "video_segmented",
     )
     av_status_step: str = "av_corresponded"
     av_required_steps: tuple[str, ...] = ("audio_imported", "video_matched")
@@ -129,6 +166,7 @@ class Settings(BaseSettings):
     audio_match: AudioMatchSettings = Field(default_factory=AudioMatchSettings)
     package: PackageSettings = Field(default_factory=PackageSettings)
     clip: ClipSettings = Field(default_factory=ClipSettings)
+    segment: SegmentSettings = Field(default_factory=SegmentSettings)
     progress: ProgressSettings = Field(default_factory=ProgressSettings)
 
     @property
@@ -153,7 +191,7 @@ def _resolve_paths(raw: dict[str, Any], base_dir: Path) -> dict[str, Any]:
     if not isinstance(file_management, dict):
         return raw
 
-    for key in ("export_dir", "target_root", "video_root"):
+    for key in ("export_dir", "target_root", "video_root", "segment_root"):
         value = file_management.get(key)
         if isinstance(value, str):
             path = Path(value)
@@ -182,6 +220,11 @@ def _extract_nested(raw: dict[str, Any]) -> dict[str, Any]:
         **parameters.get("clip", {}),
         "status_step": status_steps.get("clip", "video_processed"),
         "required_steps": required_steps.get("clip", ("av_corresponded",)),
+    }
+    extracted["segment"] = {
+        **parameters.get("segment", {}),
+        "status_step": status_steps.get("segment", "video_segmented"),
+        "required_steps": required_steps.get("segment", ("video_processed",)),
     }
     extracted["progress"] = {
         "process_steps": progress.get("process_steps", ProgressSettings().process_steps),

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 from time import perf_counter
@@ -94,6 +95,7 @@ def run_command(
     skip_video_match: bool = typer.Option(False, "--skip-video-match"),
     skip_av_correspondence: bool = typer.Option(False, "--skip-av-correspondence"),
     skip_clip: bool = typer.Option(False, "--skip-clip"),
+    skip_segment: bool = typer.Option(False, "--skip-segment"),
     use_audio_match_experiment: bool | None = typer.Option(
         None,
         "--use-audio-match-experiment/--disable-audio-match-experiment",
@@ -122,6 +124,10 @@ def run_command(
                 skip_av_correspondence,
             ),
             run_clip_stage=_skip(settings.video_clip.run_clip_stage, skip_clip),
+            run_segment_stage=_skip(
+                settings.video_clip.run_segment_stage,
+                skip_segment,
+            ),
         )
     )
 
@@ -141,6 +147,7 @@ def verify_command(
             run_video_match=False,
             run_av_correspondence=False,
             run_clip_stage=False,
+            run_segment_stage=False,
         )
     )
 
@@ -164,6 +171,7 @@ def match_command(
             run_video_match=True,
             run_av_correspondence=False,
             run_clip_stage=False,
+            run_segment_stage=False,
         )
     )
 
@@ -184,6 +192,27 @@ def clip_command(
             run_video_match=False,
             run_av_correspondence=True,
             run_clip_stage=True,
+            run_segment_stage=True,
+        )
+    )
+
+
+@app.command("segment")
+def segment_command(
+    config: Path | None = typer.Option(None, "--config", help="config.yaml/json path."),
+    overwrite: bool | None = typer.Option(None, "--overwrite/--no-overwrite"),
+    continue_on_error: bool | None = typer.Option(None, "--continue-on-error/--stop-on-error"),
+):
+    raise typer.Exit(
+        _run(
+            _settings(config, overwrite, continue_on_error),
+            run_get_files=False,
+            run_verify_export=False,
+            run_difficulty_export=False,
+            run_video_match=False,
+            run_av_correspondence=False,
+            run_clip_stage=False,
+            run_segment_stage=True,
         )
     )
 

@@ -5,11 +5,10 @@ from pathlib import Path
 from typing import Any, Iterable
 
 import json
-from sqlmodel import Session, SQLModel, create_engine, select
+from sqlmodel import Session, create_engine, select
 
-from Traning.Lib.beatmap.order import OrderFolderWalker
+from Traning.Lib.beatmap.manifest import ManifestFolderWalker
 from Traning.conf import load_settings
-from Traning.Lib.defaults import DEFAULT_SETTINGS as DEFAULTS
 from Traning.state.status_schema import (
     PROCESS_STEPS,
     STATUS_DB_FILENAME,
@@ -20,19 +19,20 @@ from Traning.state.status_schema import (
     normalize_process_steps,
     normalize_status,
 )
+from Traning.state.manifest_schema import MANIFEST_DB_FILENAME
 
 
 class ProcessStatusManager:
     def __init__(
         self,
         target_root: str,
-        order_filename: str = DEFAULTS.file_management.order_filename,
+        manifest_filename: str = MANIFEST_DB_FILENAME,
         status_filename: str = "process_status.json",
         process_steps: Iterable[str] | None = None,
         db_filename: str = STATUS_DB_FILENAME,
     ):
         self.target_root = Path(target_root)
-        self.order_filename = order_filename
+        self.manifest_filename = manifest_filename
         self.status_filename = status_filename
         self.db_path = self.target_root / db_filename
         self.process_steps = (
@@ -40,12 +40,12 @@ class ProcessStatusManager:
             if process_steps is not None
             else normalize_process_steps(load_settings().progress.process_steps or PROCESS_STEPS)
         )
-        self.walker = OrderFolderWalker(
+        self.walker = ManifestFolderWalker(
             target_root=str(self.target_root),
-            order_filename=self.order_filename,
+            manifest_filename=self.manifest_filename,
         )
         self.engine = create_engine(f"sqlite:///{self.db_path}", echo=False)
-        SQLModel.metadata.create_all(self.engine)
+        ProcessStepStatus.__table__.create(self.engine, checkfirst=True)
 
     def _normalize_folder_name(self, folder_name: str) -> str:
         folder_name = folder_name.strip()
@@ -62,7 +62,7 @@ class ProcessStatusManager:
         folder_name = self._normalize_folder_name(folder_name)
         if folder_name not in self._registered_names():
             raise PermissionError(
-                f"{folder_name} 未登记在 {self.target_root / self.order_filename} 中，不允许使用"
+                f"{folder_name} 未登记在 {self.target_root / self.manifest_filename} 中，不允许使用"
             )
 
     def _require_existing_folder(self, folder_name: str) -> Path:
@@ -104,6 +104,22 @@ class ProcessStatusManager:
             )
             return session.exec(statement).first() is not None
 
+    def _migrate_legacy_status_key(self, folder_name: str) -> None:
+        source_name = self.walker.source_name_for(folder_name)
+        if source_name is None or source_name == folder_name:
+            return
+
+        with Session(self.engine) as session:
+            statement = select(ProcessStepStatus).where(
+                ProcessStepStatus.target_root == str(self.target_root),
+                ProcessStepStatus.folder_name == source_name,
+            )
+            records = list(session.exec(statement))
+            for record in records:
+                record.folder_name = folder_name
+            if records:
+                session.commit()
+
     def _load_legacy_json(self, folder_name: str) -> dict[str, Any] | None:
         status_path = self.get_status_path(folder_name)
         if not status_path.exists():
@@ -120,9 +136,12 @@ class ProcessStatusManager:
         self._require_existing_folder(folder_name)
 
         if not self._has_records(folder_name):
+            self._migrate_legacy_status_key(folder_name)
+        if not self._has_records(folder_name):
             legacy_status = self._load_legacy_json(folder_name)
             if legacy_status is not None:
                 self.save_status(folder_name, legacy_status)
+                self.get_status_path(folder_name).unlink(missing_ok=True)
 
         status = self._default_status()
         with Session(self.engine) as session:

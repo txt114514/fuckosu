@@ -19,6 +19,8 @@ class Circle(HitObject):
 class Slider(HitObject):
     path: List[Tuple[float, float]]
     repeats: int = 1
+    curve_type: str = "L"
+    pixel_length: float | None = None
     def __post_init__(self):
         self.type = "slider"
 @dataclass

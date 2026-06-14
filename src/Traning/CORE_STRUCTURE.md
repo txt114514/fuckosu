@@ -35,6 +35,7 @@ core/tasks/difficulty.py  -> core/beatmap/difficulty.py
 core/tasks/match.py       -> core/video/match.py
 core/tasks/av.py          -> core/video/av.py
 core/tasks/clip.py        -> core/video/clip.py
+core/tasks/segment.py     -> core/video/segment.py
 ```
 
 ## core/beatmap
@@ -45,7 +46,7 @@ core/tasks/clip.py        -> core/video/clip.py
 
 - `importer.py`: 从 osu 导出包导入 `.osz/.osu/audio.mp3`
 - `verify.py`: 解析谱面 hit objects 并导出 `verify.txt`
-- `difficulty.py`: 导出 `difficulty.txt`
+- `difficulty.py`: 读取谱面难度并写入 SQLite manifest
 - `pipeline.py`: 组合谱面相关阶段，供直接调用或测试使用
 
 它不实现底层解析算法。真正的核心数据处理保留在 `Lib/beatmap`。
@@ -59,6 +60,7 @@ core/tasks/clip.py        -> core/video/clip.py
 - `train_pipeline`: Prefect flow，调用 `core/tasks`
 - `train_pipeline_direct`: 普通 Python 调用，直接调用 `core/beatmap` 和 `core/video`
 - `TemporaryTrainingRunner`: 旧入口兼容包装
+- `PIPELINE_STAGES`: 七阶段查找表，统一保存开关位置、direct 入口和 Prefect task
 
 它不直接处理文件内容，也不直接调用 `Lib`。
 
@@ -69,9 +71,9 @@ core/tasks/clip.py        -> core/video/clip.py
 它保留真正有价值的底层处理器：
 
 - `Lib/beatmap`: 谱面导入、谱面解析、难度导出、包目录管理
-- `Lib/video`: 视频匹配、AV 对齐、裁剪
+- `Lib/video`: 视频匹配、AV 对齐、裁剪和按谱面切分训练片段
 - `Lib/audio`: 音频匹配
-- `Lib/common`: 批处理和 PathSpec 工具
+- `Lib/common`: 批处理、失败定位和 PathSpec 工具
 - `Lib/media`: ffmpeg/ffprobe 调用
 
 原则是：`Lib` 负责“怎么处理数据”，`core` 负责“什么时候调用哪个处理器”。

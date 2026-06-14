@@ -15,9 +15,8 @@ def match_videos(settings: Settings) -> bool:
         VideoMatchProcessor(
             video_root=str(settings.file_management.video_root),
             target_root=str(settings.file_management.target_root),
-            order_filename=settings.file_management.order_filename,
+            manifest_filename=settings.file_management.manifest_filename,
             audio_filename=settings.file_management.audio_filename,
-            verify_filename=settings.file_management.verify_filename,
             video_suffixes=settings.file_formats.video_suffixes,
             use_audio_match_experiment=settings.video_clip.use_audio_match_experiment,
             sample_rate=settings.av.sample_rate,

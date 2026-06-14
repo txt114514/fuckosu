@@ -8,8 +8,9 @@ from prefect import task
 
 from Traning.conf import Settings
 from Traning.core.video.clip import crop_video
+from Traning.core.tasks import require_success
 
 
 @task(name="clip", retries=0)
 def crop_video_task(settings: Settings) -> bool:
-    return crop_video(settings)
+    return require_success("clip", crop_video(settings))

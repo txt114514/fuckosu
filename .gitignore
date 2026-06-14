@@ -1,9 +1,15 @@
 # 默认忽略根目录下所有内容
 /*
 
-# 保留这两个根目录文件
+# 保留这些根目录文件
 !/.gitignore
 !/README.md
+!/AGENTS.md
+
+# 保留 Codex 工程索引及其生成器
+!/project_index/
+!/project_index/**
+/project_index/__pycache__/
 
 # 保留这几个目录及其全部内容
 !/.devcontainer/

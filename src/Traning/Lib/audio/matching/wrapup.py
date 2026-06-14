@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from Traning.Lib.common.failures import exception_detail, failure_detail
+
 
 class AudioMatchWrapUpMixin:
     def _print_greedy_matches(self, matches: list[dict[str, Any]]):
@@ -87,14 +89,17 @@ class AudioMatchWrapUpMixin:
                     detail=detail,
                 )
                 print(f"[完成] {original_path.name} -> {destination_path}")
-        except Exception:
+        except Exception as error:
             for folder_name, destination_path, original_path in reversed(completed_plan):
                 if destination_path.exists():
                     destination_path.rename(original_path)
                     self.status_manager.mark_step_pending(
                         folder_name,
                         self.match_status_step,
-                        detail={"error": "音频实验匹配移动过程中发生异常，已回滚"},
+                        detail=exception_detail(
+                            error,
+                            recovery="音频实验匹配移动过程中发生异常，已回滚",
+                        ),
                     )
             for temp_path, original_path in temp_plan:
                 if temp_path.exists():
@@ -109,10 +114,11 @@ class AudioMatchWrapUpMixin:
             self.status_manager.mark_step_pending(
                 folder_name,
                 self.match_status_step,
-                detail={
-                    "stage": "audio_experiment_unmatched",
-                    "error": "音频实验匹配阶段未选中对应视频",
-                },
+                detail=failure_detail(
+                    "音频实验匹配阶段未选中对应视频",
+                    self._apply_matches,
+                    stage="audio_experiment_unmatched",
+                ),
             )
 
         matched_video_names = {Path(str(result["video_path"])).name for result in matches}
@@ -138,7 +144,7 @@ class AudioMatchWrapUpMixin:
         folder_names = self._candidate_folder_names(include_existing_video=not apply_matches)
         if not folder_names:
             if apply_matches:
-                raise ValueError("order.txt 对应文件夹都已经存在视频文件，无需继续处理")
+                raise ValueError("manifest 中的文件夹都已经存在视频文件，无需继续处理")
             raise ValueError("没有找到带参考音频的谱面文件夹")
 
         videos = self._candidate_videos(allow_fallback=allow_fallback_videos)

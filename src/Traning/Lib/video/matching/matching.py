@@ -34,6 +34,6 @@ class VideoMatchProcessor:
         VideoMatchRenamer(
             video_root=self.video_root,
             target_root=self.target_root,
-            order_filename=self.order_filename,
+            manifest_filename=self.manifest_filename,
             video_suffixes=self.video_suffixes,
         ).run()

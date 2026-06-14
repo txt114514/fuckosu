@@ -10,8 +10,10 @@ from typing import Any
 __all__ = [
     "build_crop_video_args",
     "build_extract_wav_args",
+    "build_segment_video_args",
     "build_trim_video_args",
     "get_audio_stream_start_time",
+    "get_media_duration_seconds",
     "get_video_size",
     "run_ffmpeg",
     "run_ffprobe_json",
@@ -102,6 +104,28 @@ def build_trim_video_args(
     )
 
 
+def build_segment_video_args(
+    source_video_path: Path,
+    output_video_path: Path,
+    *,
+    trim_start_seconds: float,
+    trim_duration_seconds: float,
+) -> tuple[str, ...]:
+    return (
+        *COMMON_FFMPEG_ARGS,
+        "-ss",
+        f"{trim_start_seconds:.6f}",
+        "-i",
+        str(source_video_path),
+        "-t",
+        f"{trim_duration_seconds:.6f}",
+        *H264_VERYFAST_ARGS,
+        *AUDIO_AAC_192K_ARGS,
+        *FASTSTART_ARGS,
+        str(output_video_path),
+    )
+
+
 def build_crop_video_args(
     source_video_path: Path,
     output_video_path: Path,
@@ -167,6 +191,29 @@ def get_audio_stream_start_time(source_path: Path) -> float:
     if raw_start_time in (None, "N/A", ""):
         return 0.0
     return float(raw_start_time)
+
+
+def get_media_duration_seconds(source_path: Path) -> float:
+    payload = run_ffprobe_json(
+        [
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "json",
+            str(source_path),
+        ],
+        error_prefix="读取媒体时长失败",
+    )
+    raw_duration = payload.get("format", {}).get("duration")
+    if raw_duration in (None, "N/A", ""):
+        raise ValueError(f"未读取到媒体时长: {source_path}")
+
+    duration = float(raw_duration)
+    if duration <= 0:
+        raise ValueError(f"媒体时长必须大于 0: {source_path}")
+    return duration
 
 
 def get_video_size(video_path: Path) -> tuple[int, int]:

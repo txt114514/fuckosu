@@ -14,6 +14,7 @@ PROCESS_STEPS = (
     "video_matched",
     "av_corresponded",
     "video_processed",
+    "video_segmented",
 )
 STATUS_DB_FILENAME = ".process_status.sqlite"
 

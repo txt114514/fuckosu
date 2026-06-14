@@ -10,6 +10,7 @@ from loguru import logger
 
 from Traning.Lib.beatmap.folder_store import BeatmapFolderStore
 from Traning.Lib.common.batch import FolderBatchProcessor
+from Traning.Lib.common.failures import format_exception
 from Traning.Lib.defaults import DEFAULT_SETTINGS as DEFAULTS
 from Traning.Lib.video.clipping.geometry import ClipGeometryMixin
 from Traning.Lib.video.clipping.preflight import ClipPreflightMixin
@@ -26,7 +27,11 @@ def build_fixed_region_video_crop_processor_from_config_or_default(
     try:
         settings = load_settings(config_path)
     except Exception as e:
-        logger.error("{} 读取失败，改用默认参数: {}", config_path or "默认配置", e)
+        logger.error(
+            "{} 读取失败，改用默认参数: {}",
+            config_path or "默认配置",
+            format_exception(e),
+        )
         settings = DEFAULTS
     return FixedRegionVideoCropProcessor(settings)
 
@@ -82,9 +87,9 @@ class FixedRegionVideoCropProcessor(
             raise ValueError("status_step 不能为空")
 
         self.target_root = Path(config.target_root)
-        self.order_filename = config.order_filename
+        self.manifest_filename = config.manifest_filename
         self.output_filename = config.output_filename
-        super().__init__(config.failed_filename)
+        super().__init__()
         self.status_step = config.status_step.strip()
         self.required_steps = tuple(
             step.strip()
@@ -96,12 +101,12 @@ class FixedRegionVideoCropProcessor(
         self.reference_crop_height = self.crop_bottom - self.crop_top
         self.store = BeatmapFolderStore(
             target_root=str(self.target_root),
-            order_filename=self.order_filename,
+            manifest_filename=self.manifest_filename,
         )
         self.walker = self.store.walker
         self.status_manager = status_manager or ProcessStatusManager(
             target_root=str(self.target_root),
-            order_filename=self.order_filename,
+            manifest_filename=self.manifest_filename,
         )
 
         self._ensure_status_steps_registered()

@@ -13,13 +13,11 @@ from Traning.conf import Settings
 def av_correspondence(settings: Settings) -> bool:
     logger.info("开始 av_correspondence")
     started_at = perf_counter()
-    VideoAVProcessor(
+    success = VideoAVProcessor(
         target_root=str(settings.file_management.target_root),
-        order_filename=settings.file_management.order_filename,
+        manifest_filename=settings.file_management.manifest_filename,
         audio_filename=settings.file_management.audio_filename,
-        verify_filename=settings.file_management.verify_filename,
         output_filename=settings.file_management.output_filename,
-        failed_filename=settings.file_management.av_correspondence_failed_filename,
         status_step=settings.progress.av_status_step,
         required_steps=settings.progress.av_required_steps,
         sample_rate=settings.av.sample_rate,
@@ -31,4 +29,4 @@ def av_correspondence(settings: Settings) -> bool:
         video_suffixes=settings.file_formats.video_suffixes,
     ).run(overwrite=settings.overwrite)
     logger.info("完成 av_correspondence ({:.2f}s)", perf_counter() - started_at)
-    return True
+    return success

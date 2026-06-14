@@ -60,7 +60,7 @@ class AVCorrespondenceProcessor(
 
         assign_group(self, config, "av")
         self.target_root = Path(self.target_root)
-        super().__init__(config.failed_filename)
+        super().__init__()
         self.status_step = self.status_step.strip()
         self.required_steps = tuple(
             step.strip()
@@ -73,12 +73,12 @@ class AVCorrespondenceProcessor(
         self.video_file_spec = suffix_spec(self.video_suffixes)
         self.store = BeatmapFolderStore(
             target_root=str(self.target_root),
-            order_filename=self.order_filename,
+            manifest_filename=self.manifest_filename,
         )
         self.walker = self.store.walker
         self.status_manager = status_manager or ProcessStatusManager(
             target_root=str(self.target_root),
-            order_filename=self.order_filename,
+            manifest_filename=self.manifest_filename,
         )
 
         self._ensure_status_steps_registered()

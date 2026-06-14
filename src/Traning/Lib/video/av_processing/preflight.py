@@ -4,6 +4,7 @@ from pathlib import Path
 
 import numpy as np
 
+from Traning.Lib.common.failures import failure_detail
 from Traning.Lib.common.pathspec import filter_files
 
 
@@ -86,7 +87,10 @@ class AVPreflightMixin:
             self.status_manager.mark_step_pending(
                 folder_name,
                 self.status_step,
-                detail={"error": "状态显示已完成 AV 对齐，但输出文件不存在"},
+                detail=failure_detail(
+                    "状态显示已完成 AV 对齐，但输出文件不存在",
+                    self._sync_output_status,
+                ),
             )
             step_done = False
 

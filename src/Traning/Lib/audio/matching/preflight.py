@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from Traning.Lib.common.failures import failure_detail
 from Traning.Lib.common.pathspec import filter_files, matches_name
 
 
@@ -37,7 +38,10 @@ class AudioMatchPreflightMixin:
             self.status_manager.mark_step_pending(
                 folder_name,
                 self.match_status_step,
-                detail={"error": "状态显示已匹配视频，但文件夹中未找到视频文件"},
+                detail=failure_detail(
+                    "状态显示已匹配视频，但文件夹中未找到视频文件",
+                    self._sync_video_matched_status,
+                ),
             )
 
     def _pending_folder_names(self) -> list[str]:

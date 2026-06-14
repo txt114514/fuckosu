@@ -2,22 +2,20 @@ from __future__ import annotations
 
 
 class OszImportWrapUpMixin:
-    def run(self):
+    def run(self) -> bool:
         entries = self._scan_all_entries_in_time_order()
         if not entries:
             print("没有可登记的目标 .osu")
-            return
+            return self.fail_count == 0
 
-        # 严格时间顺序：先重建 order.txt
-        self._rebuild_order(entries)
+        self._rebuild_manifest(entries)
 
-        # 再只使用 order.txt 中允许的文件夹
         self._sync_folders_and_copy_files(entries)
 
         extra_dirs = self.updater.find_unregistered_existing_folders()
         if extra_dirs:
             print()
-            print("警告：发现未登记到 order.txt 的现有文件夹，这些文件夹不会被使用：")
+            print("警告：发现未登记到 manifest 的现有文件夹，这些文件夹不会被使用：")
             for p in extra_dirs:
                 print(f"  - {p}")
 
@@ -25,4 +23,6 @@ class OszImportWrapUpMixin:
         print(
             f"处理完成：成功 {self.success_count} 个，跳过 {self.skip_count} 个，失败 {self.fail_count} 个"
         )
-        print(f"记录文件：{self.updater.order_file}")
+        print(f"manifest：{self.updater.manifest_path}")
+        print(f"谱面编号对照表：{self.updater.manifest_table_path}")
+        return self.fail_count == 0

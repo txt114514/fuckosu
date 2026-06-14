@@ -3,14 +3,14 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Literal, Protocol
+
+from Traning.Lib.common.failures import format_exception
 
 
 __all__ = [
     "BatchProcessResult",
     "ConfigValueSpec",
-    "FailedReportStoreLike",
     "FolderBatchProcessor",
     "FolderWalkerLike",
     "config_bools",
@@ -170,28 +170,15 @@ class FolderWalkerLike(Protocol):
         ...
 
 
-class FailedReportStoreLike(Protocol):
-    def write_failed_report(
-        self,
-        failed_cases: list[tuple[str, str]],
-        failed_filename: str,
-    ) -> Path:
-        ...
-
-
 class FolderBatchProcessor(ABC):
     """Shared shell for folder-based batch processors."""
 
     walker: FolderWalkerLike
-    store: FailedReportStoreLike
-    failed_filename: str
 
-    def __init__(self, failed_filename: str):
-        self.failed_filename = failed_filename
+    def __init__(self):
         self.success_count = 0
         self.skip_count = 0
         self.fail_count = 0
-        self.failed_cases: list[tuple[str, str]] = []
 
     def progress_message(
         self,
@@ -228,14 +215,13 @@ class FolderBatchProcessor(ABC):
 
         raise ValueError(f"未知处理结果: {result}")
 
-    def _print_summary(self, failed_path: Path):
+    def _print_summary(self):
         print()
         print(
             f"处理完成：成功 {self.success_count} 个，跳过 {self.skip_count} 个，失败 {self.fail_count} 个"
         )
-        print(f"失败名单：{failed_path}")
 
-    def run(self, overwrite: bool = False):
+    def run(self, overwrite: bool = False) -> bool:
         folder_names = self.iter_folder_names()
         total = len(folder_names)
 
@@ -248,15 +234,11 @@ class FolderBatchProcessor(ABC):
                 result = self.process_one(folder_name, overwrite=overwrite)
             except Exception as e:
                 self.fail_count += 1
-                self.failed_cases.append((folder_name, str(e)))
                 self.handle_failure(folder_name, e)
-                print(f"[失败] {folder_name}: {e}")
+                print(f"[失败] {folder_name}: {format_exception(e)}")
                 continue
 
             self._record_result(folder_name, result)
 
-        failed_path = self.store.write_failed_report(
-            self.failed_cases,
-            failed_filename=self.failed_filename,
-        )
-        self._print_summary(failed_path)
+        self._print_summary()
+        return self.fail_count == 0

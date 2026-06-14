@@ -70,11 +70,11 @@ class OsuOszProcessor(OszImportWrapUpMixin, OszImportWriterMixin, OszScannerMixi
         self.mp3_file_spec = suffix_spec((".mp3",))
         self.updater = PackageUpdater(
             target_root=str(self.target_root),
-            order_filename=self.order_filename,
+            manifest_filename=self.manifest_filename,
         )
         self.status_manager = ProcessStatusManager(
             target_root=str(self.target_root),
-            order_filename=self.order_filename,
+            manifest_filename=self.manifest_filename,
         )
 
         self.success_count = 0

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from Traning.Lib.common.failures import exception_detail
+
 
 class ClipWrapUpMixin:
     def progress_message(self, index: int, total: int, folder_name: str) -> str | None:
@@ -61,9 +63,9 @@ class ClipWrapUpMixin:
             self.status_manager.mark_step_pending(
                 folder_name,
                 self.status_step,
-                detail={
-                    "stage": "failed",
-                    "error": str(error),
+                detail=exception_detail(
+                    error,
+                    stage="failed",
                     **self._reference_detail(),
-                },
+                ),
             )

@@ -5,7 +5,7 @@ from typing import List
 
 import pathspec
 
-from Traning.Lib.beatmap.order import OrderFolderWalker
+from Traning.Lib.beatmap.manifest import ManifestEntry, PackageManifest
 from Traning.conf import Settings
 from Traning.conf.legacy_config import settings_namespace
 from Traning.Lib.defaults import DEFAULT_SETTINGS as DEFAULTS
@@ -14,9 +14,9 @@ from Traning.Lib.defaults import DEFAULT_SETTINGS as DEFAULTS
 class PackageUpdater:
     """
     规则：
-    1. order.txt 是唯一可信索引
-    2. 文件夹只有在 order.txt 中登记后才允许被使用
-    3. 文件夹创建顺序以 order.txt 为准
+    1. SQLite manifest 是唯一可信索引
+    2. 文件夹使用稳定的内部 ID
+    3. 处理顺序只保存在 manifest 中
     """
 
     def __init__(
@@ -30,53 +30,32 @@ class PackageUpdater:
 
         config = settings_namespace(settings, processor="package", overrides=overrides)
         self.target_root = Path(config.target_root)
-        self.order_filename = config.order_filename
-        self.order_file = self.target_root / self.order_filename
+        self.manifest_filename = config.manifest_filename
         self.ignore_spec = pathspec.PathSpec.from_lines("gitwildmatch", config.ignore_patterns)
 
         self.target_root.mkdir(parents=True, exist_ok=True)
-        if not self.order_file.exists():
-            self.order_file.touch()
-
-    def load_order_list(self) -> List[str]:
-        walker = OrderFolderWalker(
+        self.manifest = PackageManifest(
             target_root=str(self.target_root),
-            order_filename=self.order_filename,
+            manifest_filename=self.manifest_filename,
         )
-        return walker.read_folder_names()
+        self.manifest_path = self.manifest.db_path
+        self.manifest_table_path = self.manifest.table_path
+
+    def load_manifest_folder_names(self) -> List[str]:
+        return self.manifest.read_folder_names()
 
     def load_registered_names(self) -> set[str]:
-        return set(self.load_order_list())
+        return set(self.manifest.read_all_folder_names())
 
-    def overwrite_order(self, folder_names: List[str]):
-        """
-        直接按给定顺序重写 order.txt。
-        这是严格时间排序模式下最关键的方法。
-        """
-        cleaned: List[str] = []
-        seen = set()
-
-        for name in folder_names:
-            name = name.strip()
-            if not name:
-                continue
-            if name in seen:
-                raise ValueError(f"order 中出现重复目录名: {name}")
-            seen.add(name)
-            cleaned.append(name)
-
-        text = "\n".join(cleaned)
-        if text:
-            text += "\n"
-
-        self.order_file.write_text(text, encoding="utf-8")
+    def replace_manifest(self, entries: list[ManifestEntry]) -> dict[str, str]:
+        return self.manifest.replace(entries)
 
     def is_registered(self, folder_name: str) -> bool:
-        return folder_name in self.load_registered_names()
+        return self.manifest.is_active(folder_name)
 
     def create_folder_if_registered(self, folder_name: str) -> Path:
         """
-        只有在 order.txt 中已登记的名字才允许创建/使用对应文件夹。
+        只有在 manifest 中启用的内部 ID 才允许创建/使用对应文件夹。
         """
         folder_name = folder_name.strip()
         if not folder_name:
@@ -84,19 +63,16 @@ class PackageUpdater:
 
         if not self.is_registered(folder_name):
             raise PermissionError(
-                f"{folder_name} 未登记到 {self.order_file}，不允许创建或使用该文件夹"
+                f"{folder_name} 未登记到 {self.manifest_path}，不允许创建或使用该文件夹"
             )
 
         folder_path = self.target_root / folder_name
         folder_path.mkdir(parents=True, exist_ok=True)
         return folder_path
 
-    def sync_folders_from_order(self) -> List[Path]:
-        """
-        严格按 order.txt 同步文件夹。
-        不在 order.txt 中的文件夹不会被这里使用。
-        """
-        folder_names = self.load_order_list()
+    def sync_folders_from_manifest(self) -> List[Path]:
+        """Create active manifest folders in processing order."""
+        folder_names = self.load_manifest_folder_names()
         result: List[Path] = []
 
         for name in folder_names:
@@ -108,7 +84,7 @@ class PackageUpdater:
 
     def find_unregistered_existing_folders(self) -> List[Path]:
         """
-        返回 target_root 下存在，但不在 order.txt 中登记的目录。
+        返回 target_root 下存在，但不在 manifest 中登记的目录。
         这些目录按你的规则“不应该被使用”。
         """
         registered = self.load_registered_names()

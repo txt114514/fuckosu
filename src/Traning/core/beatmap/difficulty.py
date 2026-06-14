@@ -14,10 +14,10 @@ def export_difficulty(settings: Settings) -> bool:
     logger.info("开始 difficulty_export")
     started_at = perf_counter()
     store = build_store(settings)
-    BeatmapDifficultyProcessor(
+    success = BeatmapDifficultyProcessor(
         walker=store.walker,
         store=store,
         settings=settings,
     ).run(overwrite=settings.overwrite)
     logger.info("完成 difficulty_export ({:.2f}s)", perf_counter() - started_at)
-    return True
+    return success

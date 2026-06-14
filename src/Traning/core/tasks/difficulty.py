@@ -8,8 +8,9 @@ from prefect import task
 
 from Traning.conf import Settings
 from Traning.core.beatmap.difficulty import export_difficulty
+from Traning.core.tasks import require_success
 
 
 @task(name="difficulty_export", retries=0)
 def export_difficulty_task(settings: Settings) -> bool:
-    return export_difficulty(settings)
+    return require_success("difficulty_export", export_difficulty(settings))

@@ -7,6 +7,8 @@ from typing import Any, Callable, Iterable, Mapping, TypeVar
 
 from loguru import logger
 
+from Traning.Lib.common.failures import format_exception
+from Traning.Lib.artifacts import VERIFY_FILENAME
 from Traning.conf import Settings, load_settings
 from Traning.conf.field_groups import assign_group, forward_kwargs, group_values
 
@@ -73,16 +75,12 @@ def settings_kwargs(settings: Settings, processor: str | None = None) -> dict[st
         "export_dir": str(files.export_dir),
         "target_root": str(files.target_root),
         "video_root": str(files.video_root),
-        "order_filename": files.order_filename,
-        "verify_filename": files.verify_filename,
-        "difficulty_filename": files.difficulty_filename,
-        "verify_failed_filename": files.verify_failed_filename,
-        "difficulty_failed_filename": files.difficulty_failed_filename,
+        "manifest_filename": files.manifest_filename,
+        "verify_filename": VERIFY_FILENAME,
         "audio_filename": files.audio_filename,
         "output_filename": files.output_filename,
         "video_suffixes": settings.file_formats.video_suffixes,
         "keyword": settings.file_formats.keyword,
-        "failed_filename": files.av_correspondence_failed_filename,
         "status_step": settings.progress.av_status_step,
         "required_steps": settings.progress.av_required_steps,
         "sample_rate": settings.av.sample_rate,
@@ -96,7 +94,6 @@ def settings_kwargs(settings: Settings, processor: str | None = None) -> dict[st
         "match_status_step": settings.audio_match.match_status_step,
         "ignore_patterns": settings.package.ignore_patterns,
         "use_audio_match_experiment": settings.video_clip.use_audio_match_experiment,
-        "clip_failed_filename": files.clip_failed_filename,
         "clip_status_step": settings.clip.status_step,
         "clip_required_steps": settings.clip.required_steps,
         "clip_crop_reference_width": settings.clip.crop_reference_width,
@@ -115,12 +112,9 @@ def settings_kwargs(settings: Settings, processor: str | None = None) -> dict[st
 
     if processor == "clip":
         values.update(
-            failed_filename=values["clip_failed_filename"],
             status_step=values["clip_status_step"],
             required_steps=values["clip_required_steps"],
         )
-    elif processor == "verify":
-        values.update(failed_filename=values["verify_failed_filename"])
 
     return values
 
@@ -154,13 +148,8 @@ def settings_namespace(
     for key, value in (overrides or {}).items():
         values[key] = _coerce_like(values[key], value) if key in values else value
     if processor == "clip":
-        values["failed_filename"] = values["clip_failed_filename"]
         values["status_step"] = values["clip_status_step"]
         values["required_steps"] = values["clip_required_steps"]
-    elif processor == "verify":
-        values["failed_filename"] = values["verify_failed_filename"]
-    elif processor == "difficulty":
-        values["failed_filename"] = values["difficulty_failed_filename"]
     return SimpleNamespace(**values)
 
 
@@ -203,5 +192,9 @@ def build_from_config_or_default(
     try:
         return build_from_config(builder, loaders, config_path)
     except Exception as e:
-        logger.error("{} 读取失败，改用默认参数: {}", config_path or CONFIG_PATH, e)
+        logger.error(
+            "{} 读取失败，改用默认参数: {}",
+            config_path or CONFIG_PATH,
+            format_exception(e),
+        )
         return (default_builder or builder)()
