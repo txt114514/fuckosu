@@ -1,0 +1,97 @@
+from __future__ import annotations
+
+import json
+from math import isfinite
+from pathlib import Path
+
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+from traning.state.experiment_schema import TrialParameters
+
+
+EVALUATION_SUBPROJECTS = (
+    "single_point",
+    "slider",
+    "multi_point",
+    "point_slider",
+    "spinner",
+    "long_sequence",
+)
+
+
+class FrameEvaluation(BaseModel):
+    sample_key: str
+    frame_index: int
+    passed: bool
+    target_source_index: int | None = None
+    predicted_osu_xy: tuple[float, float] | None = None
+    metrics: dict[str, float] = Field(default_factory=dict)
+
+    @field_validator("frame_index")
+    @classmethod
+    def _nonnegative_frame_index(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError("frame_index must be nonnegative")
+        return value
+
+
+class TrialGalleryEvaluation(BaseModel):
+    trial_id: str
+    score: float
+    score_version: str = "external"
+    parameters: TrialParameters
+    frames: tuple[FrameEvaluation, ...] = ()
+    metrics: dict[str, float] = Field(default_factory=dict)
+
+    @field_validator("score")
+    @classmethod
+    def _finite_score(cls, value: float) -> float:
+        if not isfinite(value):
+            raise ValueError("score must be finite")
+        return value
+
+
+class BatchGalleryRequest(BaseModel):
+    batch_id: str
+    trials: tuple[TrialGalleryEvaluation, ...]
+    random_seed: int = 2026
+
+    @field_validator("trials")
+    @classmethod
+    def _require_trials(
+        cls,
+        value: tuple[TrialGalleryEvaluation, ...],
+    ) -> tuple[TrialGalleryEvaluation, ...]:
+        if not value:
+            raise ValueError("trials must not be empty")
+        return value
+
+    @model_validator(mode="after")
+    def _require_one_score_version(self) -> BatchGalleryRequest:
+        versions = {trial.score_version for trial in self.trials}
+        if len(versions) != 1:
+            raise ValueError(
+                "all trials in one batch must use the same score_version"
+            )
+        return self
+
+    @property
+    def best_trial(self) -> TrialGalleryEvaluation:
+        return min(self.trials, key=lambda trial: (-trial.score, trial.trial_id))
+
+
+def load_batch_gallery_request(path: Path) -> BatchGalleryRequest:
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"failed to read gallery request: {path}") from error
+    return BatchGalleryRequest.model_validate(raw)
+
+
+__all__ = [
+    "BatchGalleryRequest",
+    "EVALUATION_SUBPROJECTS",
+    "FrameEvaluation",
+    "TrialGalleryEvaluation",
+    "load_batch_gallery_request",
+]

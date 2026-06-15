@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build compact, deterministic indexes for the before_traning Python package."""
+"""Build compact, deterministic indexes for project Python packages."""
 
 from __future__ import annotations
 
@@ -12,9 +12,10 @@ from typing import Iterable
 
 
 WORKSPACE = Path(__file__).resolve().parents[1]
-SOURCE_ROOT = WORKSPACE / "src" / "before_traning"
-SEMANTIC_INDEX = Path(__file__).with_name("FUNCTION_INDEX.md")
-LOCATION_INDEX = Path(__file__).with_name("FUNCTION_LOCATIONS.md")
+BEFORE_SOURCE_ROOT = WORKSPACE / "src" / "before_traning"
+TRAINING_SOURCE_ROOT = WORKSPACE / "src" / "traning"
+BEFORE_CODEX_INDEX = BEFORE_SOURCE_ROOT / "docs" / "CODEX_INDEX.md"
+TRAINING_CODEX_INDEX = TRAINING_SOURCE_ROOT / "docs" / "CODEX_INDEX.md"
 
 GENERATED_NOTICE = (
     "> 自动生成文件，请勿手工修改。运行 "
@@ -82,6 +83,35 @@ ROLE_OVERRIDES = {
     "Lib/video/segment_dataset.py": "用 SQLite 管理视频片段索引、导出 CSV 并校验数据集文件完整性。",
     "Lib/video/segmentation/planner.py": "构建对象恰好归属一次的原子片段，并将完整原子片段组合为长序列维度，避免该维度内部重复 source_index。",
     "Lib/video/segmentation/segmentation.py": "根据显式参数调用 planner，返回原子与长序列计划集合。",
+}
+
+TRAINING_ROLE_OVERRIDES = {
+    "main.py": "Typer CLI；执行数据检查、样本预览和训练阶段注册表。",
+    "conf/settings.py": "训练配置模型与 YAML 加载；解析数据集路径并校验采样和分块参数。",
+    "conf/defaults.py": "创建默认训练 Settings。",
+    "core/pipeline.py": "声明训练阶段注册表；当前登记 data_input，后续扩展空间、时序和导出阶段。",
+    "core/data_input/data_input.py": "数据输入模块公开门面；提供检查、Dataset 和 DataLoader。",
+    "core/data_input/preflight.py": "扫描训练片段并生成数量、类别、维度和问题报告。",
+    "core/data_input/loader.py": "把配置映射为 SegmentFrameDataset 与 PyTorch DataLoader。",
+    "Lib/data/annotation.py": "beatmap.json 的 Pydantic 契约和按帧可见 HitObject 筛选。",
+    "Lib/data/discovery.py": "发现 video.mp4 与 beatmap.json 配对并构建稳定片段记录。",
+    "Lib/data/dataset.py": "按片段帧索引解码原分辨率 RGB Tensor 和可变长度标签。",
+    "Lib/data/video_reader.py": "带有限打开文件缓存的 OpenCV 视频帧读取器。",
+    "Lib/data/tiling.py": "构建覆盖完整画面的重叠 patch 窗口并返回 Tensor 视图。",
+    "Lib/data/sampling.py": "根据片段时长、FPS 和步长建立帧引用表。",
+    "Lib/data/collate.py": "组装图像批次并保留可变长度样本元数据。",
+    "Lib/metrics/scoring.py": "实现点与 slider 的空间、时间、1.5x 膨胀路径覆盖和组合评分。",
+    "Lib/visualization/render.py": "把帧 Tensor、osu 标签和共享坐标变换渲染为标注图片。",
+    "Lib/visualization/selection.py": "根据 HitObject 起始时间反推最接近的采样帧。",
+    "Lib/visualization/display.py": "通过独立 ffplay 子进程把标注图片显示到主机 X11。",
+    "Lib/visualization/gallery.py": "选择批次最高分 trial，并按通过状态和六个子项目随机保存标注帧图集。",
+    "Lib/visualization/output_identity.py": "为 traning_example 输出分配进程安全的递增次数和 UTC 时间标识。",
+    "core/visualization/service.py": "可选可视化故障隔离、一次性告警和训练步频率控制。",
+    "core/visualization/preview.py": "组装 Dataset、单帧点击标注和批次最佳参数图集。",
+    "state/run_state.py": "保存 trial、课程阶段、rung、预算和全局步数的运行状态。",
+    "state/checkpoint_schema.py": "检查点 lineage 与模型/优化器/scheduler/AMP 恢复契约。",
+    "state/experiment_schema.py": "三层参数、TPE/随机来源、ASHA trial、课程和独立评估契约。",
+    "state/gallery_schema.py": "批次 trial 分数、稳定帧引用和最佳参数图集输入契约。",
 }
 
 SUMMARY_OVERRIDES = {
@@ -347,10 +377,10 @@ class SymbolVisitor(ast.NodeVisitor):
         self._visit_function(node)
 
 
-def source_files() -> list[Path]:
+def source_files(source_root: Path) -> list[Path]:
     return sorted(
         path
-        for path in SOURCE_ROOT.rglob("*.py")
+        for path in source_root.rglob("*.py")
         if "__pycache__" not in path.parts
     )
 
@@ -363,21 +393,31 @@ def parse_file(path: Path) -> tuple[ast.Module, list[Symbol]]:
     return tree, visitor.symbols
 
 
-def local_dependencies(tree: ast.Module) -> tuple[str, ...]:
+def local_dependencies(
+    tree: ast.Module,
+    prefixes: tuple[str, ...],
+) -> tuple[str, ...]:
     dependencies: set[str] = set()
     for node in tree.body:
-        if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith("before_traning"):
+        if (
+            isinstance(node, ast.ImportFrom)
+            and node.module
+            and node.module.startswith(prefixes)
+        ):
             dependencies.add(node.module)
         elif isinstance(node, ast.Import):
             for alias in node.names:
-                if alias.name.startswith("before_traning"):
+                if alias.name.startswith(prefixes):
                     dependencies.add(alias.name)
     return tuple(sorted(dependencies))
 
 
-def module_role(relative_path: str) -> str:
-    if relative_path in ROLE_OVERRIDES:
-        return ROLE_OVERRIDES[relative_path]
+def module_role(
+    relative_path: str,
+    role_overrides: dict[str, str],
+) -> str:
+    if relative_path in role_overrides:
+        return role_overrides[relative_path]
     if relative_path.endswith("/__init__.py") or relative_path == "__init__.py":
         return "包导出边界；集中暴露该目录的稳定名称。"
     return "Python 模块；具体职责见下方符号及调用。"
@@ -421,17 +461,21 @@ def kind_label(kind: str) -> str:
     }[kind]
 
 
-def render_semantic_index(
+def render_symbol_index(
+    lines: list[str],
     parsed: list[tuple[Path, ast.Module, list[Symbol]]],
+    *,
+    source_root: Path,
+    role_overrides: dict[str, str],
+    dependency_prefixes: tuple[str, ...],
 ) -> str:
     all_symbols = [symbol for _, _, symbols in parsed for symbol in symbols]
     known_names = {symbol.short_name for symbol in all_symbols}
     functions = sum(symbol.kind != "class" for symbol in all_symbols)
     classes = len(all_symbols) - functions
-    lines = [
-        "# Function Index",
-        "",
-        GENERATED_NOTICE,
+    lines.extend(
+        [
+        "## 符号索引",
         "",
         f"覆盖 `{len(parsed)}` 个 Python 文件、`{functions}` 个命名函数/方法、"
         f"`{classes}` 个类。匿名 lambda 不单独列出。",
@@ -439,28 +483,25 @@ def render_semantic_index(
         "图例：`F` 模块函数，`M` 方法，`N` 嵌套函数，`C` 类；"
         "`IO-R/IO-W` 文件读写，`DB` 数据库，`PROCESS` 外部进程。",
         "",
-        "使用顺序：先读 `PROJECT_MAP.md`，再在 `FUNCTION_LOCATIONS.md` 定位，"
-        "最后只读取本文件对应模块块和源码行。",
-        "",
-    ]
+        ]
+    )
 
     for path, tree, symbols in parsed:
-        relative = path.relative_to(SOURCE_ROOT).as_posix()
+        if not symbols:
+            continue
+        relative = path.relative_to(source_root).as_posix()
         workspace_path = path.relative_to(WORKSPACE).as_posix()
         lines.extend(
             [
                 f"## `{workspace_path}`",
                 "",
-                f"职责：{module_role(relative)}",
+                f"职责：{module_role(relative, role_overrides)}",
             ]
         )
-        dependencies = local_dependencies(tree)
+        dependencies = local_dependencies(tree, dependency_prefixes)
         if dependencies:
             rendered_dependencies = ", ".join(f"`{item}`" for item in dependencies)
             lines.append(f"工程依赖：{rendered_dependencies}")
-        if not symbols:
-            lines.extend(["", "- 无命名函数、方法或类。", ""])
-            continue
 
         lines.append("")
         for symbol in symbols:
@@ -475,76 +516,164 @@ def render_semantic_index(
             else:
                 display = f"{symbol.qualname}{symbol.signature}"
             tags = f" [{' '.join(symbol.tags)}]" if symbol.tags else ""
+            calls = relevant_calls(symbol, known_names)
+            call_text = (
+                " 调用：" + ", ".join(f"`{call}`" for call in calls) + "。"
+                if calls
+                else ""
+            )
             lines.append(
                 f"- `{kind_label(symbol.kind)} {location}` `{display}`{tags}："
-                f"{summary_for(symbol)}"
+                f"{summary_for(symbol)}{call_text}"
             )
-            calls = relevant_calls(symbol, known_names)
-            if calls:
-                lines.append(
-                    "  关键调用：" + ", ".join(f"`{call}`" for call in calls) + "。"
-                )
         lines.append("")
 
     return "\n".join(lines).rstrip() + "\n"
 
 
-def render_location_index(
+def render_before_index(
     parsed: list[tuple[Path, ast.Module, list[Symbol]]],
 ) -> str:
-    all_symbols = [symbol for _, _, symbols in parsed for symbol in symbols]
-    functions = sum(symbol.kind != "class" for symbol in all_symbols)
-    classes = len(all_symbols) - functions
     lines = [
-        "# Function Locations",
+        "# before_traning Codex Index",
         "",
         GENERATED_NOTICE,
         "",
-        f"快速位置表：`{functions}` 个命名函数/方法，附带 `{classes}` 个类定义。",
-        "格式为 `起止行  类型  限定名`；路径按模块分组。",
+        "面向 Codex 的低 token 工程导航；先按阶段定位，再读取命中的源码。",
         "",
-        "快速搜索：`rg -n \"符号名\" project_index/FUNCTION_LOCATIONS.md`。",
+        "## 调用分层",
+        "",
+        "```text",
+        "main.py -> core/pipeline.py:TRAINING_PIPELINE -> core stages",
+        "        -> Lib reusable APIs -> state / filesystem / SQLite / ffmpeg",
+        "```",
+        "",
+        "## 七阶段入口",
+        "",
+        "| key | Core 入口 | 完成状态 |",
+        "|---|---|---|",
+        "| `import_beatmaps` | `core/beatmap/importer.py` | `osu_imported`, `audio_imported` |",
+        "| `verify_export` | `core/beatmap/verify.py` | `verify_exported` |",
+        "| `difficulty_export` | `core/beatmap/difficulty.py` | `difficulty_exported` |",
+        "| `video_match` | `core/video/match.py` | `video_matched` |",
+        "| `av_correspondence` | `core/video/av.py` | `av_corresponded` |",
+        "| `clip` | `core/video/clip.py` | `video_processed` |",
+        "| `video_segment` | `core/video/segment.py` | `video_segmented` |",
+        "",
+        "快速查询：`python project_index/build_index.py --lookup 符号名`。",
         "",
     ]
-
-    for path, _tree, symbols in parsed:
-        if not symbols:
-            continue
-        workspace_path = path.relative_to(WORKSPACE).as_posix()
-        lines.extend([f"## `{workspace_path}`", ""])
-        for symbol in symbols:
-            location = (
-                f"{symbol.line}"
-                if symbol.line == symbol.end_line
-                else f"{symbol.line}-{symbol.end_line}"
-            )
-            lines.append(
-                f"- `{location}` `{kind_label(symbol.kind)}` `{symbol.qualname}`"
-            )
-        lines.append("")
-
-    return "\n".join(lines).rstrip() + "\n"
+    return render_symbol_index(
+        lines,
+        parsed,
+        source_root=BEFORE_SOURCE_ROOT,
+        role_overrides=ROLE_OVERRIDES,
+        dependency_prefixes=("before_traning", "package"),
+    )
 
 
-def parse_project() -> list[tuple[Path, ast.Module, list[Symbol]]]:
+def render_training_index(
+    parsed: list[tuple[Path, ast.Module, list[Symbol]]],
+) -> str:
+    lines = [
+        "# traning Codex Index",
+        "",
+        GENERATED_NOTICE,
+        "",
+        "训练模块的低 token 导航。当前优先完成 data_input，后续阶段沿同一注册表扩展。",
+        "",
+        "## 调用分层",
+        "",
+        "```text",
+        "main.py -> core/pipeline.py:TRAINING_STAGES",
+        "        -> core/data_input (配置映射、preflight、组装)",
+        "        -> Lib/data (发现、标签、采样、解码、分块、collate)",
+        "        -> state (run / experiment / checkpoint metadata)",
+        "```",
+        "",
+        "## 阶段路线",
+        "",
+        "| 顺序 | 阶段 | 当前状态 |",
+        "|---|---|---|",
+        "| 1 | `data_input` | 已实现并登记 |",
+        "| 2 | `spatial` | 目录边界已建立 |",
+        "| 3 | `candidate_cache` | 目录边界已建立 |",
+        "| 4 | `temporal` | 目录边界已建立 |",
+        "| 5 | `evaluation` | 目录边界已建立 |",
+        "| 6 | `export` | 目录边界已建立 |",
+        "",
+        "## data_input 契约",
+        "",
+        "- 输入根：`training_package/video_segments`。",
+        "- 每个样本目录必须同时包含 `video.mp4` 与 `beatmap.json`。",
+        "- 图像保持原分辨率 RGB CHW；默认归一化到 `[0, 1]`。",
+        "- 标签时间以片段起点为零；可见对象窗口使用谱面 AR preempt 和可配置尾部时间。",
+        "- patch 由 Tensor 视图串行产生，不提前复制全部 patch。",
+        "- osu/video 坐标转换使用 `src/package/coordinates.py` 的稳定 API。",
+        "- slider 跨 patch 使用全局 path/head/orientation 稠密图融合。",
+        "- 首版不支持 slider 路径交叉或接触分叉；此类样本在 target/data check 阶段过滤。",
+        "- 空间主扫描固定 stride 2；stride 1 只用于少量候选的局部精修。",
+        "- refiner stride 由训练前显存 dry-run 选择并在 trial 内冻结，主干不使用 stride 1。",
+        "- patch 完成后立即 CPU offload 精简输出，不跨 patch 保留深层特征。",
+        "- 空间级联为全图扫描、候选精修、条件歧义复查三层。",
+        "- 参数搜索采用 TPE/随机生成、ASHA 剪枝、课程晋级和难例挖掘。",
+        "- 同一 trial 晋级继承 checkpoint；新参数组合从基础阶段开始；推理参数不触发重训。",
+        "- 可视化默认关闭；渲染与 ffplay 显示独立于训练，失败只返回一次告警后静默禁用。",
+        "- 标注图集选择批次最高分 trial，对六个子项目的 passed/failed 结果各随机保存最多 10 帧。",
+        "- 可视化默认写入 `traning_example`，每次输出具有持久递增次数和 UTC 时间。",
+        "- 单点与 slider 使用 `point-slider-v2`；slider 以 1.5x 双向膨胀走廊计算路径覆盖。",
+        "- trial 聚合 score 仍由外部评估结果提供；搜索器和晋级执行器尚未实现。",
+        "",
+        "## 改动影响面",
+        "",
+        "| 改动 | 至少检查 |",
+        "|---|---|",
+        "| 数据路径/筛选 | Settings, config, discovery, preflight |",
+        "| 标签 schema | annotation, dataset, collate, spatial target encoder |",
+        "| 帧采样 | sampling, dataset, temporal/action label semantics |",
+        "| patch 规则 | Settings, tiling, spatial model input |",
+        "| slider 路径融合 | target encoder, global canvas, skeleton trace, candidate cache |",
+        "| 空间级联/offload | spatial model, refiner, review policy, CPU accumulator |",
+        "| 搜索/课程协议 | experiment schema, checkpoint lineage, evaluator, sampler |",
+        "| 可视化 | visualization settings, gallery schema, renderer, optional service, Docker X11 |",
+        "| 批次结构 | dataset, collate, trainer consumers |",
+        "| 新训练阶段 | core/pipeline.py, core stage, Lib APIs, state schema |",
+        "",
+        "快速查询：`python project_index/build_index.py --lookup 符号名`。",
+        "",
+    ]
+    return render_symbol_index(
+        lines,
+        parsed,
+        source_root=TRAINING_SOURCE_ROOT,
+        role_overrides=TRAINING_ROLE_OVERRIDES,
+        dependency_prefixes=("traning", "package"),
+    )
+
+
+def parse_project(
+    source_root: Path,
+) -> list[tuple[Path, ast.Module, list[Symbol]]]:
     parsed: list[tuple[Path, ast.Module, list[Symbol]]] = []
-    for path in source_files():
+    for path in source_files(source_root):
         tree, symbols = parse_file(path)
         parsed.append((path, tree, symbols))
     return parsed
 
 
 def build_outputs(
-    parsed: list[tuple[Path, ast.Module, list[Symbol]]],
+    before_parsed: list[tuple[Path, ast.Module, list[Symbol]]],
+    training_parsed: list[tuple[Path, ast.Module, list[Symbol]]],
 ) -> dict[Path, str]:
     return {
-        SEMANTIC_INDEX: render_semantic_index(parsed),
-        LOCATION_INDEX: render_location_index(parsed),
+        BEFORE_CODEX_INDEX: render_before_index(before_parsed),
+        TRAINING_CODEX_INDEX: render_training_index(training_parsed),
     }
 
 
 def write_outputs(outputs: dict[Path, str]) -> None:
     for path, content in outputs.items():
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
         print(f"wrote {path.relative_to(WORKSPACE)}")
 
@@ -617,10 +746,12 @@ def main() -> int:
         help="print only symbols/modules whose qualified name or path contains TEXT",
     )
     args = parser.parse_args()
-    parsed = parse_project()
+    before_parsed = parse_project(BEFORE_SOURCE_ROOT)
+    training_parsed = parse_project(TRAINING_SOURCE_ROOT)
+    all_parsed = before_parsed + training_parsed
     if args.lookup:
-        return lookup_symbols(parsed, args.lookup)
-    outputs = build_outputs(parsed)
+        return lookup_symbols(all_parsed, args.lookup)
+    outputs = build_outputs(before_parsed, training_parsed)
     return check_outputs(outputs) if args.check else (write_outputs(outputs) or 0)
 
 

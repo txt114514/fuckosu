@@ -1,0 +1,37 @@
+runtime:
+  seed: 2026
+  device: cuda
+
+data_input:
+  dataset_root: ../../../training_package/video_segments
+  dimensions:
+    - atomic
+    - long_sequence
+  categories: []
+  sample_fps: 60.0
+  frame_step: 1
+  max_segments:
+  max_frames_per_segment:
+  visibility_post_ms: 100.0
+  normalize_images: true
+  strict: true
+  patch_width: 512
+  patch_height: 512
+  overlap_x: 128
+  overlap_y: 128
+
+loader:
+  batch_size: 1
+  num_workers: 0
+  shuffle: true
+  pin_memory: true
+
+visualization:
+  enabled: false
+  every_n_steps: 500
+  output_dir: ../../../traning_example
+  save_images: true
+  gallery_samples_per_group: 10
+  show_window: false
+  window_title: "osu! training annotation"
+  ffplay_binary: ffplay

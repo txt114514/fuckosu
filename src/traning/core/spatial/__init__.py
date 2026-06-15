@@ -1,0 +1,2 @@
+"""Spatial candidate detection stage."""
+
