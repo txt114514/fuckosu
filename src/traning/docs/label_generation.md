@@ -9,6 +9,15 @@
 - 原始 osu!standard playfield 坐标为 `512 x 384`。
 - 视频像素坐标通过 `package.OsuVideoTransform` 做居中等比缩放。
 - Patch 标签先在完整视频坐标系生成，再按 `PatchMeta.x0/y0/x1/y1` 裁剪到局部。
+- `traning.training.spatial_targets.build_spatial_loss_targets` 在模型输出的 feature grid
+  上直接栅格化标签。右侧/底部 patch 的 padding 区域使用 `PatchMeta.padded_width` 和
+  `PatchMeta.padded_height` 对齐，padding 单元保持 background。
+
+## 输入颜色 Cue
+
+`traning.data.color_cues` 可从 RGB 帧派生 3 个输入通道：有限色号响应、白色数字/内纹响应和
+目标相关边缘响应。它们只作为模型输入先验，用来降低背景颜色干扰；不属于原始标注，也不作为
+额外监督标签写入 `SpatialLossTargets`。
 
 ## Approach Circle
 
@@ -26,11 +35,30 @@ radius_change = -3 * hit_circle_radius / preempt_ms
 `hit_circle_radius`。如果后续从 osu!lazer 规则或渲染端获得更精确半径，应替换该派生
 公式，并保留版本号。
 
+当前版 `SegmentFrameDataset` 会把 `difficulty.approach_preempt_ms` 和
+`difficulty.circle_radius_osu_pixels` 写入每帧样本；若历史样本缺少 `approach_preempt_ms`，
+target 构建器仅使用 `1000ms` 作为兼容默认值。
+
+`ring_mask` 标记当前帧可见的 approach circle 圆环带宽；`ring_radius` 写入 feature-cell
+单位的当前半径，仅在 `ring_mask` 正样本区域参与回归。
+
+## Dense Target Shapes
+
+每个 patch target 与 `SpatialPredictionHead` 输出一一对应：
+
+- `center_heatmap`: `1 x 1 x H x W`，circle、slider head/tail 和 spinner 中心的高斯热图。
+- `visible_heatmap`: `1 x 1 x H x W`，当前可见对象结构区域。
+- `xy_offset`: `1 x 2 x H x W`，中心单元相对 cell center 的偏移，只在中心热图正样本回归。
+- `object_type`: `1 x H x W`，类别表来自 `models.object_heads.OBJECT_TYPE_NAMES`。
+- `ring_mask` / `ring_radius`: approach circle 圆环和当前半径。
+- `slider_mask` / `slider_direction`: slider body tube 和无方向切线 `(cos 2θ, sin 2θ)`。
+- `spinner_mask`: spinner 活跃区域。
+
 ## Slider
 
 Slider 标签在全局视频坐标中生成：
 
-1. 从原始 slider 控制点采样中心线 polyline。
+1. 从原始 slider 控制点生成第一版中心线 polyline。
 2. 按 hit circle 半径生成 body mask。
 3. 单独生成 head/tail/repeat point heatmap。
 4. 对中心线局部切线写入无方向方向场 `(cos 2θ, sin 2θ)`。

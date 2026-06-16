@@ -39,13 +39,20 @@ def build_dataloader(
     shuffle: bool | None = None,
 ) -> DataLoader:
     loader = settings.loader
+    worker_options = {}
+    if loader.num_workers > 0:
+        worker_options["persistent_workers"] = loader.persistent_workers
+        if loader.prefetch_factor is not None:
+            worker_options["prefetch_factor"] = loader.prefetch_factor
     return DataLoader(
         build_dataset(settings, split=split),
         batch_size=loader.batch_size,
         shuffle=loader.shuffle if shuffle is None else shuffle,
         num_workers=loader.num_workers,
         pin_memory=loader.pin_memory,
+        drop_last=loader.drop_last,
         collate_fn=collate_frame_samples,
+        **worker_options,
     )
 
 

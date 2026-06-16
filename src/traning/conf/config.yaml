@@ -31,6 +31,9 @@ loader:
   num_workers: 0
   shuffle: true
   pin_memory: true
+  persistent_workers: false
+  prefetch_factor:
+  drop_last: false
 
 evaluation:
   min_click_interval_ms: 50.0

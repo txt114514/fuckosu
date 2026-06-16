@@ -12,7 +12,10 @@
 - 现有 patch 能力在 `src/traning/Lib/data/tiling.py`，只提供窗口与 Tensor view，不是任务文档要求的完整 `PatchStream`。
 - 当前已有评分、点击序列模拟、错误归因和可视化图集契约。
 - 本轮新增了 PatchStream、坐标转换、合成跨 Patch 结构、局部/全局 encoder、全局结构头、grid_sample 融合、空间输出头、因果 GRU、损失函数、CPU feature canvas 和 smoke/profile CLI。
-- 候选缓存、正式训练循环、真实标签光栅化、checkpoint 训练恢复和导出器仍待后续实现。
+- 空间模型输入已支持 `input.color_cues: osu_basic`，在 RGB 外追加有限色号、白色数字/内纹和目标相关边缘 cue。
+- 候选缓存、checkpoint 训练恢复和导出器仍待后续实现；`train-spatial`
+  已接入首版单帧 dense target 与串行 patch optimizer loop，dense prediction
+  已能融合为全图概率画布并解码 Top-K 空间候选。
 - 当前 Dockerfile 基于 `pytorch/pytorch:2.9.0-cuda13.0-cudnn9-devel`，不得替换 base image，也不得重新安装 torch。
 
 ## 可直接复用模块
@@ -29,15 +32,19 @@
 ## 应修改或新增模块
 
 - 保留 `traning.core.env_check` 和现有 Typer app；本轮继续扩展 `model-smoke`、`memory-profile`、`visualize-patches`、`visualize-fusion`、`train-spatial`、`train-fusion`、`train-temporal`。
-- 新增 `traning.data`：`PatchStream`、坐标转换和合成结构。
+- 新增 `traning.data`：`PatchStream`、坐标转换、合成结构和 osu 色号/数字输入 cue。
 - 新增 `traning.models`：local/global encoder、全局结构头、融合、空间输出头和因果时序模型。
-- 新增 `traning.training`：损失函数和 CPU feature canvas。
+- 新增 `traning.training`：损失函数、CPU feature canvas、dense spatial target
+  光栅化、首版 spatial trainer 和全图候选解码。
 - 扩展 `traning.conf.settings` 和 `configs/model_small_vram.yaml`，保留旧 `data_input` 配置兼容。
+- 统一 CUDA 训练 runtime：AMP、GradScaler、channels-last、TF32/cuDNN benchmark、
+  non-blocking copy、显存快照和 OOM 建议集中在 `traning.core.memory`。
 - 更新 `project_index/build_index.py` 的训练模块导航说明，并重建自动索引。
 
 ## 不应在本阶段修改
 
-- 不在本轮实现正式训练循环、候选缓存、checkpoint 恢复或导出器；训练 CLI 目前是显式阶段入口，会报告 optimizer loop 尚未实现。
+- 不在本轮实现候选缓存、checkpoint 恢复或导出器；`train-fusion` 与
+  `train-temporal` 仍是显式占位入口，`train-spatial` 已可执行单帧训练。
 - 不引入 `flash-attn`、`xformers`、自定义 CUDA extension 或需要编译 CUDA 算子的第三方包。
 - 不自动下载预训练权重，不把 `timm`、`huggingface-hub` 作为默认硬依赖。
 - 不改 `.devcontainer/docker-compose.yml` 的 GPU 运行参数，除非后续环境检查证明 compose 配置本身有问题。
@@ -61,7 +68,9 @@ Dockerfile 已安装或已有的关键依赖包括：`torch`、`torchvision`、`
 
 ## 兼容性风险
 
-- 当前重装后容器内 `torch 2.9.0+cu130` 与 `torchvision 0.24.0+cu130` 存在，但 `torch.cuda.is_available()` 为 `False`，`nvidia-smi` 无法与 NVIDIA driver 通信；这仍是当前运行环境 GPU 透传或驱动可见性问题，不应通过重装 torch 解决。
+- 当前 devcontainer 本体已确认能通过 CUDA：`torch 2.9.0+cu130`、`torchvision 0.24.0+cu130`、
+  RTX 4060 Laptop GPU、BF16 可用；Codex 普通 `exec_command` sandbox 可能因 namespace 限制
+  看不到 `/dev/nvidia*`，GPU 命令应通过 `host-exec docker exec -u dev osu_ai_dev ...` 验证。
 - `host-exec` 会以 root 进入主机 namespace 执行命令，权限很高；应只用于显式诊断和主机侧检查，普通代码修改和测试仍在容器内执行。
 - 文档给出的全仓库 `grep` 会扫入 `.vscode-server`、训练视频、压缩包和二进制资产；后续检查应限定 `src`、`.devcontainer`、`project_index`、`scripts` 等项目源码范围。
 - 当前仓库没有 `pyproject.toml` 或 requirements 文件；依赖管理沿用现有 Dockerfile 的 pip 安装区域。
@@ -74,11 +83,12 @@ Dockerfile 已安装或已有的关键依赖包括：`torch`、`torchvision`、`
 - 扩展 `src/traning/conf/settings.py` 和 `src/traning/conf/__init__.py`
 - 新增 `configs/model_small_vram.yaml`
 - 更新 `.gitignore`，允许 `configs/` 下的默认模型配置入库
-- 新增 `src/traning/data/{patch_stream.py,coordinates.py,synthetic_structures.py}`
+- 新增/扩展 `src/traning/data/{patch_stream.py,coordinates.py,synthetic_structures.py,color_cues.py}`
 - 新增 `src/traning/models/{local_encoder.py,global_encoder.py,global_structure_head.py,gated_sparse_fusion.py,object_heads.py,outputs.py,temporal_model.py}`
-- 新增 `src/traning/training/{losses.py,feature_canvas.py}`
-- 新增 `src/traning/core/memory.py`
-- 扩展 `src/traning/main.py` 的 smoke/profile/visualize/train 阶段命令
-- 新增 `src/traning/docs/label_generation.md`
-- 新增 Patch、坐标、encoder、fusion、跨 Patch、空间头、时序和 memory smoke 测试
+- 新增/扩展 `src/traning/training/{losses.py,feature_canvas.py,spatial_decode.py,spatial_targets.py,spatial_trainer.py}`
+- 扩展 `src/traning/core/memory.py` 为统一 CUDA optimization policy
+- 扩展 `src/traning/main.py` 的 smoke/profile/visualize/train 阶段命令，其中
+  `train-spatial` 已接入真实 optimizer loop
+- 新增 `src/traning/docs/label_generation.md` 和 `src/traning/docs/CUDA_OPTIMIZATION.md`
+- 新增 Patch、坐标、encoder、fusion、跨 Patch、空间头、时序、CUDA 配置和 memory smoke 测试
 - 更新 `project_index/build_index.py` 并重建 `src/traning/docs/CODEX_INDEX.md`

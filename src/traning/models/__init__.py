@@ -11,6 +11,7 @@ from traning.models.global_structure_head import (
 from traning.models.local_encoder import LocalFeatures, SmallLocalEncoder
 from traning.models.object_heads import OBJECT_TYPE_NAMES, SpatialPredictionHead
 from traning.models.outputs import ActionPrediction, SpatialPrediction
+from traning.models.stack import build_model_stack
 from traning.models.temporal_model import CausalTemporalModel
 
 __all__ = [
@@ -27,5 +28,6 @@ __all__ = [
     "SmallLocalEncoder",
     "SpatialPrediction",
     "SpatialPredictionHead",
+    "build_model_stack",
     "sample_global_feature",
 ]

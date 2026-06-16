@@ -25,6 +25,23 @@
   也可搜索对应模块 `docs/CODEX_INDEX.md` 的模块块和精确源码行。
 - 不要为理解局部改动重新遍历全部 Python 文件；按 Project Map 的阶段表和影响面扩展阅读。
 
+## GPU Command Execution
+
+- Codex 的普通 `exec_command` sandbox 可能看不到 `/dev/nvidia*`，即使 devcontainer 本体
+  已经能正常使用 CUDA；不要因此重装 PyTorch 或修改 CUDA 镜像。
+- 需要运行 GPU/CUDA 命令时，优先通过主机桥进入正常容器 namespace：
+  `host-exec docker exec -u dev osu_ai_dev bash -lc 'cd /home/dev/workspace && <command>'`
+- GPU 可用性验证命令：
+  `host-exec docker exec -u dev osu_ai_dev bash -lc 'cd /home/dev/workspace && bash scripts/check_gpu.sh'`
+- 训练 CLI 的 CUDA 验证示例：
+  `host-exec docker exec -u dev osu_ai_dev bash -lc 'cd /home/dev/workspace && PYTHONPATH=src python -m traning.cli env-check --strict --require-cuda'`
+- 后续新增或修改 `src/traning` 训练代码时，必须优先复用 `traning.core.memory` 的 CUDA
+  运行时入口：`configure_torch_runtime`、`module_to_device`、`tensor_to_device`、
+  `autocast_context`、`create_grad_scaler` 和 `collect_memory_snapshot`。
+- CUDA 训练路径默认使用 `optimizer.zero_grad(set_to_none=True)`、AMP、必要时 GradScaler、
+  channels-last、TF32/cuDNN benchmark、pinned memory 和 non-blocking GPU copy；不要在训练
+  step 中保留无用 GPU Tensor 列表，也不要频繁调用 `torch.cuda.empty_cache()`。
+
 ## Index Maintenance
 
 - 修改任何 `src/before_traning/**/*.py` 或 `src/traning/**/*.py` 文件后，必须运行：

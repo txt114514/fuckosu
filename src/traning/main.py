@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -18,9 +19,15 @@ from rich.table import Table
 from traning.Lib.data import build_patch_windows
 from traning.conf import DataSplit, load_settings
 from traning.core.memory import (
+    CudaRuntimeConfig,
     autocast_context,
     collect_memory_snapshot,
+    configure_torch_runtime,
+    create_grad_scaler,
     format_oom_guidance,
+    maybe_compile_module,
+    module_to_device,
+    tensor_to_device,
 )
 from traning.core.data_input import build_dataset, inspect_data_input
 from traning.core.env_check import collect_environment_report
@@ -29,13 +36,12 @@ from traning.core.visualization import (
     save_annotation_gallery,
     visualize_click_label,
 )
-from traning.data import PatchStream
-from traning.models import (
-    GatedSparseFusion,
-    GlobalStructureHead,
-    LightweightGlobalEncoder,
-    SmallLocalEncoder,
-    SpatialPredictionHead,
+from traning.data import PatchStream, append_color_cues
+from traning.models import build_model_stack
+from traning.training import (
+    SpatialPredictionCanvas,
+    decode_spatial_candidates,
+    run_spatial_training,
 )
 from traning.state import load_batch_gallery_request
 
@@ -137,42 +143,7 @@ def _load_image_tensor(path: Path) -> torch.Tensor:
 
 
 def _build_model_stack(settings) -> dict[str, torch.nn.Module]:
-    local_cfg = settings.local_encoder
-    global_cfg = settings.global_encoder
-    fusion_cfg = settings.fusion
-    local = SmallLocalEncoder(
-        stem_channels=local_cfg.stem_channels,
-        feature_channels=local_cfg.feature_channels,
-        output_stride=local_cfg.output_stride,
-        gradient_checkpointing=settings.memory.gradient_checkpointing,
-    )
-    global_encoder = LightweightGlobalEncoder(
-        input_height=global_cfg.input_height,
-        input_width=global_cfg.input_width,
-        feature_channels=global_cfg.feature_channels,
-        backbone=global_cfg.backbone,
-        pretrained=global_cfg.pretrained,
-        frozen=global_cfg.frozen,
-    )
-    fusion = GatedSparseFusion(
-        local_channels=local_cfg.feature_channels,
-        global_channels=global_cfg.feature_channels,
-        hidden_dim=fusion_cfg.hidden_dim,
-        heads=fusion_cfg.heads,
-        sampling_points=fusion_cfg.sampling_points,
-        layers=fusion_cfg.layers,
-        enabled=fusion_cfg.mode != "disabled",
-    )
-    return {
-        "local": local,
-        "global": global_encoder,
-        "structure": GlobalStructureHead(global_cfg.feature_channels),
-        "fusion": fusion,
-        "head": SpatialPredictionHead(
-            local_cfg.feature_channels,
-            embedding_dim=local_cfg.embedding_dim,
-        ),
-    }
+    return build_model_stack(settings)
 
 
 def _execute_model_smoke(
@@ -182,6 +153,16 @@ def _execute_model_smoke(
     backward: bool,
 ) -> dict[str, Any]:
     settings = load_settings(config)
+    runtime_state = configure_torch_runtime(
+        device=device,
+        amp_dtype=settings.memory.amp_dtype,
+        runtime=CudaRuntimeConfig(
+            allow_tf32=settings.memory.allow_tf32,
+            cudnn_benchmark=settings.memory.cudnn_benchmark,
+            matmul_float32_precision=settings.memory.matmul_float32_precision,
+            channels_last=settings.memory.channels_last,
+        ),
+    )
     stream = PatchStream(
         patch_width=settings.tiling.patch_width,
         patch_height=settings.tiling.patch_height,
@@ -195,14 +176,34 @@ def _execute_model_smoke(
         settings.input.width,
         dtype=torch.float32,
     )
+    frame = append_color_cues(frame, mode=settings.input.color_cues)
     patch, meta = next(stream.iter_patches(frame))
     patch_count = stream.count(frame)
-    frame = frame.unsqueeze(0).to(device)
-    patch = patch.unsqueeze(0).to(device)
+    frame = tensor_to_device(
+        frame.unsqueeze(0),
+        device,
+        channels_last=runtime_state.channels_last,
+        non_blocking=stream.pin_memory,
+    )
+    patch = tensor_to_device(
+        patch.unsqueeze(0),
+        device,
+        channels_last=runtime_state.channels_last,
+        non_blocking=stream.pin_memory,
+    )
     modules = _build_model_stack(settings)
-    for module in modules.values():
-        module.to(device)
-        module.train(backward)
+    for name, module in tuple(modules.items()):
+        moved = module_to_device(
+            module,
+            device,
+            channels_last=runtime_state.channels_last,
+        )
+        moved = maybe_compile_module(
+            moved,
+            enabled=settings.memory.compile_model,
+        )
+        moved.train(backward)
+        modules[name] = moved
     parameters = [
         parameter
         for module in modules.values()
@@ -210,6 +211,11 @@ def _execute_model_smoke(
         if parameter.requires_grad
     ]
     optimizer = torch.optim.AdamW(parameters, lr=1e-4) if backward else None
+    scaler = create_grad_scaler(
+        device=device,
+        amp_dtype=settings.memory.amp_dtype,
+        mode=settings.memory.grad_scaler,
+    )
     if device.type == "cuda":
         torch.cuda.reset_peak_memory_stats()
     try:
@@ -231,8 +237,9 @@ def _execute_model_smoke(
                 + global_prediction.objectness.mean()
             )
         if optimizer is not None:
-            loss.backward()
-            optimizer.step()
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
     except RuntimeError as error:
         if "out of memory" in str(error).lower():
             console.print(
@@ -256,6 +263,13 @@ def _execute_model_smoke(
     snapshot = collect_memory_snapshot()
     return {
         "device": str(device),
+        "amp_dtype": runtime_state.amp_dtype,
+        "channels_last": runtime_state.channels_last,
+        "allow_tf32": runtime_state.allow_tf32,
+        "cudnn_benchmark": runtime_state.cudnn_benchmark,
+        "matmul_precision": runtime_state.matmul_float32_precision,
+        "grad_scaler": scaler.is_enabled(),
+        "compile_model": settings.memory.compile_model,
         "patch_count": patch_count,
         "patch_shape": tuple(patch.shape),
         "local_shape": tuple(local_features.dense.shape),
@@ -385,6 +399,138 @@ def model_smoke(
     _render_dict_table("Model smoke", summary)
 
 
+def _candidate_to_dict(candidate) -> dict[str, Any]:
+    return {
+        "x": candidate.x,
+        "y": candidate.y,
+        "score": candidate.score,
+        "object_type": candidate.object_type,
+        "object_type_id": candidate.object_type_id,
+        "center_score": candidate.center_score,
+        "visible_score": candidate.visible_score,
+        "type_score": candidate.type_score,
+        "ring_score": candidate.ring_score,
+        "ring_radius_px": candidate.ring_radius_px,
+        "slider_score": candidate.slider_score,
+        "spinner_score": candidate.spinner_score,
+    }
+
+
+@app.command("spatial-decode-smoke")
+def spatial_decode_smoke(
+    config: Path = typer.Option(Path("configs/model_small_vram.yaml"), "--config"),
+    split: DataSplit = typer.Option("train", "--split"),
+    index: int = typer.Option(0, "--index", min=0),
+    device: str = typer.Option("cpu", "--device"),
+    max_candidates: int = typer.Option(16, "--max-candidates", min=1),
+    score_threshold: float = typer.Option(0.0, "--score-threshold", min=0.0),
+    nms_radius_px: float = typer.Option(32.0, "--nms-radius-px", min=0.0),
+    patch_limit: int | None = typer.Option(None, "--patch-limit", min=1),
+) -> None:
+    settings = load_settings(config)
+    selected = _select_device(device)
+    dataset = build_dataset(settings, split=split)
+    if index >= len(dataset):
+        raise typer.BadParameter(
+            f"index {index} is outside dataset length {len(dataset)}"
+        )
+    sample = dataset[index]
+    frame = sample["image"]
+    if not torch.is_floating_point(frame):
+        frame = frame.float().div(255.0)
+    frame = append_color_cues(frame.contiguous(), mode=settings.input.color_cues)
+    stream = PatchStream(
+        patch_width=settings.tiling.patch_width,
+        patch_height=settings.tiling.patch_height,
+        overlap_x=settings.tiling.overlap_x,
+        overlap_y=settings.tiling.overlap_y,
+        pin_memory=settings.loader.pin_memory and selected.type == "cuda",
+    )
+    runtime_state = configure_torch_runtime(
+        device=selected,
+        amp_dtype=settings.memory.amp_dtype,
+        runtime=CudaRuntimeConfig(
+            allow_tf32=settings.memory.allow_tf32,
+            cudnn_benchmark=settings.memory.cudnn_benchmark,
+            matmul_float32_precision=settings.memory.matmul_float32_precision,
+            channels_last=settings.memory.channels_last,
+        ),
+    )
+    modules = _build_model_stack(settings)
+    for name, module in tuple(modules.items()):
+        moved = module_to_device(
+            module,
+            selected,
+            channels_last=runtime_state.channels_last,
+        )
+        moved = maybe_compile_module(moved, enabled=settings.memory.compile_model)
+        moved.eval()
+        modules[name] = moved
+    frame_device = tensor_to_device(
+        frame.unsqueeze(0),
+        selected,
+        channels_last=runtime_state.channels_last,
+        non_blocking=stream.pin_memory,
+    )
+    canvas = SpatialPredictionCanvas(
+        frame_width=sample["image"].shape[-1],
+        frame_height=sample["image"].shape[-2],
+        stride=settings.local_encoder.output_stride,
+        embedding_dim=settings.local_encoder.embedding_dim,
+    )
+    processed = 0
+    with torch.no_grad():
+        with autocast_context(selected, settings.memory.amp_dtype):
+            global_features = modules["global"](frame_device)
+            global_dense = global_features.dense.detach()
+        for patch_cpu, meta in stream.iter_patches(frame):
+            if patch_limit is not None and processed >= patch_limit:
+                break
+            patch = tensor_to_device(
+                patch_cpu.unsqueeze(0),
+                selected,
+                channels_last=runtime_state.channels_last,
+                non_blocking=stream.pin_memory,
+            )
+            with autocast_context(selected, settings.memory.amp_dtype):
+                local_features = modules["local"](patch)
+                fused = modules["fusion"](
+                    local_features=local_features,
+                    global_features=global_dense,
+                    patch_meta=meta,
+                )
+                prediction = modules["head"](fused.dense)
+            canvas.write_patch(prediction, meta)
+            processed += 1
+    candidates = decode_spatial_candidates(
+        canvas.to_maps(),
+        max_candidates=max_candidates,
+        score_threshold=score_threshold,
+        nms_radius_px=nms_radius_px,
+    )
+    output_dir = _run_dir("spatial_decode_smoke")
+    candidate_rows = [_candidate_to_dict(candidate) for candidate in candidates]
+    (output_dir / "candidates.json").write_text(
+        json.dumps(candidate_rows, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    summary = {
+        "device": str(selected),
+        "sample_key": sample["sample_key"],
+        "frame_index": sample["frame_index"],
+        "timestamp_ms": sample["timestamp_ms"],
+        "patches_processed": processed,
+        "candidate_count": len(candidates),
+        "top_candidate": candidate_rows[0] if candidate_rows else None,
+        "run_dir": output_dir,
+    }
+    (output_dir / "summary.txt").write_text(
+        "\n".join(f"{key}: {value}" for key, value in summary.items()) + "\n",
+        encoding="utf-8",
+    )
+    _render_dict_table("Spatial decode smoke", summary)
+
+
 @app.command("memory-profile")
 def memory_profile(
     config: Path = typer.Option(Path("configs/model_small_vram.yaml"), "--config"),
@@ -461,7 +607,20 @@ def visualize_fusion(
 ) -> None:
     settings = load_settings(config)
     selected = _select_device(device)
-    frame = _load_image_tensor(input_image)
+    runtime_state = configure_torch_runtime(
+        device=selected,
+        amp_dtype=settings.memory.amp_dtype,
+        runtime=CudaRuntimeConfig(
+            allow_tf32=settings.memory.allow_tf32,
+            cudnn_benchmark=settings.memory.cudnn_benchmark,
+            matmul_float32_precision=settings.memory.matmul_float32_precision,
+            channels_last=settings.memory.channels_last,
+        ),
+    )
+    frame = append_color_cues(
+        _load_image_tensor(input_image),
+        mode=settings.input.color_cues,
+    )
     stream = PatchStream(
         patch_width=settings.tiling.patch_width,
         patch_height=settings.tiling.patch_height,
@@ -470,12 +629,29 @@ def visualize_fusion(
     )
     patch, meta = next(stream.iter_patches(frame))
     modules = _build_model_stack(settings)
-    for module in modules.values():
-        module.to(selected)
-        module.eval()
+    for name, module in tuple(modules.items()):
+        moved = module_to_device(
+            module,
+            selected,
+            channels_last=runtime_state.channels_last,
+        )
+        moved.eval()
+        modules[name] = moved
+    frame_device = tensor_to_device(
+        frame.unsqueeze(0),
+        selected,
+        channels_last=runtime_state.channels_last,
+        non_blocking=False,
+    )
+    patch_device = tensor_to_device(
+        patch.unsqueeze(0),
+        selected,
+        channels_last=runtime_state.channels_last,
+        non_blocking=False,
+    )
     with torch.no_grad():
-        global_features = modules["global"](frame.unsqueeze(0).to(selected))
-        local_features = modules["local"](patch.unsqueeze(0).to(selected))
+        global_features = modules["global"](frame_device)
+        local_features = modules["local"](patch_device)
         fused = modules["fusion"](
             local_features=local_features,
             global_features=global_features.dense,
@@ -525,8 +701,50 @@ def _training_placeholder(stage: str, config: Path) -> None:
 @app.command("train-spatial")
 def train_spatial(
     config: Path = typer.Option(Path("configs/model_small_vram.yaml"), "--config"),
+    split: DataSplit = typer.Option("train", "--split"),
+    device: str = typer.Option(
+        "auto",
+        "--device",
+        help="cpu, cuda, or auto. Use cuda through host-exec for real GPU runs.",
+    ),
+    max_steps: int = typer.Option(1, "--max-steps", min=1),
+    learning_rate: float = typer.Option(1e-4, "--lr", min=1e-8),
+    patch_limit: int | None = typer.Option(None, "--patch-limit", min=1),
 ) -> None:
-    _training_placeholder("train_spatial", config)
+    settings = load_settings(config)
+    selected = _select_device(device)
+    output_dir = _run_dir("train_spatial")
+    try:
+        result = run_spatial_training(
+            settings,
+            device=selected,
+            run_dir=output_dir,
+            split=split,
+            max_steps=max_steps,
+            learning_rate=learning_rate,
+            patch_limit=patch_limit,
+        )
+    except RuntimeError as error:
+        if "out of memory" in str(error).lower():
+            console.print(
+                "[red]"
+                + format_oom_guidance(
+                    patch_size=(
+                        settings.tiling.patch_width,
+                        settings.tiling.patch_height,
+                    ),
+                    global_size=(
+                        settings.global_encoder.input_width,
+                        settings.global_encoder.input_height,
+                    ),
+                    batch_size=1,
+                    amp_dtype=settings.memory.amp_dtype,
+                    config_path=str(config),
+                )
+                + "[/red]"
+            )
+        raise
+    _render_dict_table("Spatial training", result.as_dict())
 
 
 @app.command("train-fusion")

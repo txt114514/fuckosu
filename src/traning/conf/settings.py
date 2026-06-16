@@ -36,6 +36,7 @@ class InputSettings(BaseModel):
     width: int = 1484
     height: int = 846
     resize: bool = False
+    color_cues: Literal["disabled", "osu_basic"] = "disabled"
 
     @field_validator("width", "height")
     @classmethod
@@ -162,6 +163,12 @@ class MemoryConfig(BaseModel):
     backward_per_patch: bool = True
     cache_global_features: bool = True
     offload_candidates_to_cpu: bool = True
+    channels_last: bool = True
+    allow_tf32: bool = True
+    cudnn_benchmark: bool = True
+    matmul_float32_precision: Literal["highest", "high", "medium"] = "high"
+    grad_scaler: Literal["auto", "enabled", "disabled"] = "auto"
+    compile_model: bool = False
     max_vram_gib: float = 7.5
 
     @field_validator("max_vram_gib")
@@ -181,6 +188,9 @@ class LoaderSettings(BaseModel):
     num_workers: int = 0
     shuffle: bool = True
     pin_memory: bool = True
+    persistent_workers: bool = False
+    prefetch_factor: int | None = None
+    drop_last: bool = False
 
     @field_validator("batch_size")
     @classmethod
@@ -195,6 +205,21 @@ class LoaderSettings(BaseModel):
         if value < 0:
             raise ValueError("num_workers must be nonnegative")
         return value
+
+    @field_validator("prefetch_factor")
+    @classmethod
+    def _optional_positive_prefetch(cls, value: int | None) -> int | None:
+        if value is not None and value <= 0:
+            raise ValueError("prefetch_factor must be positive when set")
+        return value
+
+    @model_validator(mode="after")
+    def validate_worker_options(self) -> LoaderSettings:
+        if self.num_workers == 0 and self.persistent_workers:
+            raise ValueError("persistent_workers requires num_workers > 0")
+        if self.num_workers == 0 and self.prefetch_factor is not None:
+            raise ValueError("prefetch_factor requires num_workers > 0")
+        return self
 
 
 class EvaluationSettings(BaseModel):

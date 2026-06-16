@@ -37,6 +37,22 @@ class SpatialLossTargets:
     spinner_mask: torch.Tensor
 
 
+def _masked_smooth_l1(
+    prediction: torch.Tensor,
+    target: torch.Tensor,
+    mask: torch.Tensor,
+) -> torch.Tensor:
+    if mask.ndim != prediction.ndim:
+        while mask.ndim < prediction.ndim:
+            mask = mask.unsqueeze(1)
+    mask = mask.to(device=prediction.device, dtype=prediction.dtype)
+    denominator = mask.sum() * prediction.shape[1]
+    if float(denominator.detach().cpu()) <= 0.0:
+        return prediction.sum() * 0.0
+    loss = F.smooth_l1_loss(prediction, target, reduction="none") * mask
+    return loss.sum() / denominator.clamp_min(1.0)
+
+
 def compute_spatial_loss(
     prediction: SpatialPrediction,
     target: SpatialLossTargets,
@@ -54,7 +70,11 @@ def compute_spatial_loss(
             prediction.visible_heatmap,
             target.visible_heatmap,
         ),
-        "offset": F.smooth_l1_loss(prediction.xy_offset, target.xy_offset),
+        "offset": _masked_smooth_l1(
+            prediction.xy_offset,
+            target.xy_offset,
+            (target.center_heatmap > 0.25).to(target.center_heatmap.dtype),
+        ),
         "object_type": F.cross_entropy(
             prediction.object_type_logits,
             target.object_type.long(),
@@ -63,14 +83,19 @@ def compute_spatial_loss(
             prediction.ring_mask,
             target.ring_mask,
         ),
-        "radius": F.smooth_l1_loss(prediction.ring_radius, target.ring_radius),
+        "radius": _masked_smooth_l1(
+            prediction.ring_radius,
+            target.ring_radius,
+            target.ring_mask,
+        ),
         "slider": F.binary_cross_entropy_with_logits(
             prediction.slider_mask,
             target.slider_mask,
         ),
-        "slider_direction": F.smooth_l1_loss(
+        "slider_direction": _masked_smooth_l1(
             prediction.slider_direction,
             target.slider_direction,
+            target.slider_mask,
         ),
         "spinner": F.binary_cross_entropy_with_logits(
             prediction.spinner_mask,

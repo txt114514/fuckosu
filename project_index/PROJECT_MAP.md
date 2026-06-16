@@ -9,7 +9,7 @@
 |---|---|---|---|
 | 全局共享 API | `src/package` | [`README.md`](../src/package/README.md) | 公开入口：`src/package/__init__.py` |
 | 训练前处理 | `src/before_traning` | [`README.md`](../src/before_traning/docs/README.md) | [`CODEX_INDEX.md`](../src/before_traning/docs/CODEX_INDEX.md) |
-| 模型训练 | `src/traning` | [`README.md`](../src/traning/docs/README.md)、[`TRAINING_PLAN.md`](../src/traning/docs/TRAINING_PLAN.md)、[`TEST_PARAMETER_MECHANISM.md`](../src/traning/docs/TEST_PARAMETER_MECHANISM.md)、[`SCORING_SPEC.md`](../src/traning/docs/SCORING_SPEC.md) | [`CODEX_INDEX.md`](../src/traning/docs/CODEX_INDEX.md) |
+| 模型训练 | `src/traning` | [`README.md`](../src/traning/docs/README.md)、[`TRAINING_PLAN.md`](../src/traning/docs/TRAINING_PLAN.md)、[`label_generation.md`](../src/traning/docs/label_generation.md)、[`CUDA_OPTIMIZATION.md`](../src/traning/docs/CUDA_OPTIMIZATION.md)、[`TEST_PARAMETER_MECHANISM.md`](../src/traning/docs/TEST_PARAMETER_MECHANISM.md)、[`SCORING_SPEC.md`](../src/traning/docs/SCORING_SPEC.md) | [`CODEX_INDEX.md`](../src/traning/docs/CODEX_INDEX.md) |
 
 ## 全局 API 约定
 
@@ -31,14 +31,18 @@
 
 1. 先读 `src/traning/docs/CODEX_INDEX.md`，确认当前阶段和数据契约。
 2. 需要模型目标和长期路线时读取 `src/traning/docs/TRAINING_PLAN.md`。
-3. 运行 `python project_index/build_index.py --lookup 符号名` 定位实现。
-4. 当前首要入口是 `core/data_input`；空间、候选缓存和时序目录暂为阶段边界。
-5. 批次评估图集入口是 `save-annotation-gallery`；结果契约位于
+3. 处理 CUDA、显存、AMP、channels-last 或训练 step 时读取
+   `src/traning/docs/CUDA_OPTIMIZATION.md`。
+4. 处理空间监督、osu 坐标光栅化或 patch dense target 时读取
+   `src/traning/docs/label_generation.md`。
+5. 运行 `python project_index/build_index.py --lookup 符号名` 定位实现。
+6. 当前首要入口是 `core/data_input`；空间、候选缓存和时序目录暂为阶段边界。
+7. 批次评估图集入口是 `save-annotation-gallery`；结果契约位于
    `state/gallery_schema.py`，按最高分 trial 和六个数据子项目生成 `passed/failed`
    标注目录。
-6. 参数搜索、score 和通过机制的已实现/待实现边界见
+8. 参数搜索、score 和通过机制的已实现/待实现边界见
    `src/traning/docs/TEST_PARAMETER_MECHANISM.md`。
-7. 点与 slider 的 `point-slider-v2` 公式见
+9. 点与 slider 的 `point-slider-v2` 公式见
    `src/traning/docs/SCORING_SPEC.md`。
 
 ## 索引维护

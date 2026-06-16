@@ -26,6 +26,8 @@ class PatchMeta:
     frame_height: int
     valid_width: int
     valid_height: int
+    patch_width: int | None = None
+    patch_height: int | None = None
 
     @property
     def width(self) -> int:
@@ -34,6 +36,14 @@ class PatchMeta:
     @property
     def height(self) -> int:
         return self.y1 - self.y0
+
+    @property
+    def padded_width(self) -> int:
+        return self.patch_width or self.valid_width
+
+    @property
+    def padded_height(self) -> int:
+        return self.patch_height or self.valid_height
 
 
 class PatchStream:
@@ -84,6 +94,8 @@ class PatchStream:
                 frame_height=frame_height,
                 valid_width=window.width,
                 valid_height=window.height,
+                patch_width=self.patch_width,
+                patch_height=self.patch_height,
             )
             for index, window in enumerate(windows)
         )

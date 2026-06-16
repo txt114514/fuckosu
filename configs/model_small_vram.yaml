@@ -2,6 +2,31 @@ input:
   width: 1484
   height: 846
   resize: false
+  color_cues: osu_basic
+
+data_input:
+  dataset_root: ../training_package/video_segments
+  dimensions:
+    - atomic
+    - long_sequence
+  categories: []
+  include_items: []
+  exclude_items: []
+  train_items:
+    - item_000001
+  validation_items:
+    - item_000002
+  sample_fps: 60.0
+  frame_step: 1
+  max_segments:
+  max_frames_per_segment:
+  visibility_post_ms: 100.0
+  normalize_images: true
+  strict: true
+  patch_width: 512
+  patch_height: 512
+  overlap_x: 128
+  overlap_y: 128
 
 tiling:
   patch_height: 512
@@ -39,12 +64,27 @@ temporal:
   layers: 2
   history_frames: 8
 
+loader:
+  batch_size: 1
+  num_workers: 0
+  shuffle: true
+  pin_memory: true
+  persistent_workers: false
+  prefetch_factor:
+  drop_last: false
+
 memory:
   amp_dtype: auto
   gradient_checkpointing: true
   backward_per_patch: true
   cache_global_features: true
   offload_candidates_to_cpu: true
+  channels_last: true
+  allow_tf32: true
+  cudnn_benchmark: true
+  matmul_float32_precision: high
+  grad_scaler: auto
+  compile_model: false
   max_vram_gib: 7.5
 
 smet:

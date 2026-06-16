@@ -1,3 +1,9 @@
+from traning.data.color_cues import (
+    ColorCueMode,
+    append_color_cues,
+    color_cue_channel_count,
+    extract_osu_basic_color_cues,
+)
 from traning.data.coordinates import (
     feature_grid_to_image,
     global_to_local,
@@ -16,9 +22,13 @@ from traning.data.synthetic_structures import (
 )
 
 __all__ = [
+    "ColorCueMode",
     "PatchMeta",
     "PatchStream",
     "SyntheticStructure",
+    "append_color_cues",
+    "color_cue_channel_count",
+    "extract_osu_basic_color_cues",
     "feature_grid_to_image",
     "global_to_local",
     "global_to_patch_indices",

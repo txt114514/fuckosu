@@ -78,6 +78,7 @@ class SegmentFrameDataset(Dataset[dict[str, Any]]):
             "circle_radius_osu_pixels": (
                 record.annotation.difficulty.circle_radius_osu_pixels
             ),
+            "approach_preempt_ms": record.annotation.difficulty.approach_preempt_ms,
         }
 
     def __getstate__(self) -> dict[str, Any]:

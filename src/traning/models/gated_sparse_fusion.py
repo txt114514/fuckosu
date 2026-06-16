@@ -28,8 +28,8 @@ def _base_grid(
 ) -> torch.Tensor:
     if width <= 0 or height <= 0:
         raise ValueError("feature map dimensions must be positive")
-    x_extent = max(float(meta.valid_width), 1.0)
-    y_extent = max(float(meta.valid_height), 1.0)
+    x_extent = max(float(meta.padded_width), 1.0)
+    y_extent = max(float(meta.padded_height), 1.0)
     x = meta.x0 + (torch.arange(width, device=device, dtype=dtype) + 0.5) * (
         x_extent / width
     )

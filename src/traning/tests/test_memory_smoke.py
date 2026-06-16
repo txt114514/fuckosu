@@ -5,31 +5,64 @@ import unittest
 import torch
 
 from traning.core.memory import autocast_context, collect_memory_snapshot
+from traning.core.memory import (
+    CudaRuntimeConfig,
+    configure_torch_runtime,
+    create_grad_scaler,
+    module_to_device,
+    tensor_to_device,
+)
 from traning.data import PatchMeta
 from traning.models import GatedSparseFusion, SmallLocalEncoder, SpatialPredictionHead
 
 
 class MemorySmokeTests(unittest.TestCase):
     def run_smoke(self, device: torch.device) -> None:
-        local = SmallLocalEncoder(stem_channels=4, feature_channels=8).to(device)
-        fusion = GatedSparseFusion(
-            local_channels=8,
-            global_channels=8,
-            hidden_dim=16,
-            heads=4,
-            sampling_points=2,
-            layers=1,
-        ).to(device)
-        head = SpatialPredictionHead(8, embedding_dim=8).to(device)
+        runtime = configure_torch_runtime(
+            device=device,
+            amp_dtype="auto",
+            runtime=CudaRuntimeConfig(channels_last=True),
+        )
+        local = module_to_device(
+            SmallLocalEncoder(stem_channels=4, feature_channels=8),
+            device,
+            channels_last=runtime.channels_last,
+        )
+        fusion = module_to_device(
+            GatedSparseFusion(
+                local_channels=8,
+                global_channels=8,
+                hidden_dim=16,
+                heads=4,
+                sampling_points=2,
+                layers=1,
+            ),
+            device,
+            channels_last=runtime.channels_last,
+        )
+        head = module_to_device(
+            SpatialPredictionHead(8, embedding_dim=8),
+            device,
+            channels_last=runtime.channels_last,
+        )
         optimizer = torch.optim.AdamW(
             list(local.parameters())
             + list(fusion.parameters())
             + list(head.parameters()),
             lr=1e-4,
         )
+        scaler = create_grad_scaler(device=device, amp_dtype="auto")
         optimizer.zero_grad(set_to_none=True)
-        patch = torch.randn(1, 3, 64, 64, device=device)
-        global_feature = torch.randn(1, 8, 8, 8, device=device)
+        patch = tensor_to_device(
+            torch.randn(1, 3, 64, 64),
+            device,
+            channels_last=runtime.channels_last,
+        )
+        global_feature = tensor_to_device(
+            torch.randn(1, 8, 8, 8),
+            device,
+            channels_last=runtime.channels_last,
+        )
         meta = PatchMeta(0, 0, 0, 64, 64, 64, 64, 64, 64)
         with autocast_context(device, "auto"):
             local_features = local(patch)
@@ -40,8 +73,9 @@ class MemorySmokeTests(unittest.TestCase):
             )
             prediction = head(fused.dense)
             loss = prediction.center_heatmap.mean()
-        loss.backward()
-        optimizer.step()
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
 
     def test_cpu_forward_backward_step(self) -> None:
         self.run_smoke(torch.device("cpu"))

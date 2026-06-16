@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Iterator
 
 import torch
+from torch import nn
 
 
 @dataclass(frozen=True)
@@ -14,6 +15,25 @@ class MemorySnapshot:
     max_reserved_gib: float | None
     current_allocated_gib: float | None
     current_reserved_gib: float | None
+
+
+@dataclass(frozen=True)
+class CudaRuntimeConfig:
+    allow_tf32: bool = True
+    cudnn_benchmark: bool = True
+    matmul_float32_precision: str = "high"
+    channels_last: bool = True
+
+
+@dataclass(frozen=True)
+class CudaRuntimeState:
+    device: str
+    amp_dtype: str
+    channels_last: bool
+    allow_tf32: bool
+    cudnn_benchmark: bool
+    matmul_float32_precision: str
+    grad_scaler_enabled: bool
 
 
 def resolve_amp_dtype(device: torch.device, amp_dtype: str) -> torch.dtype | None:
@@ -37,6 +57,105 @@ def autocast_context(device: torch.device, amp_dtype: str) -> Iterator[None]:
     else:
         with torch.autocast(device_type=device.type, dtype=dtype):
             yield
+
+
+def configure_torch_runtime(
+    *,
+    device: torch.device,
+    amp_dtype: str,
+    runtime: CudaRuntimeConfig = CudaRuntimeConfig(),
+) -> CudaRuntimeState:
+    """Apply CUDA runtime defaults used by training and smoke tests."""
+
+    if device.type == "cuda":
+        precision = "tf32" if runtime.allow_tf32 else "ieee"
+        if hasattr(torch.backends.cuda.matmul, "fp32_precision"):
+            torch.backends.cuda.matmul.fp32_precision = precision
+        else:  # pragma: no cover - old PyTorch compatibility.
+            torch.set_float32_matmul_precision(runtime.matmul_float32_precision)
+            torch.backends.cuda.matmul.allow_tf32 = runtime.allow_tf32
+        if hasattr(torch.backends.cudnn, "fp32_precision"):
+            torch.backends.cudnn.fp32_precision = precision
+        else:  # pragma: no cover - old PyTorch compatibility.
+            torch.backends.cudnn.allow_tf32 = runtime.allow_tf32
+        if hasattr(torch.backends.cudnn, "conv") and hasattr(
+            torch.backends.cudnn.conv,
+            "fp32_precision",
+        ):
+            torch.backends.cudnn.conv.fp32_precision = precision
+        torch.backends.cudnn.benchmark = runtime.cudnn_benchmark
+    return CudaRuntimeState(
+        device=str(device),
+        amp_dtype=str(resolve_amp_dtype(device, amp_dtype)),
+        channels_last=runtime.channels_last and device.type == "cuda",
+        allow_tf32=runtime.allow_tf32,
+        cudnn_benchmark=runtime.cudnn_benchmark if device.type == "cuda" else False,
+        matmul_float32_precision=runtime.matmul_float32_precision,
+        grad_scaler_enabled=amp_uses_grad_scaler(device, amp_dtype),
+    )
+
+
+def amp_uses_grad_scaler(device: torch.device, amp_dtype: str) -> bool:
+    return (
+        device.type == "cuda" and resolve_amp_dtype(device, amp_dtype) == torch.float16
+    )
+
+
+def create_grad_scaler(
+    *,
+    device: torch.device,
+    amp_dtype: str,
+    mode: str = "auto",
+) -> torch.amp.GradScaler:
+    if mode not in {"auto", "enabled", "disabled"}:
+        raise ValueError("grad scaler mode must be auto, enabled, or disabled")
+    enabled = {
+        "auto": amp_uses_grad_scaler(device, amp_dtype),
+        "enabled": device.type == "cuda",
+        "disabled": False,
+    }[mode]
+    return torch.amp.GradScaler(device.type, enabled=enabled)
+
+
+def module_to_device(
+    module: nn.Module,
+    device: torch.device,
+    *,
+    channels_last: bool,
+) -> nn.Module:
+    module = module.to(device)
+    if channels_last and device.type == "cuda":
+        module = module.to(memory_format=torch.channels_last)
+    return module
+
+
+def maybe_compile_module(
+    module: nn.Module,
+    *,
+    enabled: bool,
+    mode: str = "default",
+) -> nn.Module:
+    if not enabled:
+        return module
+    if not hasattr(torch, "compile"):
+        raise RuntimeError("torch.compile is not available in this PyTorch build")
+    return torch.compile(module, mode=mode)
+
+
+def tensor_to_device(
+    tensor: torch.Tensor,
+    device: torch.device,
+    *,
+    channels_last: bool,
+    non_blocking: bool = True,
+) -> torch.Tensor:
+    if channels_last and device.type == "cuda" and tensor.ndim == 4:
+        return tensor.to(
+            device=device,
+            non_blocking=non_blocking,
+            memory_format=torch.channels_last,
+        )
+    return tensor.to(device=device, non_blocking=non_blocking)
 
 
 def collect_memory_snapshot() -> MemorySnapshot:
@@ -94,9 +213,17 @@ def format_oom_guidance(
 
 
 __all__ = [
+    "CudaRuntimeConfig",
+    "CudaRuntimeState",
     "MemorySnapshot",
+    "amp_uses_grad_scaler",
     "autocast_context",
     "collect_memory_snapshot",
+    "configure_torch_runtime",
+    "create_grad_scaler",
     "format_oom_guidance",
+    "maybe_compile_module",
+    "module_to_device",
     "resolve_amp_dtype",
+    "tensor_to_device",
 ]
