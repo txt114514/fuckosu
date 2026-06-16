@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from math import acos, ceil, hypot, isfinite, pi, sqrt
 from typing import Literal
@@ -364,6 +365,8 @@ def _build_plan(
     circle_size: float,
     circle_radius: float,
     approach_context_seconds: float,
+    max_pre_context_seconds: float,
+    pre_context_jitter_seconds: float,
     post_context_seconds: float,
     video_duration_seconds: float,
 ) -> SegmentPlan:
@@ -380,9 +383,23 @@ def _build_plan(
             f"video={video_duration_seconds:.3f}s"
         )
 
+    pre_context_seconds = max(
+        0.0,
+        min(
+            max_pre_context_seconds,
+            approach_context_seconds
+            + _stable_pre_context_jitter_seconds(
+                object_indexes,
+                hit_start_ms=hit_start_ms,
+                hit_end_ms=hit_end_ms,
+                dimension=dimension,
+                limit_seconds=pre_context_jitter_seconds,
+            ),
+        ),
+    )
     clip_start_seconds = max(
         0.0,
-        hit_start_ms / 1000.0 - approach_context_seconds,
+        hit_start_ms / 1000.0 - pre_context_seconds,
     )
     clip_end_seconds = min(
         video_duration_seconds,
@@ -411,6 +428,29 @@ def _build_plan(
     )
 
 
+def _stable_pre_context_jitter_seconds(
+    object_indexes: list[int],
+    *,
+    hit_start_ms: int,
+    hit_end_ms: int,
+    dimension: SegmentDimension,
+    limit_seconds: float,
+) -> float:
+    if limit_seconds <= 0:
+        return 0.0
+    payload = "|".join(
+        (
+            dimension,
+            str(hit_start_ms),
+            str(hit_end_ms),
+            ",".join(str(value) for value in object_indexes),
+        )
+    )
+    digest = hashlib.sha256(payload.encode("ascii")).digest()
+    unit = int.from_bytes(digest[:8], "big") / (2**64 - 1)
+    return (unit * 2.0 - 1.0) * limit_seconds
+
+
 def build_segment_plans(
     hit_objects: list[HitObject],
     *,
@@ -420,6 +460,7 @@ def build_segment_plans(
     priority_merge_window_ms: int,
     use_priority_merge: bool,
     approach_preempt_seconds: float,
+    pre_context_jitter_seconds: float,
     post_context_seconds: float,
     video_duration_seconds: float,
 ) -> list[SegmentPlan]:
@@ -429,6 +470,11 @@ def build_segment_plans(
         raise ValueError("approach_preempt_ratio 必须在 0 到 1 之间")
     if not isfinite(post_context_seconds) or post_context_seconds < 0:
         raise ValueError("post_context_seconds 必须是非负有限数值")
+    if (
+        not isfinite(pre_context_jitter_seconds)
+        or pre_context_jitter_seconds < 0
+    ):
+        raise ValueError("pre_context_jitter_seconds 必须是非负有限数值")
 
     approach_context_seconds = (
         approach_preempt_seconds * approach_preempt_ratio
@@ -458,6 +504,8 @@ def build_segment_plans(
                 circle_size=circle_size,
                 circle_radius=circle_radius,
                 approach_context_seconds=approach_context_seconds,
+                max_pre_context_seconds=approach_preempt_seconds,
+                pre_context_jitter_seconds=pre_context_jitter_seconds,
                 post_context_seconds=post_context_seconds,
                 video_duration_seconds=video_duration_seconds,
             )
@@ -478,6 +526,7 @@ def build_long_sequence_plans(
     *,
     approach_preempt_seconds: float,
     approach_preempt_ratio: float,
+    pre_context_jitter_seconds: float,
     post_context_seconds: float,
     video_duration_seconds: float,
     max_objects: int,
@@ -493,6 +542,11 @@ def build_long_sequence_plans(
         raise ValueError("approach_preempt_ratio 必须在 0 到 1 之间")
     if not isfinite(post_context_seconds) or post_context_seconds < 0:
         raise ValueError("post_context_seconds 必须是非负有限数值")
+    if (
+        not isfinite(pre_context_jitter_seconds)
+        or pre_context_jitter_seconds < 0
+    ):
+        raise ValueError("pre_context_jitter_seconds 必须是非负有限数值")
     if any(plan.dimension != "atomic" for plan in atomic_plans):
         raise ValueError("长序列只能由 atomic SegmentPlan 构建")
 
@@ -522,6 +576,8 @@ def build_long_sequence_plans(
             circle_size=plans[0].circle_size,
             circle_radius=plans[0].circle_radius,
             approach_context_seconds=approach_context_seconds,
+            max_pre_context_seconds=approach_preempt_seconds,
+            pre_context_jitter_seconds=pre_context_jitter_seconds,
             post_context_seconds=post_context_seconds,
             video_duration_seconds=video_duration_seconds,
         )

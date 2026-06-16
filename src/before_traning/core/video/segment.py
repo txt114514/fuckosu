@@ -114,7 +114,11 @@ def _beatmap_payload(
                 settings.segment.priority_merge_window_ms
             ),
             "use_priority_merge": settings.segment.use_priority_merge,
+            "pre_context_jitter_seconds": (
+                settings.segment.pre_context_jitter_seconds
+            ),
             "post_context_seconds": settings.segment.post_context_seconds,
+            "include_audio": settings.segment.include_audio,
             "build_long_sequences": settings.segment.build_long_sequences,
             "long_sequence_continuity_window_ms": round(
                 beatmap.approach_preempt_ms
@@ -196,9 +200,13 @@ def _segment_row(
             settings.segment.priority_merge_window_ms
         ),
         "use_priority_merge": settings.segment.use_priority_merge,
+        "pre_context_jitter_seconds": (
+            f"{settings.segment.pre_context_jitter_seconds:.6f}"
+        ),
         "configured_post_context_seconds": (
             f"{settings.segment.post_context_seconds:.6f}"
         ),
+        "include_audio": settings.segment.include_audio,
         "build_long_sequences": settings.segment.build_long_sequences,
         "long_sequence_continuity_window_ms": round(
             beatmap.approach_preempt_ms
@@ -353,6 +361,9 @@ class VideoSegmentationProcessor(FolderBatchProcessor):
             approach_preempt_ratio=(
                 self.settings.segment.approach_preempt_ratio
             ),
+            pre_context_jitter_seconds=(
+                self.settings.segment.pre_context_jitter_seconds
+            ),
             post_context_seconds=(
                 self.settings.segment.post_context_seconds
             ),
@@ -419,6 +430,7 @@ class VideoSegmentationProcessor(FolderBatchProcessor):
                     segment_directory / SEGMENT_VIDEO_FILENAME,
                     start_seconds=plan.clip_start_seconds,
                     end_seconds=plan.clip_end_seconds,
+                    include_audio=self.settings.segment.include_audio,
                 )
                 write_json_file(
                     segment_directory / SEGMENT_BEATMAP_FILENAME,

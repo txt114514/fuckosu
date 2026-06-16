@@ -74,6 +74,7 @@ parameters:
     crop_bottom: 1080
   segment:
     approach_preempt_ratio: 0.5
+    pre_context_jitter_seconds: 0.15
     post_context_seconds: 0.4
     min_circle_overlap_ratio: 0.5
     use_priority_merge: true
@@ -81,3 +82,4 @@ parameters:
     build_long_sequences: true
     long_sequence_max_objects: 12
     long_sequence_max_duration_seconds: 10.0
+    include_audio: false

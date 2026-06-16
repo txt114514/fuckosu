@@ -25,6 +25,7 @@ def plan_video_segments(
     *,
     video_duration_seconds: float,
     approach_preempt_ratio: float,
+    pre_context_jitter_seconds: float,
     post_context_seconds: float,
     min_circle_overlap_ratio: float,
     priority_merge_window_ms: int,
@@ -41,6 +42,7 @@ def plan_video_segments(
         priority_merge_window_ms=priority_merge_window_ms,
         use_priority_merge=use_priority_merge,
         approach_preempt_seconds=beatmap.approach_preempt_ms / 1000.0,
+        pre_context_jitter_seconds=pre_context_jitter_seconds,
         post_context_seconds=post_context_seconds,
         video_duration_seconds=video_duration_seconds,
     )
@@ -51,6 +53,7 @@ def plan_video_segments(
                 beatmap.approach_preempt_ms / 1000.0
             ),
             approach_preempt_ratio=approach_preempt_ratio,
+            pre_context_jitter_seconds=pre_context_jitter_seconds,
             post_context_seconds=post_context_seconds,
             video_duration_seconds=video_duration_seconds,
             max_objects=long_sequence_max_objects,

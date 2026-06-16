@@ -11,12 +11,16 @@ def discover_segments(
     *,
     dimensions: tuple[str, ...] = (),
     categories: tuple[str, ...] = (),
+    include_items: tuple[str, ...] = (),
+    exclude_items: tuple[str, ...] = (),
     max_segments: int | None = None,
 ) -> DiscoveryResult:
     records: list[SegmentRecord] = []
     issues: list[DatasetIssue] = []
     dimension_filter = set(dimensions)
     category_filter = set(categories)
+    include_filter = set(include_items)
+    exclude_filter = set(exclude_items)
 
     if not dataset_root.is_dir():
         return DiscoveryResult(
@@ -25,6 +29,12 @@ def discover_segments(
         )
 
     for annotation_path in sorted(dataset_root.glob("item_*/*/*/beatmap.json")):
+        item_name = annotation_path.parents[2].name
+        if include_filter and item_name not in include_filter:
+            continue
+        if item_name in exclude_filter:
+            continue
+
         segment_directory = annotation_path.parent
         video_path = segment_directory / "video.mp4"
         try:
@@ -41,7 +51,6 @@ def discover_segments(
             issues.append(DatasetIssue(video_path, "paired video.mp4 is missing"))
             continue
 
-        item_name = annotation_path.parents[2].name
         records.append(
             SegmentRecord(
                 key=f"{item_name}/{annotation.segment_id}",

@@ -44,6 +44,8 @@ PYTHONPATH=src python src/before_traning/main.py --help
 - `overwrite`：是否覆盖已有产物
 - `continue_on_error`：单项失败后是否继续
 - `global_offset_ms`：AV 对齐的全局时间修正
+- `parameters.segment.pre_context_jitter_seconds`：片段首目标前置时间的稳定抖动范围
+- `parameters.segment.include_audio`：segment `video.mp4` 是否保留音频，默认不保留
 
 ## 输入位置
 
@@ -102,6 +104,12 @@ import_beatmaps
 原子片段按 `single_point`、`multi_point`、`slider`、`point_slider`、`spinner`
 分类。启用长序列构建后还会生成 `long_sequence`，它只组合完整原子片段，不拆分
 已有高重合组。
+
+片段起点默认不是固定落在首个目标前同一个时间差，而是在
+`approach_preempt_ratio` 计算出的基础前置时间上加入确定性抖动。这样同一谱面对象组重跑
+时保持可复现，但不同片段不会给模型提供“固定第几毫秒必然点击”的捷径。生成的
+segment `video.mp4` 默认使用 `-an` 去掉音频；训练阶段应只依赖画面和 `beatmap.json`
+标签。
 
 ## 视频与 osu! 坐标转换
 

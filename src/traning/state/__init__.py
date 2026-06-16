@@ -11,6 +11,7 @@ from traning.state.experiment_schema import (
 from traning.state.gallery_schema import (
     BatchGalleryRequest,
     EVALUATION_SUBPROJECTS,
+    ErrorDomain,
     FrameEvaluation,
     TrialGalleryEvaluation,
     load_batch_gallery_request,
@@ -22,6 +23,7 @@ __all__ = [
     "CheckpointMetadata",
     "CurriculumStage",
     "EVALUATION_SUBPROJECTS",
+    "ErrorDomain",
     "EvaluationRunMetadata",
     "ExperimentMetadata",
     "FrameEvaluation",

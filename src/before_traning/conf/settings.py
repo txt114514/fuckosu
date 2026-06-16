@@ -97,6 +97,7 @@ class ClipSettings(BaseModel):
 
 class SegmentSettings(BaseModel):
     approach_preempt_ratio: float = 0.5
+    pre_context_jitter_seconds: float = 0.15
     post_context_seconds: float = 0.4
     min_circle_overlap_ratio: float = 0.5
     use_priority_merge: bool = True
@@ -104,6 +105,7 @@ class SegmentSettings(BaseModel):
     build_long_sequences: bool = True
     long_sequence_max_objects: int = 12
     long_sequence_max_duration_seconds: float = 10.0
+    include_audio: bool = False
     status_step: str = "video_segmented"
     required_steps: tuple[str, ...] = ("video_processed",)
 
@@ -139,6 +141,7 @@ class SegmentSettings(BaseModel):
 
     @field_validator(
         "post_context_seconds",
+        "pre_context_jitter_seconds",
     )
     @classmethod
     def _nonnegative_context(cls, value: float) -> float:

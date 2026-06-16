@@ -11,8 +11,9 @@ from rich.console import Console
 from rich.table import Table
 
 from traning.Lib.data import build_patch_windows
-from traning.conf import load_settings
+from traning.conf import DataSplit, load_settings
 from traning.core.data_input import build_dataset, inspect_data_input
+from traning.core.env_check import collect_environment_report
 from traning.core.pipeline import run_pipeline
 from traning.core.visualization import (
     save_annotation_gallery,
@@ -26,12 +27,13 @@ console = Console()
 
 
 def _render_report(report) -> None:
-    table = Table(title="Data input")
+    table = Table(title=f"Data input ({report.split})")
     table.add_column("Metric")
     table.add_column("Value")
     table.add_row("segments", str(report.segment_count))
     table.add_row("estimated frames", str(report.frame_count_estimate))
     table.add_row("issues", str(report.issue_count))
+    table.add_row("items", str(report.item_counts))
     table.add_row("dimensions", str(report.dimension_counts))
     table.add_row("categories", str(report.category_counts))
     console.print(table)
@@ -39,24 +41,99 @@ def _render_report(report) -> None:
         console.print(f"[red]- {issue}[/red]")
 
 
+def _format_bool(value: bool | None) -> str:
+    if value is None:
+        return "unknown"
+    return "yes" if value else "no"
+
+
+def _format_gib(value: float | None) -> str:
+    if value is None:
+        return "unknown"
+    return f"{value:.2f} GiB"
+
+
+def _render_env_report(report) -> None:
+    torch_table = Table(title="Training environment")
+    torch_table.add_column("Metric")
+    torch_table.add_column("Value")
+    torch_table.add_row("python", report.python_version)
+    torch_table.add_row("executable", report.python_executable)
+    torch_table.add_row("platform", report.platform)
+    torch_table.add_row("ffmpeg", report.ffmpeg_path or "missing")
+    torch_table.add_row("nvidia-smi", report.nvidia_smi_path or "missing")
+    torch_table.add_row("torch", report.torch.version or "missing")
+    torch_table.add_row("torchvision", report.torch.torchvision_version or "missing")
+    torch_table.add_row("torch cuda", report.torch.torch_cuda or "missing")
+    torch_table.add_row("cuda available", _format_bool(report.torch.cuda_available))
+    torch_table.add_row("gpu", report.torch.gpu_name or "unavailable")
+    torch_table.add_row("compute capability", report.torch.compute_capability or "unknown")
+    torch_table.add_row("cuDNN", report.torch.cudnn_version or "unknown")
+    torch_table.add_row("bf16", _format_bool(report.torch.bf16_supported))
+    torch_table.add_row("free vram", _format_gib(report.torch.free_vram_gib))
+    torch_table.add_row("total vram", _format_gib(report.torch.total_vram_gib))
+    if report.torch.error:
+        torch_table.add_row("torch warning", report.torch.error)
+    console.print(torch_table)
+
+    package_table = Table(title="Python packages")
+    package_table.add_column("Package")
+    package_table.add_column("Required")
+    package_table.add_column("Import")
+    package_table.add_column("Version")
+    for check in report.packages:
+        package_table.add_row(
+            check.spec.label,
+            _format_bool(check.spec.required),
+            _format_bool(check.available),
+            check.version or "unknown",
+        )
+    console.print(package_table)
+
+
 @app.command("data-check")
 def data_check(
     config: Path | None = typer.Option(None, "--config"),
+    split: DataSplit = typer.Option("all", "--split"),
 ) -> None:
     settings = load_settings(config)
-    report = inspect_data_input(settings)
+    report = inspect_data_input(settings, split=split)
     _render_report(report)
     if settings.data_input.strict and not report.ok:
+        raise typer.Exit(1)
+
+
+@app.command("env-check")
+def env_check(
+    strict: bool = typer.Option(
+        False,
+        "--strict/--no-strict",
+        help="Exit non-zero when required runtime dependencies are missing.",
+    ),
+    require_cuda: bool = typer.Option(
+        False,
+        "--require-cuda/--no-require-cuda",
+        help="Treat CUDA unavailability as a failure in strict mode.",
+    ),
+) -> None:
+    report = collect_environment_report()
+    _render_env_report(report)
+    if strict and not report.ready(require_cuda=require_cuda):
+        missing = ", ".join(report.missing_required_packages) or "none"
+        console.print(f"[red]environment check failed; missing: {missing}[/red]")
+        if require_cuda and not report.torch.cuda_available:
+            console.print("[red]CUDA is not available inside the container[/red]")
         raise typer.Exit(1)
 
 
 @app.command("data-preview")
 def data_preview(
     index: int = typer.Option(0, "--index", min=0),
+    split: DataSplit = typer.Option("train", "--split"),
     config: Path | None = typer.Option(None, "--config"),
 ) -> None:
     settings = load_settings(config)
-    dataset = build_dataset(settings)
+    dataset = build_dataset(settings, split=split)
     if index >= len(dataset):
         raise typer.BadParameter(
             f"index {index} is outside dataset length {len(dataset)}"

@@ -2,7 +2,7 @@
 
 版本：`point-slider-v2`
 
-本规格把 [`about_score.txt`](about_score.txt) 中的评分想法形式化为可执行公式。实现位于
+本规格把点、slider 路径和通过判定形式化为可执行公式。实现位于
 `src/traning/Lib/metrics/scoring.py`。
 
 ## 1. 基本定义
@@ -153,10 +153,93 @@ and path passed
 raw = slider_spatial + temporal + slider_spatial * temporal
 ```
 
-## 5. 当前聚合边界
+## 5. 点击序列模拟
+
+单对象 score 只回答“这一次预测是否能命中这个目标”。完整评估还需要按时间模拟点击序列：
+
+```text
+预测点击流 + 当前未命中目标集合
+  -> 应用最小点击间隔
+  -> 对仍有效目标逐个判定
+  -> 首个合格目标消失
+  -> 后续点击只能命中剩余目标
+```
+
+序列模拟版本为 `click-sequence-v1`，底层对象公式仍使用 `point-slider-v2`。
+
+### 5.1 目标一次性命中
+
+当某次点击对某个目标同时满足空间和时间通过条件后，该目标被视为模拟点击成功，并从
+有效目标集合中移除。之后即使有更靠近中心或时间更精确的点击，也不会提高这个目标的
+得分，也不会再次命中这个目标。
+
+如果某次点击没有达到该目标的通过条件，该目标仍保持有效；后续点击仍可命中它。因此
+每个目标最多只有一次合格判定，且这次判定按点击时序取最早的合格点击。
+
+### 5.2 重叠目标
+
+多个目标在空间和时间上重叠时，一次点击可能同时满足多个未命中目标。此时按目标谱面
+时间从早到晚选择一个目标作为本次命中；若时间相同，再按 `source_index` 和目标 ID
+稳定排序。被命中的目标立即消失，下一次有效点击再对剩余的重叠目标判定。
+
+这个规则等价于把已经打击成功的目标从画面里移除，避免同一次或后续点击反复给同一
+目标刷更高分。
+
+### 5.3 点击频率限制
+
+评估不禁止模型输出多次疑似点击；即使当前只有一个目标，模型也可以尝试多个候选点。
+但为了避免通过高频点击提高命中率，序列模拟器会应用最小点击间隔：
+
+```text
+min_click_interval_ms = 50.0
+```
+
+该值由 `evaluation.min_click_interval_ms` 配置，默认约 50ms。低于间隔的点击标记为
+`frequency_limited`，不参与目标判定，也不会让目标消失。它不刷新冷却时间；下一个距离
+最近一次有效点击达到间隔的点击仍可参与判定。
+
+### 5.4 Slider 首次成功后失效
+
+slider 使用与第 4 节相同的起点和路径通过条件。某次预测使 slider 起点与路径都通过后，
+该 slider 也从有效目标集合中移除；之后对同一 slider 的点击或路径预测不再计分。
+
+## 6. 错误归因
+
+点击序列模拟同时输出错误主责任，便于后续把评估结果反馈到不同参数网：
+
+| 主责任 | 含义 | 典型标签 |
+|---|---|---|
+| `spatial` | 位置、路径或空间融合错误 | `spatial_miss`, `head_spatial_miss`, `slider_path_miss` |
+| `temporal` | 点击时间偏早或偏晚 | `early_click`, `late_click` |
+| `decision` | 是否点击、点哪个、点几次或冷却抑制错误 | `duplicate_after_hit`, `better_score_after_resolution`, `frequency_limited`, `no_active_target` |
+| `none` | 本次点击已命中，或没有可归因错误 | 无 |
+
+因此：
+
+- 重复点击同一已命中目标归入 `decision`。
+- 已有更高分点击但目标已因较早合格点击失效时，标记
+  `duplicate_after_hit + better_score_after_resolution`，归入 `decision`。
+- 点击空间偏差归入 `spatial`。
+- 点击时间偏离和提前点击归入 `temporal`。
+- 低于最小点击间隔的高频点击归入 `decision`，标签为 `frequency_limited`。
+
+评估 JSON 可携带以下字段：
+
+```json
+{
+  "primary_error": "decision",
+  "error_tags": ["duplicate_after_hit", "better_score_after_resolution"],
+  "spatial_error": 0.0,
+  "temporal_error_ms": -90.0,
+  "frequency_limited": false
+}
+```
+
+## 7. 当前聚合边界
 
 本版本已经实现单个点和单条 slider 的空间、时间、组合分数及通过判定。一个 trial
-包含多个样本时如何跨子项目聚合为最终 `score` 尚未确定。
+包含多个样本时如何跨子项目聚合为最终 `score` 尚未确定。点击序列模拟已经能生成
+逐目标命中、未命中、点击频率限制和错误归因结果，但尚未接入完整 trial 聚合公式。
 
 在聚合公式确定前，批次 JSON 应写明：
 

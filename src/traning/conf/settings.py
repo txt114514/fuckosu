@@ -1,10 +1,16 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -14,6 +20,7 @@ from pydantic_settings import (
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CONFIG_PATH = Path(__file__).resolve().parent / "config.yaml"
+DataSplit = Literal["all", "train", "validation"]
 
 
 class SettingsError(Exception):
@@ -46,6 +53,17 @@ class LoaderSettings(BaseModel):
         return value
 
 
+class EvaluationSettings(BaseModel):
+    min_click_interval_ms: float = 50.0
+
+    @field_validator("min_click_interval_ms")
+    @classmethod
+    def _nonnegative_interval(cls, value: float) -> float:
+        if value < 0 or value != value or value == float("inf"):
+            raise ValueError("min_click_interval_ms must be finite and nonnegative")
+        return value
+
+
 class VisualizationSettings(BaseModel):
     enabled: bool = False
     every_n_steps: int = 500
@@ -68,6 +86,10 @@ class DataInputSettings(BaseModel):
     dataset_root: Path = REPO_ROOT / "training_package" / "video_segments"
     dimensions: tuple[str, ...] = ("atomic", "long_sequence")
     categories: tuple[str, ...] = ()
+    include_items: tuple[str, ...] = ()
+    exclude_items: tuple[str, ...] = ()
+    train_items: tuple[str, ...] = ()
+    validation_items: tuple[str, ...] = ()
     sample_fps: float = 60.0
     frame_step: int = 1
     max_segments: int | None = None
@@ -108,6 +130,31 @@ class DataInputSettings(BaseModel):
             raise ValueError("visibility_post_ms must be finite and nonnegative")
         return value
 
+    @field_validator(
+        "dimensions",
+        "categories",
+        "include_items",
+        "exclude_items",
+        "train_items",
+        "validation_items",
+    )
+    @classmethod
+    def _unique_nonempty_strings(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        cleaned = tuple(item.strip() for item in value)
+        if any(not item for item in cleaned):
+            raise ValueError("filter values must be nonempty strings")
+        if len(set(cleaned)) != len(cleaned):
+            raise ValueError("filter values must be unique")
+        return cleaned
+
+    @model_validator(mode="after")
+    def validate_item_splits(self) -> DataInputSettings:
+        overlap = set(self.train_items) & set(self.validation_items)
+        if overlap:
+            joined = ", ".join(sorted(overlap))
+            raise ValueError(f"train_items and validation_items overlap: {joined}")
+        return self
+
     def validate_tiling(self) -> None:
         if not 0 <= self.overlap_x < self.patch_width:
             raise ValueError("overlap_x must be in [0, patch_width)")
@@ -126,6 +173,7 @@ class Settings(BaseSettings):
     runtime: RuntimeSettings = Field(default_factory=RuntimeSettings)
     data_input: DataInputSettings = Field(default_factory=DataInputSettings)
     loader: LoaderSettings = Field(default_factory=LoaderSettings)
+    evaluation: EvaluationSettings = Field(default_factory=EvaluationSettings)
     visualization: VisualizationSettings = Field(
         default_factory=VisualizationSettings
     )
@@ -193,7 +241,9 @@ def load_settings(config_path: Path | None = None) -> Settings:
 
 __all__ = [
     "CONFIG_PATH",
+    "DataSplit",
     "DataInputSettings",
+    "EvaluationSettings",
     "LoaderSettings",
     "REPO_ROOT",
     "RuntimeSettings",

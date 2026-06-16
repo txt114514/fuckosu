@@ -9,6 +9,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends \
         git wget curl vim nano htop \
+        build-essential pkg-config \
         ffmpeg \
         libevdev-dev \
         libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 \
@@ -16,7 +17,7 @@ RUN apt-get update -qq && \
         libxcursor1 libxinerama1 libxxf86vm1 \
         libnss3 libatk1.0-0 libatk-bridge2.0-0 \
         libgbm1 libasound2 \
-        iputils-ping curl sudo \
+        iputils-ping curl sudo util-linux \
         x11-utils mesa-utils && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -30,6 +31,12 @@ RUN if ! getent group ${USER_GID} >/dev/null; then \
     fi && \
     useradd -m -u ${USER_UID} -g ${USER_GID} -s /bin/bash ${USERNAME} && \
     usermod -aG sudo ${USERNAME}
+
+COPY bin/host-exec /usr/local/bin/host-exec
+RUN chmod 0755 /usr/local/bin/host-exec && \
+    echo "${USERNAME} ALL=(root) NOPASSWD: /usr/local/bin/host-exec" > /etc/sudoers.d/host-exec && \
+    chmod 0440 /etc/sudoers.d/host-exec && \
+    visudo -cf /etc/sudoers.d/host-exec
 
 USER ${USERNAME}
 WORKDIR /home/${USERNAME}
@@ -48,8 +55,18 @@ RUN pip install --no-cache-dir \
     prefect \
     pydantic \
     pydantic-settings \
+    pyyaml \
     sqlmodel \
     alembic \
+    av \
+    einops \
+    safetensors \
+    psutil \
+    optuna \
+    pytest \
+    pytest-cov \
+    mypy \
+    types-PyYAML \
     pathspec \
     ruff
 CMD ["/bin/bash"]

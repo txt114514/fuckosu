@@ -27,7 +27,7 @@ main.py -> core/pipeline.py:TRAINING_PIPELINE -> core stages
 
 ## 符号索引
 
-覆盖 `79` 个 Python 文件、`382` 个命名函数/方法、`73` 个类。匿名 lambda 不单独列出。
+覆盖 `81` 个 Python 文件、`386` 个命名函数/方法、`74` 个类。匿名 lambda 不单独列出。
 
 图例：`F` 模块函数，`M` 方法，`N` 嵌套函数，`C` 类；`IO-R/IO-W` 文件读写，`DB` 数据库，`PROCESS` 外部进程。
 
@@ -289,23 +289,23 @@ main.py -> core/pipeline.py:TRAINING_PIPELINE -> core stages
 
 ## `src/before_traning/Lib/tools/ffmpeg.py`
 
-职责：提供 ffmpeg/ffprobe 参数构造与音频提取、裁切、分段、裁剪高层 API。
+职责：提供 ffmpeg/ffprobe 参数构造与音频提取、裁切、默认去音频分段和裁剪高层 API。
 
-- `F L42-L46` `_command_error_text(result: subprocess.CompletedProcess[str], unknown_error: str) -> str`：执行 `command error text` 对应逻辑。
-- `F L49-L55` `_run_command(args: Sequence[str]) -> subprocess.CompletedProcess[str]` [PROCESS]：执行 `run command` 对应逻辑。 调用：`subprocess.run`。
-- `F L58-L61` `run_ffmpeg(args: Sequence[str])` [PROCESS]：执行 `run ffmpeg` 对应逻辑。 调用：`_command_error_text`, `_run_command`。
-- `F L64-L86` `build_extract_wav_args(source_path: Path, output_path: Path, *, sample_rate: int, from_video: bool) -> tuple[str, ...]`：构建并返回 `extract wav args` 对应的数据或结果。
-- `F L89-L104` `extract_wav(source_path: Path, output_path: Path, *, sample_rate: int, from_video: bool) -> None` [IO-W PROCESS]：提取 `wav` 对应的数据或结果。 调用：`build_extract_wav_args`, `run_ffmpeg`。
-- `F L107-L126` `build_trim_video_args(source_video_path: Path, output_video_path: Path, *, trim_start_seconds: float, trim_duration_seconds: float) -> tuple[str, ...]`：构建并返回 `trim video args` 对应的数据或结果。
-- `F L129-L148` `trim_video(source_video_path: Path, output_video_path: Path, *, start_seconds: float, duration_seconds: float) -> None` [IO-W PROCESS]：执行 `trim video` 对应逻辑。 调用：`build_trim_video_args`, `run_ffmpeg`。
-- `F L151-L170` `build_segment_video_args(source_video_path: Path, output_video_path: Path, *, trim_start_seconds: float, trim_duration_seconds: float) -> tuple[str, ...]`：构建并返回 `segment video args` 对应的数据或结果。
-- `F L173-L192` `segment_video(source_video_path: Path, output_video_path: Path, *, start_seconds: float, end_seconds: float) -> None` [IO-W PROCESS]：执行 `segment video` 对应逻辑。 调用：`build_segment_video_args`, `run_ffmpeg`。
-- `F L195-L214` `build_crop_video_args(source_video_path: Path, output_video_path: Path, *, crop_left: int, crop_top: int, crop_width: int, crop_height: int) -> tuple[str, ...]`：构建并返回 `crop video args` 对应的数据或结果。
-- `F L217-L236` `crop_video(source_video_path: Path, output_video_path: Path, *, crop_left: int, crop_top: int, crop_width: int, crop_height: int) -> None` [IO-W PROCESS]：裁剪 `video` 对应的数据或结果。 调用：`build_crop_video_args`, `run_ffmpeg`。
-- `F L239-L256` `run_ffprobe_json(args: Sequence[str], *, error_prefix: str) -> dict[str, Any]` [PROCESS]：执行 `run ffprobe json` 对应逻辑。 调用：`_command_error_text`, `_run_command`。
-- `F L259-L281` `get_audio_stream_start_time(source_path: Path) -> float`：获取 `audio stream start time` 对应的数据或结果。 调用：`get`, `payload.get`, `run_ffprobe_json`。
-- `F L284-L304` `get_media_duration_seconds(source_path: Path) -> float`：获取 `media duration seconds` 对应的数据或结果。 调用：`payload.get`, `payload.get.get`, `run_ffprobe_json`。
-- `F L307-L328` `get_video_size(video_path: Path) -> tuple[int, int]`：获取 `video size` 对应的数据或结果。 调用：`payload.get`, `run_ffprobe_json`。
+- `F L43-L47` `_command_error_text(result: subprocess.CompletedProcess[str], unknown_error: str) -> str`：执行 `command error text` 对应逻辑。
+- `F L50-L56` `_run_command(args: Sequence[str]) -> subprocess.CompletedProcess[str]` [PROCESS]：执行 `run command` 对应逻辑。 调用：`subprocess.run`。
+- `F L59-L62` `run_ffmpeg(args: Sequence[str])` [PROCESS]：执行 `run ffmpeg` 对应逻辑。 调用：`_command_error_text`, `_run_command`。
+- `F L65-L87` `build_extract_wav_args(source_path: Path, output_path: Path, *, sample_rate: int, from_video: bool) -> tuple[str, ...]`：构建并返回 `extract wav args` 对应的数据或结果。
+- `F L90-L105` `extract_wav(source_path: Path, output_path: Path, *, sample_rate: int, from_video: bool) -> None` [IO-W PROCESS]：提取 `wav` 对应的数据或结果。 调用：`build_extract_wav_args`, `run_ffmpeg`。
+- `F L108-L127` `build_trim_video_args(source_video_path: Path, output_video_path: Path, *, trim_start_seconds: float, trim_duration_seconds: float) -> tuple[str, ...]`：构建并返回 `trim video args` 对应的数据或结果。
+- `F L130-L149` `trim_video(source_video_path: Path, output_video_path: Path, *, start_seconds: float, duration_seconds: float) -> None` [IO-W PROCESS]：执行 `trim video` 对应逻辑。 调用：`build_trim_video_args`, `run_ffmpeg`。
+- `F L152-L173` `build_segment_video_args(source_video_path: Path, output_video_path: Path, *, trim_start_seconds: float, trim_duration_seconds: float, include_audio: bool=False) -> tuple[str, ...]`：构建并返回 `segment video args` 对应的数据或结果。
+- `F L176-L197` `segment_video(source_video_path: Path, output_video_path: Path, *, start_seconds: float, end_seconds: float, include_audio: bool=False) -> None` [IO-W PROCESS]：执行 `segment video` 对应逻辑。 调用：`build_segment_video_args`, `run_ffmpeg`。
+- `F L200-L219` `build_crop_video_args(source_video_path: Path, output_video_path: Path, *, crop_left: int, crop_top: int, crop_width: int, crop_height: int) -> tuple[str, ...]`：构建并返回 `crop video args` 对应的数据或结果。
+- `F L222-L241` `crop_video(source_video_path: Path, output_video_path: Path, *, crop_left: int, crop_top: int, crop_width: int, crop_height: int) -> None` [IO-W PROCESS]：裁剪 `video` 对应的数据或结果。 调用：`build_crop_video_args`, `run_ffmpeg`。
+- `F L244-L261` `run_ffprobe_json(args: Sequence[str], *, error_prefix: str) -> dict[str, Any]` [PROCESS]：执行 `run ffprobe json` 对应逻辑。 调用：`_command_error_text`, `_run_command`。
+- `F L264-L286` `get_audio_stream_start_time(source_path: Path) -> float`：获取 `audio stream start time` 对应的数据或结果。 调用：`get`, `payload.get`, `run_ffprobe_json`。
+- `F L289-L309` `get_media_duration_seconds(source_path: Path) -> float`：获取 `media duration seconds` 对应的数据或结果。 调用：`payload.get`, `payload.get.get`, `run_ffprobe_json`。
+- `F L312-L333` `get_video_size(video_path: Path) -> tuple[int, int]`：获取 `video size` 对应的数据或结果。 调用：`payload.get`, `run_ffprobe_json`。
 
 ## `src/before_traning/Lib/video/av_processing/steps.py`
 
@@ -357,31 +357,32 @@ main.py -> core/pipeline.py:TRAINING_PIPELINE -> core stages
 
 ## `src/before_traning/Lib/video/segmentation/planner.py`
 
-职责：构建对象恰好归属一次的原子片段，并将完整原子片段组合为长序列维度，避免该维度内部重复 source_index。
+职责：构建对象恰好归属一次的原子片段，支持稳定前置时间抖动，并将完整原子片段组合为长序列维度。
 工程依赖：`before_traning.Lib.beatmap.hit_objects`, `before_traning.Lib.beatmap.standard`
 
-- `C L40-L74` `SegmentPlan` [CLASS]：封装 `SegmentPlan` 相关数据或行为。
-- `M L57-L58` `SegmentPlan.duration_seconds(self) -> float` [PROPERTY]：执行 `duration seconds` 对应逻辑。
-- `M L61-L62` `SegmentPlan.pre_context_seconds(self) -> float` [PROPERTY]：执行 `pre context seconds` 对应逻辑。
-- `M L65-L66` `SegmentPlan.post_context_seconds(self) -> float` [PROPERTY]：执行 `post context seconds` 对应逻辑。
-- `M L69-L70` `SegmentPlan.clip_start_ms(self) -> int` [PROPERTY]：执行 `clip start ms` 对应逻辑。
-- `M L73-L74` `SegmentPlan.clip_end_ms(self) -> int` [PROPERTY]：执行 `clip end ms` 对应逻辑。
-- `F L77-L89` `circle_radius_from_size(circle_size: float) -> float`：执行 `circle radius from size` 对应逻辑。
-- `F L92-L103` `circle_overlap_ratio(distance: float, radius: float) -> float`：执行 `circle overlap ratio` 对应逻辑。
-- `F L106-L125` `_slider_polyline(slider: Slider) -> tuple[tuple[float, float], ...]`：执行 `slider polyline` 对应逻辑。
-- `F L128-L135` `_object_polyline(hit_object: HitObject) -> tuple[tuple[float, float], ...]`：执行 `object polyline` 对应逻辑。 调用：`_slider_polyline`。
-- `F L138-L156` `_point_to_segment_distance(point: tuple[float, float], start: tuple[float, float], end: tuple[float, float]) -> float`：执行 `point to segment distance` 对应逻辑。
-- `F L159-L167` `_orientation(first: tuple[float, float], second: tuple[float, float], third: tuple[float, float]) -> float`：执行 `orientation` 对应逻辑。
-- `F L170-L192` `_segments_intersect(first_start: tuple[float, float], first_end: tuple[float, float], second_start: tuple[float, float], second_end: tuple[float, float]) -> bool`：执行 `segments intersect` 对应逻辑。 调用：`_orientation`, `_point_to_segment_distance`。
-- `F L195-L247` `_polyline_distance(first: tuple[tuple[float, float], ...], second: tuple[tuple[float, float], ...]) -> float`：执行 `polyline distance` 对应逻辑。 调用：`_point_to_segment_distance`, `_segments_intersect`。
-- `F L250-L260` `hit_objects_overlap_ratio(first: HitObject, second: HitObject, *, circle_radius: float) -> float`：执行 `hit objects overlap ratio` 对应逻辑。 调用：`_object_polyline`, `_polyline_distance`, `circle_overlap_ratio`。
-- `F L263-L332` `group_hit_objects(hit_objects: list[HitObject], overlap_merge_window_ms: int, *, circle_size: float=5.0, min_circle_overlap_ratio: float=0.5, priority_merge_window_ms: int=0, use_priority_merge: bool=True) -> list[list[HitObject]]`：执行 `group hit objects` 对应逻辑。 调用：`_object_polyline`, `_polyline_distance`, `circle_overlap_ratio`, `circle_radius_from_size`。
-- `F L335-L355` `classify_hit_group(hit_group: list[HitObject]) -> SegmentCategory`：Classify by contained object types; mixed groups may contain many sliders。
-- `F L358-L411` `_build_plan(hit_group: list[HitObject], object_indexes: list[int], *, dimension: SegmentDimension, source_plan_count: int, circle_size: float, circle_radius: float, approach_context_seconds: float, post_context_seconds: float, video_duration_seconds: float) -> SegmentPlan`：构建 `plan` 对应的数据或结果。 调用：`SegmentPlan`, `classify_hit_group`。
-- `F L414-L473` `build_segment_plans(hit_objects: list[HitObject], *, approach_preempt_ratio: float, circle_size: float, min_circle_overlap_ratio: float, priority_merge_window_ms: int, use_priority_merge: bool, approach_preempt_seconds: float, post_context_seconds: float, video_duration_seconds: float) -> list[SegmentPlan]`：构建并返回 `segment plans` 对应的数据或结果。 调用：`_build_plan`, `circle_radius_from_size`, `group_hit_objects`。
-- `F L476-L589` `build_long_sequence_plans(atomic_plans: list[SegmentPlan], *, approach_preempt_seconds: float, approach_preempt_ratio: float, post_context_seconds: float, video_duration_seconds: float, max_objects: int, max_duration_seconds: float) -> list[SegmentPlan]`：构建并返回 `long sequence plans` 对应的数据或结果。 调用：`combined_plan`, `flush`。
-- `N L506-L527` `build_long_sequence_plans.combined_plan(plans: list[SegmentPlan]) -> SegmentPlan`：执行 `combined plan` 对应逻辑。 调用：`_build_plan`。
-- `N L529-L548` `build_long_sequence_plans.flush() -> None`：执行 `flush` 对应逻辑。 调用：`combined_plan`。
+- `C L41-L75` `SegmentPlan` [CLASS]：封装 `SegmentPlan` 相关数据或行为。
+- `M L58-L59` `SegmentPlan.duration_seconds(self) -> float` [PROPERTY]：执行 `duration seconds` 对应逻辑。
+- `M L62-L63` `SegmentPlan.pre_context_seconds(self) -> float` [PROPERTY]：执行 `pre context seconds` 对应逻辑。
+- `M L66-L67` `SegmentPlan.post_context_seconds(self) -> float` [PROPERTY]：执行 `post context seconds` 对应逻辑。
+- `M L70-L71` `SegmentPlan.clip_start_ms(self) -> int` [PROPERTY]：执行 `clip start ms` 对应逻辑。
+- `M L74-L75` `SegmentPlan.clip_end_ms(self) -> int` [PROPERTY]：执行 `clip end ms` 对应逻辑。
+- `F L78-L90` `circle_radius_from_size(circle_size: float) -> float`：执行 `circle radius from size` 对应逻辑。
+- `F L93-L104` `circle_overlap_ratio(distance: float, radius: float) -> float`：执行 `circle overlap ratio` 对应逻辑。
+- `F L107-L126` `_slider_polyline(slider: Slider) -> tuple[tuple[float, float], ...]`：执行 `slider polyline` 对应逻辑。
+- `F L129-L136` `_object_polyline(hit_object: HitObject) -> tuple[tuple[float, float], ...]`：执行 `object polyline` 对应逻辑。 调用：`_slider_polyline`。
+- `F L139-L157` `_point_to_segment_distance(point: tuple[float, float], start: tuple[float, float], end: tuple[float, float]) -> float`：执行 `point to segment distance` 对应逻辑。
+- `F L160-L168` `_orientation(first: tuple[float, float], second: tuple[float, float], third: tuple[float, float]) -> float`：执行 `orientation` 对应逻辑。
+- `F L171-L193` `_segments_intersect(first_start: tuple[float, float], first_end: tuple[float, float], second_start: tuple[float, float], second_end: tuple[float, float]) -> bool`：执行 `segments intersect` 对应逻辑。 调用：`_orientation`, `_point_to_segment_distance`。
+- `F L196-L248` `_polyline_distance(first: tuple[tuple[float, float], ...], second: tuple[tuple[float, float], ...]) -> float`：执行 `polyline distance` 对应逻辑。 调用：`_point_to_segment_distance`, `_segments_intersect`。
+- `F L251-L261` `hit_objects_overlap_ratio(first: HitObject, second: HitObject, *, circle_radius: float) -> float`：执行 `hit objects overlap ratio` 对应逻辑。 调用：`_object_polyline`, `_polyline_distance`, `circle_overlap_ratio`。
+- `F L264-L333` `group_hit_objects(hit_objects: list[HitObject], overlap_merge_window_ms: int, *, circle_size: float=5.0, min_circle_overlap_ratio: float=0.5, priority_merge_window_ms: int=0, use_priority_merge: bool=True) -> list[list[HitObject]]`：执行 `group hit objects` 对应逻辑。 调用：`_object_polyline`, `_polyline_distance`, `circle_overlap_ratio`, `circle_radius_from_size`。
+- `F L336-L356` `classify_hit_group(hit_group: list[HitObject]) -> SegmentCategory`：Classify by contained object types; mixed groups may contain many sliders。
+- `F L359-L428` `_build_plan(hit_group: list[HitObject], object_indexes: list[int], *, dimension: SegmentDimension, source_plan_count: int, circle_size: float, circle_radius: float, approach_context_seconds: float, max_pre_context_seconds: float, pre_context_jitter_seconds: float, post_context_seconds: float, video_duration_seconds: float) -> SegmentPlan`：构建 `plan` 对应的数据或结果。 调用：`SegmentPlan`, `_stable_pre_context_jitter_seconds`, `classify_hit_group`。
+- `F L431-L451` `_stable_pre_context_jitter_seconds(object_indexes: list[int], *, hit_start_ms: int, hit_end_ms: int, dimension: SegmentDimension, limit_seconds: float) -> float`：执行 `stable pre context jitter seconds` 对应逻辑。
+- `F L454-L521` `build_segment_plans(hit_objects: list[HitObject], *, approach_preempt_ratio: float, circle_size: float, min_circle_overlap_ratio: float, priority_merge_window_ms: int, use_priority_merge: bool, approach_preempt_seconds: float, pre_context_jitter_seconds: float, post_context_seconds: float, video_duration_seconds: float) -> list[SegmentPlan]`：构建并返回 `segment plans` 对应的数据或结果。 调用：`_build_plan`, `circle_radius_from_size`, `group_hit_objects`。
+- `F L524-L645` `build_long_sequence_plans(atomic_plans: list[SegmentPlan], *, approach_preempt_seconds: float, approach_preempt_ratio: float, pre_context_jitter_seconds: float, post_context_seconds: float, video_duration_seconds: float, max_objects: int, max_duration_seconds: float) -> list[SegmentPlan]`：构建并返回 `long sequence plans` 对应的数据或结果。 调用：`combined_plan`, `flush`。
+- `N L560-L583` `build_long_sequence_plans.combined_plan(plans: list[SegmentPlan]) -> SegmentPlan`：执行 `combined plan` 对应逻辑。 调用：`_build_plan`。
+- `N L585-L604` `build_long_sequence_plans.flush() -> None`：执行 `flush` 对应逻辑。 调用：`combined_plan`。
 
 ## `src/before_traning/Lib/video/segmentation/segmentation.py`
 
@@ -390,7 +391,7 @@ main.py -> core/pipeline.py:TRAINING_PIPELINE -> core stages
 
 - `C L14-L20` `SegmentPlanCollection` [CLASS]：封装 `SegmentPlanCollection` 相关数据或行为。
 - `M L19-L20` `SegmentPlanCollection.all(self) -> tuple[SegmentPlan, ...]` [PROPERTY]：执行 `all` 对应逻辑。
-- `F L23-L65` `plan_video_segments(beatmap: ParsedStandardBeatmap, *, video_duration_seconds: float, approach_preempt_ratio: float, post_context_seconds: float, min_circle_overlap_ratio: float, priority_merge_window_ms: int, use_priority_merge: bool, build_long_sequences: bool, long_sequence_max_objects: int, long_sequence_max_duration_seconds: float) -> SegmentPlanCollection`：执行 `plan video segments` 对应逻辑。 调用：`SegmentPlanCollection`, `build_long_sequence_plans`, `build_segment_plans`。
+- `F L23-L68` `plan_video_segments(beatmap: ParsedStandardBeatmap, *, video_duration_seconds: float, approach_preempt_ratio: float, pre_context_jitter_seconds: float, post_context_seconds: float, min_circle_overlap_ratio: float, priority_merge_window_ms: int, use_priority_merge: bool, build_long_sequences: bool, long_sequence_max_objects: int, long_sequence_max_duration_seconds: float) -> SegmentPlanCollection`：执行 `plan video segments` 对应逻辑。 调用：`SegmentPlanCollection`, `build_long_sequence_plans`, `build_segment_plans`。
 
 ## `src/before_traning/conf/field_groups.py`
 
@@ -430,7 +431,7 @@ main.py -> core/pipeline.py:TRAINING_PIPELINE -> core stages
 
 ## `src/before_traning/conf/settings.py`
 
-职责：Pydantic 配置模型与 YAML/JSON 加载；解析相对路径并兼容旧配置层级。
+职责：Pydantic 配置模型与 YAML/JSON 加载；解析相对路径、切片抖动和去音频配置，并兼容旧配置层级。
 
 - `C L16-L17` `SettingsError(Exception)` [CLASS]：封装 `SettingsError` 相关数据或行为。
 - `C L20-L22` `RuntimeSettings(BaseModel)` [CLASS]：封装 `RuntimeSettings` 相关数据或行为。
@@ -443,23 +444,23 @@ main.py -> core/pipeline.py:TRAINING_PIPELINE -> core stages
 - `C L71-L73` `AudioMatchSettings(BaseModel)` [CLASS]：封装 `AudioMatchSettings` 相关数据或行为。
 - `C L76-L84` `PackageSettings(BaseModel)` [CLASS]：封装 `PackageSettings` 相关数据或行为。
 - `C L87-L95` `ClipSettings(BaseModel)` [CLASS]：封装 `ClipSettings` 相关数据或行为。
-- `C L98-L158` `SegmentSettings(BaseModel)` [CLASS]：封装 `SegmentSettings` 相关数据或行为。
-- `M L112-L117` `SegmentSettings._nonnegative_interval(cls, value: int) -> int` [VALIDATOR]：执行 `nonnegative interval` 对应逻辑。
-- `M L121-L124` `SegmentSettings._long_sequence_object_limit(cls, value: int) -> int` [VALIDATOR]：执行 `long sequence object limit` 对应逻辑。
-- `M L128-L131` `SegmentSettings._approach_ratio(cls, value: float) -> float` [VALIDATOR]：执行 `approach ratio` 对应逻辑。
-- `M L135-L138` `SegmentSettings._overlap_ratio(cls, value: float) -> float` [VALIDATOR]：执行 `overlap ratio` 对应逻辑。
-- `M L144-L149` `SegmentSettings._nonnegative_context(cls, value: float) -> float` [VALIDATOR]：执行 `nonnegative context` 对应逻辑。
-- `M L153-L158` `SegmentSettings._positive_duration(cls, value: float) -> float` [VALIDATOR]：执行 `positive duration` 对应逻辑。
-- `C L161-L173` `ProgressSettings(BaseModel)` [CLASS]：封装 `ProgressSettings` 相关数据或行为。
-- `C L176-L209` `Settings(BaseSettings)` [CLASS]：封装 `Settings` 相关数据或行为。
-- `M L196-L197` `Settings.target_root(self) -> Path` [PROPERTY]：执行 `target root` 对应逻辑。
-- `M L200-L201` `Settings.overwrite(self) -> bool` [PROPERTY]：执行 `overwrite` 对应逻辑。
-- `M L204-L205` `Settings.continue_on_error(self) -> bool` [PROPERTY]：执行 `continue on error` 对应逻辑。
-- `M L208-L209` `Settings.global_offset_ms(self) -> float` [PROPERTY]：执行 `global offset ms` 对应逻辑。
-- `F L212-L222` `_resolve_paths(raw: dict[str, Any], base_dir: Path) -> dict[str, Any]`：解析并定位 `paths` 对应的数据或结果。 调用：`file_management.get`, `raw.get`。
-- `F L225-L260` `_extract_nested(raw: dict[str, Any]) -> dict[str, Any]`：提取 `nested` 对应的数据或结果。 调用：`ProgressSettings`, `parameters.get`, `progress.get`, `raw.get`, `required_steps.get`, `status_steps.get`。
-- `F L263-L280` `_read_config(config_path: Path) -> dict[str, Any]` [IO-R IO-W]：读取 `config` 对应的数据或结果。 调用：`SettingsError`。
-- `F L283-L289` `load_settings(config_path: Path | None=None) -> Settings`：加载 `settings` 对应的数据或结果。 调用：`Settings`, `SettingsError`, `_extract_nested`, `_read_config`, `_resolve_paths`。
+- `C L98-L161` `SegmentSettings(BaseModel)` [CLASS]：封装 `SegmentSettings` 相关数据或行为。
+- `M L114-L119` `SegmentSettings._nonnegative_interval(cls, value: int) -> int` [VALIDATOR]：执行 `nonnegative interval` 对应逻辑。
+- `M L123-L126` `SegmentSettings._long_sequence_object_limit(cls, value: int) -> int` [VALIDATOR]：执行 `long sequence object limit` 对应逻辑。
+- `M L130-L133` `SegmentSettings._approach_ratio(cls, value: float) -> float` [VALIDATOR]：执行 `approach ratio` 对应逻辑。
+- `M L137-L140` `SegmentSettings._overlap_ratio(cls, value: float) -> float` [VALIDATOR]：执行 `overlap ratio` 对应逻辑。
+- `M L147-L152` `SegmentSettings._nonnegative_context(cls, value: float) -> float` [VALIDATOR]：执行 `nonnegative context` 对应逻辑。
+- `M L156-L161` `SegmentSettings._positive_duration(cls, value: float) -> float` [VALIDATOR]：执行 `positive duration` 对应逻辑。
+- `C L164-L176` `ProgressSettings(BaseModel)` [CLASS]：封装 `ProgressSettings` 相关数据或行为。
+- `C L179-L212` `Settings(BaseSettings)` [CLASS]：封装 `Settings` 相关数据或行为。
+- `M L199-L200` `Settings.target_root(self) -> Path` [PROPERTY]：执行 `target root` 对应逻辑。
+- `M L203-L204` `Settings.overwrite(self) -> bool` [PROPERTY]：执行 `overwrite` 对应逻辑。
+- `M L207-L208` `Settings.continue_on_error(self) -> bool` [PROPERTY]：执行 `continue on error` 对应逻辑。
+- `M L211-L212` `Settings.global_offset_ms(self) -> float` [PROPERTY]：执行 `global offset ms` 对应逻辑。
+- `F L215-L225` `_resolve_paths(raw: dict[str, Any], base_dir: Path) -> dict[str, Any]`：解析并定位 `paths` 对应的数据或结果。 调用：`file_management.get`, `raw.get`。
+- `F L228-L263` `_extract_nested(raw: dict[str, Any]) -> dict[str, Any]`：提取 `nested` 对应的数据或结果。 调用：`ProgressSettings`, `parameters.get`, `progress.get`, `raw.get`, `required_steps.get`, `status_steps.get`。
+- `F L266-L283` `_read_config(config_path: Path) -> dict[str, Any]` [IO-R IO-W]：读取 `config` 对应的数据或结果。 调用：`SettingsError`。
+- `F L286-L292` `load_settings(config_path: Path | None=None) -> Settings`：加载 `settings` 对应的数据或结果。 调用：`Settings`, `SettingsError`, `_extract_nested`, `_read_config`, `_resolve_paths`。
 
 ## `src/before_traning/core/audio/matching/matching.py`
 
@@ -741,14 +742,14 @@ main.py -> core/pipeline.py:TRAINING_PIPELINE -> core stages
 - `F L50-L57` `_overlap_merge_window_ms(beatmap: ParsedStandardBeatmap, settings: Settings) -> int`：执行 `overlap merge window ms` 对应逻辑。
 - `F L60-L63` `_output_directory_name(plan: SegmentPlan) -> str`：执行 `output directory name` 对应逻辑。
 - `F L66-L71` `_segment_directory_name(index: int, plan: SegmentPlan) -> str`：执行 `segment directory name` 对应逻辑。 调用：`format_sequence_name`。
-- `F L74-L150` `_beatmap_payload(*, folder_name: str, source_osu_path: Path, segment_id: str, beatmap: ParsedStandardBeatmap, plan: SegmentPlan, settings: Settings, parser: VerifyOsuParser) -> dict[str, object]`：执行 `beatmap payload` 对应逻辑。 调用：`_overlap_merge_window_ms`, `parser.hit_object_to_dict`。
-- `F L153-L240` `_segment_row(*, segment_id: str, output_directory_name: str, directory_name: str, beatmap: ParsedStandardBeatmap, plan: SegmentPlan, settings: Settings) -> dict[str, object]`：执行 `segment row` 对应逻辑。 调用：`_overlap_merge_window_ms`。
-- `C L243-L488` `VideoSegmentationProcessor(FolderBatchProcessor)` [CLASS]：封装 `VideoSegmentationProcessor` 相关数据或行为。
-- `M L244-L289` `VideoSegmentationProcessor.__init__(self, settings: Settings, status_manager: ProcessStatusManager | None=None)`：初始化实例依赖、配置和运行状态。 调用：`BeatmapFolderStore`, `ProcessStatusManager`, `SegmentDatasetManifest`, `VerifyOsuParser`, `self.store.recover_atomic_outputs`, `self.walker.manifest.export_table`。
-- `M L291-L297` `VideoSegmentationProcessor.progress_message(self, index: int, total: int, folder_name: str) -> str`：生成当前批处理进度文本。
-- `M L299-L479` `VideoSegmentationProcessor.process_one(self, folder_name: str, overwrite: bool=False) -> BatchProcessResult`：处理 manifest 中的单个内部谱面文件夹。 调用：`_beatmap_payload`, `_output_directory_name`, `_segment_directory_name`, `_segment_row`, `failure_detail`, `format_sequence_name`。
-- `M L481-L488` `VideoSegmentationProcessor.handle_failure(self, folder_name: str, error: Exception) -> None`：处理单文件夹失败并同步失败状态。 调用：`exception_detail`, `self.status_manager.ensure_status_file`, `self.status_manager.mark_step_pending`, `self.store.folder_exists`。
-- `F L491-L498` `segment_videos(settings: Settings) -> bool`：执行 `segment videos` 对应逻辑。 调用：`VideoSegmentationProcessor`, `VideoSegmentationProcessor.run`。
+- `F L74-L154` `_beatmap_payload(*, folder_name: str, source_osu_path: Path, segment_id: str, beatmap: ParsedStandardBeatmap, plan: SegmentPlan, settings: Settings, parser: VerifyOsuParser) -> dict[str, object]`：执行 `beatmap payload` 对应逻辑。 调用：`_overlap_merge_window_ms`, `parser.hit_object_to_dict`。
+- `F L157-L248` `_segment_row(*, segment_id: str, output_directory_name: str, directory_name: str, beatmap: ParsedStandardBeatmap, plan: SegmentPlan, settings: Settings) -> dict[str, object]`：执行 `segment row` 对应逻辑。 调用：`_overlap_merge_window_ms`。
+- `C L251-L500` `VideoSegmentationProcessor(FolderBatchProcessor)` [CLASS]：封装 `VideoSegmentationProcessor` 相关数据或行为。
+- `M L252-L297` `VideoSegmentationProcessor.__init__(self, settings: Settings, status_manager: ProcessStatusManager | None=None)`：初始化实例依赖、配置和运行状态。 调用：`BeatmapFolderStore`, `ProcessStatusManager`, `SegmentDatasetManifest`, `VerifyOsuParser`, `self.store.recover_atomic_outputs`, `self.walker.manifest.export_table`。
+- `M L299-L305` `VideoSegmentationProcessor.progress_message(self, index: int, total: int, folder_name: str) -> str`：生成当前批处理进度文本。
+- `M L307-L491` `VideoSegmentationProcessor.process_one(self, folder_name: str, overwrite: bool=False) -> BatchProcessResult`：处理 manifest 中的单个内部谱面文件夹。 调用：`_beatmap_payload`, `_output_directory_name`, `_segment_directory_name`, `_segment_row`, `failure_detail`, `format_sequence_name`。
+- `M L493-L500` `VideoSegmentationProcessor.handle_failure(self, folder_name: str, error: Exception) -> None`：处理单文件夹失败并同步失败状态。 调用：`exception_detail`, `self.status_manager.ensure_status_file`, `self.status_manager.mark_step_pending`, `self.store.folder_exists`。
+- `F L503-L510` `segment_videos(settings: Settings) -> bool`：执行 `segment videos` 对应逻辑。 调用：`VideoSegmentationProcessor`, `VideoSegmentationProcessor.run`。
 
 ## `src/before_traning/main.py`
 
@@ -824,3 +825,13 @@ main.py -> core/pipeline.py:TRAINING_PIPELINE -> core stages
 - `F L72-L94` `normalize_status(raw_status: dict[str, Any] | None, process_steps: Iterable[str]) -> dict[str, Any]`：规范化 `status` 对应的数据或结果。 调用：`default_status`, `raw_status.get`, `raw_step.get`, `raw_steps.get`。
 - `F L97-L100` `encode_detail(detail: Any) -> str | None`：执行 `encode detail` 对应逻辑。
 - `F L103-L109` `decode_detail(detail_json: str | None) -> Any`：执行 `decode detail` 对应逻辑。
+
+## `src/before_traning/tests/test_segmentation_planner.py`
+
+职责：Python 模块；具体职责见下方符号及调用。
+工程依赖：`before_traning.Lib.beatmap.hit_objects`, `before_traning.Lib.tools.ffmpeg`, `before_traning.Lib.video.segmentation.planner`
+
+- `C L11-L50` `SegmentPlannerTests(unittest.TestCase)` [CLASS]：封装 `SegmentPlannerTests` 相关数据或行为。
+- `M L12-L30` `SegmentPlannerTests._plans(self)`：执行 `plans` 对应逻辑。 调用：`Circle`, `build_segment_plans`。
+- `M L32-L39` `SegmentPlannerTests.test_pre_context_jitter_is_stable_and_varied(self) -> None`：执行 `test pre context jitter is stable and varied` 对应逻辑。 调用：`self._plans`, `self.assertEqual`, `self.assertGreater`, `self.assertTrue`。
+- `M L41-L50` `SegmentPlannerTests.test_segment_video_strips_audio_by_default(self) -> None`：执行 `test segment video strips audio by default` 对应逻辑。 调用：`build_segment_video_args`, `self.assertIn`, `self.assertNotIn`。

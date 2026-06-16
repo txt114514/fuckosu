@@ -2,7 +2,7 @@
 
 > 自动生成文件，请勿手工修改。运行 `python project_index/build_index.py` 重建。
 
-训练模块的低 token 导航。当前优先完成 data_input，后续阶段沿同一注册表扩展。
+面向 Codex 的低 token 工程导航；先按阶段定位，再读取命中的源码。
 
 ## 调用分层
 
@@ -13,59 +13,22 @@ main.py -> core/pipeline.py:TRAINING_STAGES
         -> state (run / experiment / checkpoint metadata)
 ```
 
-## 阶段路线
+## 六阶段入口
 
-| 顺序 | 阶段 | 当前状态 |
+| key | Core 入口 | 当前状态 |
 |---|---|---|
-| 1 | `data_input` | 已实现并登记 |
-| 2 | `spatial` | 目录边界已建立 |
-| 3 | `candidate_cache` | 目录边界已建立 |
-| 4 | `temporal` | 目录边界已建立 |
-| 5 | `evaluation` | 目录边界已建立 |
-| 6 | `export` | 目录边界已建立 |
-
-## data_input 契约
-
-- 输入根：`training_package/video_segments`。
-- 每个样本目录必须同时包含 `video.mp4` 与 `beatmap.json`。
-- 图像保持原分辨率 RGB CHW；默认归一化到 `[0, 1]`。
-- 标签时间以片段起点为零；可见对象窗口使用谱面 AR preempt 和可配置尾部时间。
-- patch 由 Tensor 视图串行产生，不提前复制全部 patch。
-- osu/video 坐标转换使用 `src/package/coordinates.py` 的稳定 API。
-- slider 跨 patch 使用全局 path/head/orientation 稠密图融合。
-- 首版不支持 slider 路径交叉或接触分叉；此类样本在 target/data check 阶段过滤。
-- 空间主扫描固定 stride 2；stride 1 只用于少量候选的局部精修。
-- refiner stride 由训练前显存 dry-run 选择并在 trial 内冻结，主干不使用 stride 1。
-- patch 完成后立即 CPU offload 精简输出，不跨 patch 保留深层特征。
-- 空间级联为全图扫描、候选精修、条件歧义复查三层。
-- 参数搜索采用 TPE/随机生成、ASHA 剪枝、课程晋级和难例挖掘。
-- 同一 trial 晋级继承 checkpoint；新参数组合从基础阶段开始；推理参数不触发重训。
-- 可视化默认关闭；渲染与 ffplay 显示独立于训练，失败只返回一次告警后静默禁用。
-- 标注图集选择批次最高分 trial，对六个子项目的 passed/failed 结果各随机保存最多 10 帧。
-- 可视化默认写入 `traning_example`，每次输出具有持久递增次数和 UTC 时间。
-- 单点与 slider 使用 `point-slider-v2`；slider 以 1.5x 双向膨胀走廊计算路径覆盖。
-- trial 聚合 score 仍由外部评估结果提供；搜索器和晋级执行器尚未实现。
-
-## 改动影响面
-
-| 改动 | 至少检查 |
-|---|---|
-| 数据路径/筛选 | Settings, config, discovery, preflight |
-| 标签 schema | annotation, dataset, collate, spatial target encoder |
-| 帧采样 | sampling, dataset, temporal/action label semantics |
-| patch 规则 | Settings, tiling, spatial model input |
-| slider 路径融合 | target encoder, global canvas, skeleton trace, candidate cache |
-| 空间级联/offload | spatial model, refiner, review policy, CPU accumulator |
-| 搜索/课程协议 | experiment schema, checkpoint lineage, evaluator, sampler |
-| 可视化 | visualization settings, gallery schema, renderer, optional service, Docker X11 |
-| 批次结构 | dataset, collate, trainer consumers |
-| 新训练阶段 | core/pipeline.py, core stage, Lib APIs, state schema |
+| `data_input` | `core/data_input/data_input.py` | 已实现并登记 |
+| `spatial` | `core/spatial` | 目录边界已建立 |
+| `candidate_cache` | `core/candidate_cache` | 目录边界已建立 |
+| `temporal` | `core/temporal` | 目录边界已建立 |
+| `evaluation` | `core/evaluation` | 目录边界已建立 |
+| `export` | `core/export` | 目录边界已建立 |
 
 快速查询：`python project_index/build_index.py --lookup 符号名`。
 
 ## 符号索引
 
-覆盖 `51` 个 Python 文件、`113` 个命名函数/方法、`45` 个类。匿名 lambda 不单独列出。
+覆盖 `57` 个 Python 文件、`159` 个命名函数/方法、`59` 个类。匿名 lambda 不单独列出。
 
 图例：`F` 模块函数，`M` 方法，`N` 嵌套函数，`C` 类；`IO-R/IO-W` 文件读写，`DB` 数据库，`PROCESS` 外部进程。
 
@@ -106,7 +69,7 @@ main.py -> core/pipeline.py:TRAINING_STAGES
 职责：发现 video.mp4 与 beatmap.json 配对并构建稳定片段记录。
 工程依赖：`traning.Lib.data.annotation`, `traning.Lib.data.models`
 
-- `F L9-L62` `discover_segments(dataset_root: Path, *, dimensions: tuple[str, ...]=(), categories: tuple[str, ...]=(), max_segments: int | None=None) -> DiscoveryResult`：执行 `discover segments` 对应逻辑。 调用：`DatasetIssue`, `DiscoveryResult`, `SegmentRecord`, `load_annotation`。
+- `F L9-L71` `discover_segments(dataset_root: Path, *, dimensions: tuple[str, ...]=(), categories: tuple[str, ...]=(), include_items: tuple[str, ...]=(), exclude_items: tuple[str, ...]=(), max_segments: int | None=None) -> DiscoveryResult`：执行 `discover segments` 对应逻辑。 调用：`DatasetIssue`, `DiscoveryResult`, `SegmentRecord`, `load_annotation`。
 
 ## `src/traning/Lib/data/models.py`
 
@@ -172,6 +135,37 @@ main.py -> core/pipeline.py:TRAINING_STAGES
 - `F L300-L369` `score_slider_path(reference_path: PathPoints, predicted_path: PathPoints, *, circle_radius: float, spec: ScoreSpec=ScoreSpec()) -> PathScore`：执行 `score slider path` 对应逻辑。 调用：`PathScore`, `_densify_path`, `_directed_path_statistics`。
 - `F L372-L420` `score_slider(reference_head_xy: Point | None, predicted_head_xy: Point | None, reference_path: PathPoints, predicted_path: PathPoints, *, circle_radius: float, reference_start_ms: float, predicted_start_ms: float, spec: ScoreSpec=ScoreSpec()) -> SliderScore`：执行 `score slider` 对应逻辑。 调用：`SliderScore`, `combine_coefficients`, `score_point`, `score_slider_path`。
 
+## `src/traning/Lib/metrics/sequence.py`
+
+职责：按点击时间模拟目标一次性命中、重叠目标递进、最小点击间隔限制和错误归因。
+工程依赖：`traning.Lib.metrics.scoring`
+
+- `C L35-L44` `SequenceScoreSpec` [CLASS]：封装 `SequenceScoreSpec` 相关数据或行为。
+- `M L39-L44` `SequenceScoreSpec.__post_init__(self) -> None`：完成 dataclass 初始化后的派生字段设置。
+- `C L48-L68` `TargetObject` [CLASS]：封装 `TargetObject` 相关数据或行为。
+- `M L58-L68` `TargetObject.__post_init__(self) -> None`：完成 dataclass 初始化后的派生字段设置。
+- `C L72-L80` `PredictedClick` [CLASS]：封装 `PredictedClick` 相关数据或行为。
+- `M L78-L80` `PredictedClick.__post_init__(self) -> None`：完成 dataclass 初始化后的派生字段设置。
+- `C L84-L89` `TargetResolution` [CLASS]：封装 `TargetResolution` 相关数据或行为。
+- `C L93-L107` `ClickEvaluation` [CLASS]：封装 `ClickEvaluation` 相关数据或行为。
+- `M L106-L107` `ClickEvaluation.frequency_limited(self) -> bool` [PROPERTY]：执行 `frequency limited` 对应逻辑。
+- `C L111-L126` `SequenceScore` [CLASS]：封装 `SequenceScore` 相关数据或行为。
+- `M L117-L118` `SequenceScore.hit_count(self) -> int` [PROPERTY]：执行 `hit count` 对应逻辑。
+- `M L121-L122` `SequenceScore.miss_count(self) -> int` [PROPERTY]：执行 `miss count` 对应逻辑。
+- `M L125-L126` `SequenceScore.frequency_limited_count(self) -> int` [PROPERTY]：执行 `frequency limited count` 对应逻辑。
+- `F L129-L135` `_target_sort_key(target: TargetObject) -> tuple[float, int, str]`：执行 `target sort key` 对应逻辑。
+- `F L138-L165` `_score_target(target: TargetObject, click: PredictedClick, *, circle_radius: float, spec: ScoreSpec) -> PointScore | SliderScore`：执行 `score target` 对应逻辑。 调用：`score_point`, `score_slider`。
+- `F L168-L169` `_score_value(score: PointScore | SliderScore) -> float`：执行 `score value` 对应逻辑。
+- `F L172-L178` `_spatial_passed(score: PointScore | SliderScore, spec: ScoreSpec) -> bool`：执行 `spatial passed` 对应逻辑。
+- `F L181-L183` `_temporal_passed(score: PointScore | SliderScore, spec: ScoreSpec) -> bool`：执行 `temporal passed` 对应逻辑。
+- `F L186-L189` `_spatial_error(score: PointScore | SliderScore) -> float`：执行 `spatial error` 对应逻辑。
+- `F L192-L196` `_temporal_error_ms(target: TargetObject, click: PredictedClick) -> float`：执行 `temporal error ms` 对应逻辑。
+- `F L199-L206` `_spatial_excess(score: PointScore | SliderScore, spec: ScoreSpec) -> float`：执行 `spatial excess` 对应逻辑。
+- `F L209-L216` `_temporal_excess(score: PointScore | SliderScore, spec: ScoreSpec) -> float`：执行 `temporal excess` 对应逻辑。
+- `F L219-L256` `_error_attribution(target: TargetObject, click: PredictedClick, score: PointScore | SliderScore, *, spec: ScoreSpec) -> tuple[ErrorDomain, tuple[ErrorTag, ...], float, float]`：执行 `error attribution` 对应逻辑。 调用：`_spatial_error`, `_spatial_excess`, `_spatial_passed`, `_temporal_error_ms`, `_temporal_excess`, `_temporal_passed`。
+- `F L259-L280` `_best_scored_target(targets: tuple[TargetObject, ...], click: PredictedClick, *, circle_radius: float, spec: ScoreSpec) -> tuple[TargetObject, PointScore | SliderScore] | None`：执行 `best scored target` 对应逻辑。 调用：`_score_target`, `_score_value`。
+- `F L283-L441` `score_click_sequence(targets: tuple[TargetObject, ...], clicks: tuple[PredictedClick, ...], *, circle_radius: float, spec: SequenceScoreSpec=SequenceScoreSpec()) -> SequenceScore`：执行 `score click sequence` 对应逻辑。 调用：`ClickEvaluation`, `SequenceScore`, `TargetResolution`, `_best_scored_target`, `_error_attribution`, `_score_target`。
+
 ## `src/traning/Lib/visualization/display.py`
 
 职责：通过独立 ffplay 子进程把标注图片显示到主机 X11。
@@ -232,56 +226,77 @@ main.py -> core/pipeline.py:TRAINING_STAGES
 
 ## `src/traning/conf/settings.py`
 
-职责：训练配置模型与 YAML 加载；解析数据集路径并校验采样和分块参数。
+职责：训练配置模型与 YAML 加载；解析数据集路径、item 划分、点击频率上限并校验采样和分块参数。
 
-- `C L19-L20` `SettingsError(Exception)` [CLASS]：封装 `SettingsError` 相关数据或行为。
-- `C L23-L25` `RuntimeSettings(BaseModel)` [CLASS]：封装 `RuntimeSettings` 相关数据或行为。
-- `C L28-L46` `LoaderSettings(BaseModel)` [CLASS]：封装 `LoaderSettings` 相关数据或行为。
-- `M L36-L39` `LoaderSettings._positive_batch_size(cls, value: int) -> int` [VALIDATOR]：执行 `positive batch size` 对应逻辑。
-- `M L43-L46` `LoaderSettings._nonnegative_workers(cls, value: int) -> int` [VALIDATOR]：执行 `nonnegative workers` 对应逻辑。
-- `C L49-L64` `VisualizationSettings(BaseModel)` [CLASS]：封装 `VisualizationSettings` 相关数据或行为。
-- `M L61-L64` `VisualizationSettings._positive_interval(cls, value: int) -> int` [VALIDATOR]：执行 `positive interval` 对应逻辑。
-- `C L67-L115` `DataInputSettings(BaseModel)` [CLASS]：封装 `DataInputSettings` 相关数据或行为。
-- `M L85-L88` `DataInputSettings._positive_fps(cls, value: float) -> float` [VALIDATOR]：执行 `positive fps` 对应逻辑。
-- `M L92-L95` `DataInputSettings._positive_integer(cls, value: int) -> int` [VALIDATOR]：执行 `positive integer` 对应逻辑。
-- `M L99-L102` `DataInputSettings._optional_positive_integer(cls, value: int | None) -> int | None` [VALIDATOR]：执行 `optional positive integer` 对应逻辑。
-- `M L106-L109` `DataInputSettings._nonnegative_visibility(cls, value: float) -> float` [VALIDATOR]：执行 `nonnegative visibility` 对应逻辑。
-- `M L111-L115` `DataInputSettings.validate_tiling(self) -> None`：校验 `tiling` 对应的数据或结果。
-- `C L118-L147` `Settings(BaseSettings)` [CLASS]：封装 `Settings` 相关数据或行为。
-- `M L134-L147` `Settings.settings_customise_sources(cls, settings_cls: type[BaseSettings], init_settings: PydanticBaseSettingsSource, env_settings: PydanticBaseSettingsSource, dotenv_settings: PydanticBaseSettingsSource, file_secret_settings: PydanticBaseSettingsSource) -> tuple[PydanticBaseSettingsSource, ...]`：执行 `settings customise sources` 对应逻辑。
-- `F L150-L159` `_read_config(config_path: Path) -> dict[str, Any]` [IO-R]：读取 `config` 对应的数据或结果。 调用：`SettingsError`。
-- `F L162-L180` `_resolve_paths(raw: dict[str, Any], base_dir: Path) -> dict[str, Any]`：解析并定位 `paths` 对应的数据或结果。
-- `F L183-L191` `load_settings(config_path: Path | None=None) -> Settings`：加载 `settings` 对应的数据或结果。 调用：`Settings`, `SettingsError`, `_read_config`, `_resolve_paths`, `settings.data_input.validate_tiling`。
+- `C L26-L27` `SettingsError(Exception)` [CLASS]：封装 `SettingsError` 相关数据或行为。
+- `C L30-L32` `RuntimeSettings(BaseModel)` [CLASS]：封装 `RuntimeSettings` 相关数据或行为。
+- `C L35-L53` `LoaderSettings(BaseModel)` [CLASS]：封装 `LoaderSettings` 相关数据或行为。
+- `M L43-L46` `LoaderSettings._positive_batch_size(cls, value: int) -> int` [VALIDATOR]：执行 `positive batch size` 对应逻辑。
+- `M L50-L53` `LoaderSettings._nonnegative_workers(cls, value: int) -> int` [VALIDATOR]：执行 `nonnegative workers` 对应逻辑。
+- `C L56-L64` `EvaluationSettings(BaseModel)` [CLASS]：封装 `EvaluationSettings` 相关数据或行为。
+- `M L61-L64` `EvaluationSettings._nonnegative_interval(cls, value: float) -> float` [VALIDATOR]：执行 `nonnegative interval` 对应逻辑。
+- `C L67-L82` `VisualizationSettings(BaseModel)` [CLASS]：封装 `VisualizationSettings` 相关数据或行为。
+- `M L79-L82` `VisualizationSettings._positive_interval(cls, value: int) -> int` [VALIDATOR]：执行 `positive interval` 对应逻辑。
+- `C L85-L162` `DataInputSettings(BaseModel)` [CLASS]：封装 `DataInputSettings` 相关数据或行为。
+- `M L107-L110` `DataInputSettings._positive_fps(cls, value: float) -> float` [VALIDATOR]：执行 `positive fps` 对应逻辑。
+- `M L114-L117` `DataInputSettings._positive_integer(cls, value: int) -> int` [VALIDATOR]：执行 `positive integer` 对应逻辑。
+- `M L121-L124` `DataInputSettings._optional_positive_integer(cls, value: int | None) -> int | None` [VALIDATOR]：执行 `optional positive integer` 对应逻辑。
+- `M L128-L131` `DataInputSettings._nonnegative_visibility(cls, value: float) -> float` [VALIDATOR]：执行 `nonnegative visibility` 对应逻辑。
+- `M L142-L148` `DataInputSettings._unique_nonempty_strings(cls, value: tuple[str, ...]) -> tuple[str, ...]` [VALIDATOR]：执行 `unique nonempty strings` 对应逻辑。
+- `M L151-L156` `DataInputSettings.validate_item_splits(self) -> DataInputSettings` [VALIDATOR]：校验 `item splits` 对应的数据或结果。
+- `M L158-L162` `DataInputSettings.validate_tiling(self) -> None`：校验 `tiling` 对应的数据或结果。
+- `C L165-L195` `Settings(BaseSettings)` [CLASS]：封装 `Settings` 相关数据或行为。
+- `M L182-L195` `Settings.settings_customise_sources(cls, settings_cls: type[BaseSettings], init_settings: PydanticBaseSettingsSource, env_settings: PydanticBaseSettingsSource, dotenv_settings: PydanticBaseSettingsSource, file_secret_settings: PydanticBaseSettingsSource) -> tuple[PydanticBaseSettingsSource, ...]`：执行 `settings customise sources` 对应逻辑。
+- `F L198-L207` `_read_config(config_path: Path) -> dict[str, Any]` [IO-R]：读取 `config` 对应的数据或结果。 调用：`SettingsError`。
+- `F L210-L228` `_resolve_paths(raw: dict[str, Any], base_dir: Path) -> dict[str, Any]`：解析并定位 `paths` 对应的数据或结果。
+- `F L231-L239` `load_settings(config_path: Path | None=None) -> Settings`：加载 `settings` 对应的数据或结果。 调用：`Settings`, `SettingsError`, `_read_config`, `_resolve_paths`, `settings.data_input.validate_tiling`。
 
 ## `src/traning/core/data_input/data_input.py`
 
 职责：数据输入模块公开门面；提供检查、Dataset 和 DataLoader。
 工程依赖：`traning.conf`, `traning.core.data_input.loader`, `traning.core.data_input.preflight`
 
-- `C L10-L21` `DataInputModule` [CLASS]：封装 `DataInputModule` 相关数据或行为。
+- `C L10-L26` `DataInputModule` [CLASS]：封装 `DataInputModule` 相关数据或行为。
 - `M L11-L12` `DataInputModule.__init__(self, settings: Settings)`：初始化实例依赖、配置和运行状态。
-- `M L14-L15` `DataInputModule.inspect(self) -> DataInputReport`：执行 `inspect` 对应逻辑。 调用：`inspect_data_input`。
-- `M L17-L18` `DataInputModule.dataset(self)`：执行 `dataset` 对应逻辑。 调用：`build_dataset`。
-- `M L20-L21` `DataInputModule.dataloader(self) -> DataLoader`：执行 `dataloader` 对应逻辑。 调用：`build_dataloader`。
-- `F L24-L25` `check_data_input(settings: Settings | None=None) -> DataInputReport`：执行 `check data input` 对应逻辑。 调用：`DataInputModule`, `DataInputModule.inspect`, `load_settings`。
+- `M L14-L15` `DataInputModule.inspect(self, *, split: DataSplit='all') -> DataInputReport`：执行 `inspect` 对应逻辑。 调用：`inspect_data_input`。
+- `M L17-L18` `DataInputModule.dataset(self, *, split: DataSplit='train')`：执行 `dataset` 对应逻辑。 调用：`build_dataset`。
+- `M L20-L26` `DataInputModule.dataloader(self, *, split: DataSplit='train', shuffle: bool | None=None) -> DataLoader`：执行 `dataloader` 对应逻辑。 调用：`build_dataloader`。
+- `F L29-L34` `check_data_input(settings: Settings | None=None, *, split: DataSplit='all') -> DataInputReport`：执行 `check data input` 对应逻辑。 调用：`DataInputModule`, `DataInputModule.inspect`, `load_settings`。
 
 ## `src/traning/core/data_input/loader.py`
 
 职责：把配置映射为 SegmentFrameDataset 与 PyTorch DataLoader。
 工程依赖：`traning.Lib.data`, `traning.conf`, `traning.core.data_input.preflight`
 
-- `F L10-L28` `build_dataset(settings: Settings) -> SegmentFrameDataset`：构建并返回 `dataset` 对应的数据或结果。 调用：`SegmentFrameDataset`, `discover_data_input`。
-- `F L31-L40` `build_dataloader(settings: Settings) -> DataLoader`：构建并返回 `dataloader` 对应的数据或结果。 调用：`build_dataset`。
+- `F L10-L32` `build_dataset(settings: Settings, *, split: DataSplit='train') -> SegmentFrameDataset`：构建并返回 `dataset` 对应的数据或结果。 调用：`SegmentFrameDataset`, `discover_data_input`。
+- `F L35-L49` `build_dataloader(settings: Settings, *, split: DataSplit='train', shuffle: bool | None=None) -> DataLoader`：构建并返回 `dataloader` 对应的数据或结果。 调用：`build_dataset`。
 
 ## `src/traning/core/data_input/preflight.py`
 
 职责：扫描训练片段并生成数量、类别、维度和问题报告。
-工程依赖：`traning.Lib.data`, `traning.conf`
+工程依赖：`traning.Lib.data`, `traning.Lib.data.models`, `traning.conf`
 
-- `C L12-L22` `DataInputReport` [CLASS]：封装 `DataInputReport` 相关数据或行为。
-- `M L21-L22` `DataInputReport.ok(self) -> bool` [PROPERTY]：执行 `ok` 对应逻辑。
-- `F L25-L32` `discover_data_input(settings: Settings) -> DiscoveryResult`：执行 `discover data input` 对应逻辑。 调用：`discover_segments`。
-- `F L35-L58` `inspect_data_input(settings: Settings) -> DataInputReport`：执行 `inspect data input` 对应逻辑。 调用：`DataInputReport`, `discover_data_input`。
+- `C L13-L25` `DataInputReport` [CLASS]：封装 `DataInputReport` 相关数据或行为。
+- `M L24-L25` `DataInputReport.ok(self) -> bool` [PROPERTY]：执行 `ok` 对应逻辑。
+- `F L28-L34` `_combine_item_filters(base_items: tuple[str, ...], split_items: tuple[str, ...]) -> tuple[str, ...]`：执行 `combine item filters` 对应逻辑。
+- `F L37-L42` `_split_items(config, split: DataSplit) -> tuple[str, ...]`：执行 `split items` 对应逻辑。
+- `F L45-L69` `discover_data_input(settings: Settings, *, split: DataSplit='all') -> DiscoveryResult`：执行 `discover data input` 对应逻辑。 调用：`DatasetIssue`, `DiscoveryResult`, `_combine_item_filters`, `_split_items`, `discover_segments`。
+- `F L72-L101` `inspect_data_input(settings: Settings, *, split: DataSplit='all') -> DataInputReport`：执行 `inspect data input` 对应逻辑。 调用：`DataInputReport`, `discover_data_input`。
+
+## `src/traning/core/env_check.py`
+
+职责：收集 Python、PyTorch/CUDA、GPU、FFmpeg 和关键依赖状态，供 CLI 环境检查使用。
+
+- `C L13-L17` `PackageSpec` [CLASS]：封装 `PackageSpec` 相关数据或行为。
+- `C L21-L24` `PackageCheck` [CLASS]：封装 `PackageCheck` 相关数据或行为。
+- `C L28-L40` `TorchCheck` [CLASS]：封装 `TorchCheck` 相关数据或行为。
+- `C L44-L68` `EnvironmentReport` [CLASS]：封装 `EnvironmentReport` 相关数据或行为。
+- `M L54-L59` `EnvironmentReport.missing_required_packages(self) -> tuple[str, ...]` [PROPERTY]：执行 `missing required packages` 对应逻辑。
+- `M L61-L68` `EnvironmentReport.ready(self, *, require_cuda: bool=False) -> bool`：执行 `ready` 对应逻辑。
+- `F L106-L112` `_metadata_version(distributions: Iterable[str]) -> str | None`：执行 `metadata version` 对应逻辑。
+- `F L115-L125` `check_package(spec: PackageSpec) -> PackageCheck`：执行 `check package` 对应逻辑。 调用：`PackageCheck`, `_metadata_version`。
+- `F L128-L204` `collect_torch_check() -> TorchCheck`：执行 `collect torch check` 对应逻辑。 调用：`TorchCheck`, `_metadata_version`。
+- `F L207-L219` `collect_environment_report() -> EnvironmentReport` [IO-W]：执行 `collect environment report` 对应逻辑。 调用：`EnvironmentReport`, `check_package`, `collect_torch_check`。
 
 ## `src/traning/core/pipeline.py`
 
@@ -315,14 +330,18 @@ main.py -> core/pipeline.py:TRAINING_STAGES
 ## `src/traning/main.py`
 
 职责：Typer CLI；执行数据检查、样本预览和训练阶段注册表。
-工程依赖：`traning.Lib.data`, `traning.conf`, `traning.core.data_input`, `traning.core.pipeline`, `traning.core.visualization`, `traning.state`
+工程依赖：`traning.Lib.data`, `traning.conf`, `traning.core.data_input`, `traning.core.env_check`, `traning.core.pipeline`, `traning.core.visualization`, `traning.state`
 
-- `F L28-L39` `_render_report(report) -> None`：执行 `render report` 对应逻辑。
-- `F L43-L50` `data_check(config: Path | None=typer.Option(None, '--config')) -> None` [CLI]：执行 `data check` 对应逻辑。 调用：`_render_report`, `inspect_data_input`, `load_settings`。
-- `F L54-L85` `data_preview(index: int=typer.Option(0, '--index', min=0), config: Path | None=typer.Option(None, '--config')) -> None` [CLI]：执行 `data preview` 对应逻辑。 调用：`build_dataset`, `build_patch_windows`, `load_settings`。
-- `F L89-L93` `run(config: Path | None=typer.Option(None, '--config')) -> None` [CLI]：执行该处理器的完整工作流。 调用：`_render_report`, `load_settings`, `run_pipeline`。
-- `F L97-L116` `visualize_label(segment_index: int=typer.Option(0, '--segment-index', min=0), object_index: int=typer.Option(0, '--object-index', min=0), output: Path | None=typer.Option(None, '--output'), show: bool=typer.Option(False, '--show/--no-show'), config: Path | None=typer.Option(None, '--config')) -> None` [CLI]：执行 `visualize label` 对应逻辑。 调用：`load_settings`, `visualize_click_label`。
-- `F L120-L154` `save_gallery(results: Path=typer.Option(..., '--results', exists=True, file_okay=True, dir_okay=False, readable=True), output_root: Path | None=typer.Option(None, '--output-root'), samples_per_group: int | None=typer.Option(None, '--samples-per-group', min=1), config: Path | None=typer.Option(None, '--config')) -> None` [CLI]：执行 `save gallery` 对应逻辑。 调用：`load_batch_gallery_request`, `load_settings`, `save_annotation_gallery`。
+- `F L29-L41` `_render_report(report) -> None`：执行 `render report` 对应逻辑。
+- `F L44-L47` `_format_bool(value: bool | None) -> str`：执行 `format bool` 对应逻辑。
+- `F L50-L53` `_format_gib(value: float | None) -> str`：执行 `format gib` 对应逻辑。
+- `F L56-L91` `_render_env_report(report) -> None`：执行 `render env report` 对应逻辑。 调用：`_format_bool`, `_format_gib`。
+- `F L95-L103` `data_check(config: Path | None=typer.Option(None, '--config'), split: DataSplit=typer.Option('all', '--split')) -> None` [CLI]：执行 `data check` 对应逻辑。 调用：`_render_report`, `inspect_data_input`, `load_settings`。
+- `F L107-L126` `env_check(strict: bool=typer.Option(False, '--strict/--no-strict', help='Exit non-zero when required runtime dependencies are missing.'), require_cuda: bool=typer.Option(False, '--require-cuda/--no-require-cuda', help='Treat CUDA unavailability as a failure in strict mode.')) -> None` [CLI]：执行 `env check` 对应逻辑。 调用：`_render_env_report`, `collect_environment_report`, `report.ready`。
+- `F L130-L162` `data_preview(index: int=typer.Option(0, '--index', min=0), split: DataSplit=typer.Option('train', '--split'), config: Path | None=typer.Option(None, '--config')) -> None` [CLI]：执行 `data preview` 对应逻辑。 调用：`build_dataset`, `build_patch_windows`, `load_settings`。
+- `F L166-L170` `run(config: Path | None=typer.Option(None, '--config')) -> None` [CLI]：执行该处理器的完整工作流。 调用：`_render_report`, `load_settings`, `run_pipeline`。
+- `F L174-L193` `visualize_label(segment_index: int=typer.Option(0, '--segment-index', min=0), object_index: int=typer.Option(0, '--object-index', min=0), output: Path | None=typer.Option(None, '--output'), show: bool=typer.Option(False, '--show/--no-show'), config: Path | None=typer.Option(None, '--config')) -> None` [CLI]：执行 `visualize label` 对应逻辑。 调用：`load_settings`, `visualize_click_label`。
+- `F L197-L231` `save_gallery(results: Path=typer.Option(..., '--results', exists=True, file_okay=True, dir_okay=False, readable=True), output_root: Path | None=typer.Option(None, '--output-root'), samples_per_group: int | None=typer.Option(None, '--samples-per-group', min=1), config: Path | None=typer.Option(None, '--config')) -> None` [CLI]：执行 `save gallery` 对应逻辑。 调用：`load_batch_gallery_request`, `load_settings`, `save_annotation_gallery`。
 
 ## `src/traning/state/checkpoint_schema.py`
 
@@ -347,18 +366,19 @@ main.py -> core/pipeline.py:TRAINING_STAGES
 
 ## `src/traning/state/gallery_schema.py`
 
-职责：批次 trial 分数、稳定帧引用和最佳参数图集输入契约。
+职责：批次 trial 分数、稳定帧引用、错误归因和最佳参数图集输入契约。
 工程依赖：`traning.state.experiment_schema`
 
-- `C L22-L35` `FrameEvaluation(BaseModel)` [CLASS]：封装 `FrameEvaluation` 相关数据或行为。
-- `M L32-L35` `FrameEvaluation._nonnegative_frame_index(cls, value: int) -> int` [VALIDATOR]：执行 `nonnegative frame index` 对应逻辑。
-- `C L38-L51` `TrialGalleryEvaluation(BaseModel)` [CLASS]：封装 `TrialGalleryEvaluation` 相关数据或行为。
-- `M L48-L51` `TrialGalleryEvaluation._finite_score(cls, value: float) -> float` [VALIDATOR]：执行 `finite score` 对应逻辑。
-- `C L54-L80` `BatchGalleryRequest(BaseModel)` [CLASS]：封装 `BatchGalleryRequest` 相关数据或行为。
-- `M L61-L67` `BatchGalleryRequest._require_trials(cls, value: tuple[TrialGalleryEvaluation, ...]) -> tuple[TrialGalleryEvaluation, ...]` [VALIDATOR]：执行 `require trials` 对应逻辑。
-- `M L70-L76` `BatchGalleryRequest._require_one_score_version(self) -> BatchGalleryRequest` [VALIDATOR]：执行 `require one score version` 对应逻辑。
-- `M L79-L80` `BatchGalleryRequest.best_trial(self) -> TrialGalleryEvaluation` [PROPERTY]：执行 `best trial` 对应逻辑。
-- `F L83-L88` `load_batch_gallery_request(path: Path) -> BatchGalleryRequest` [IO-R]：加载 `batch gallery request` 对应的数据或结果。
+- `C L24-L49` `FrameEvaluation(BaseModel)` [CLASS]：封装 `FrameEvaluation` 相关数据或行为。
+- `M L39-L42` `FrameEvaluation._nonnegative_frame_index(cls, value: int) -> int` [VALIDATOR]：执行 `nonnegative frame index` 对应逻辑。
+- `M L46-L49` `FrameEvaluation._finite_optional_metric(cls, value: float | None) -> float | None` [VALIDATOR]：执行 `finite optional metric` 对应逻辑。
+- `C L52-L65` `TrialGalleryEvaluation(BaseModel)` [CLASS]：封装 `TrialGalleryEvaluation` 相关数据或行为。
+- `M L62-L65` `TrialGalleryEvaluation._finite_score(cls, value: float) -> float` [VALIDATOR]：执行 `finite score` 对应逻辑。
+- `C L68-L94` `BatchGalleryRequest(BaseModel)` [CLASS]：封装 `BatchGalleryRequest` 相关数据或行为。
+- `M L75-L81` `BatchGalleryRequest._require_trials(cls, value: tuple[TrialGalleryEvaluation, ...]) -> tuple[TrialGalleryEvaluation, ...]` [VALIDATOR]：执行 `require trials` 对应逻辑。
+- `M L84-L90` `BatchGalleryRequest._require_one_score_version(self) -> BatchGalleryRequest` [VALIDATOR]：执行 `require one score version` 对应逻辑。
+- `M L93-L94` `BatchGalleryRequest.best_trial(self) -> TrialGalleryEvaluation` [PROPERTY]：执行 `best trial` 对应逻辑。
+- `F L97-L102` `load_batch_gallery_request(path: Path) -> BatchGalleryRequest` [IO-R]：加载 `batch gallery request` 对应的数据或结果。
 
 ## `src/traning/state/run_state.py`
 
@@ -367,13 +387,33 @@ main.py -> core/pipeline.py:TRAINING_STAGES
 
 - `C L9-L16` `RunState` [CLASS]：封装 `RunState` 相关数据或行为。
 
+## `src/traning/tests/test_discovery.py`
+
+职责：Python 模块；具体职责见下方符号及调用。
+工程依赖：`traning.Lib.data`
+
+- `F L11-L36` `_write_segment(root: Path, item_name: str, segment_id: str) -> None` [IO-W]：写入 `segment` 对应的数据或结果。
+- `C L39-L60` `DiscoverySplitTests(unittest.TestCase)` [CLASS]：封装 `DiscoverySplitTests` 相关数据或行为。
+- `M L40-L49` `DiscoverySplitTests.test_include_items_filters_records_before_loading(self) -> None`：执行 `test include items filters records before loading` 对应逻辑。 调用：`_write_segment`, `discover_segments`, `self.assertEqual`。
+- `M L51-L60` `DiscoverySplitTests.test_exclude_items_removes_records(self) -> None`：执行 `test exclude items removes records` 对应逻辑。 调用：`_write_segment`, `discover_segments`, `self.assertEqual`。
+
+## `src/traning/tests/test_env_check.py`
+
+职责：Python 模块；具体职责见下方符号及调用。
+工程依赖：`traning.core.env_check`
+
+- `C L11-L24` `EnvironmentCheckTests(unittest.TestCase)` [CLASS]：封装 `EnvironmentCheckTests` 相关数据或行为。
+- `M L12-L17` `EnvironmentCheckTests.test_collect_environment_report_is_non_destructive(self) -> None`：执行 `test collect environment report is non destructive` 对应逻辑。 调用：`collect_environment_report`, `self.assertIsNotNone`, `self.assertTrue`。
+- `M L19-L24` `EnvironmentCheckTests.test_required_package_specs_are_reported(self) -> None`：执行 `test required package specs are reported` 对应逻辑。 调用：`collect_environment_report`, `self.assertTrue`。
+
 ## `src/traning/tests/test_gallery_schema.py`
 
 职责：Python 模块；具体职责见下方符号及调用。
 工程依赖：`traning.state`
 
-- `C L10-L31` `BatchGalleryRequestTests(unittest.TestCase)` [CLASS]：封装 `BatchGalleryRequestTests` 相关数据或行为。
-- `M L11-L31` `BatchGalleryRequestTests.test_trials_must_share_score_version(self) -> None`：执行 `test trials must share score version` 对应逻辑。 调用：`self.assertRaises`。
+- `C L10-L54` `BatchGalleryRequestTests(unittest.TestCase)` [CLASS]：封装 `BatchGalleryRequestTests` 相关数据或行为。
+- `M L11-L32` `BatchGalleryRequestTests.test_frame_evaluation_accepts_error_attribution(self) -> None`：执行 `test frame evaluation accepts error attribution` 对应逻辑。 调用：`self.assertEqual`。
+- `M L34-L54` `BatchGalleryRequestTests.test_trials_must_share_score_version(self) -> None`：执行 `test trials must share score version` 对应逻辑。 调用：`self.assertRaises`。
 
 ## `src/traning/tests/test_scoring.py`
 
@@ -390,3 +430,15 @@ main.py -> core/pipeline.py:TRAINING_STAGES
 - `M L83-L95` `SliderScoringTests.test_slider_uses_first_path_point_as_missing_head(self) -> None`：执行 `test slider uses first path point as missing head` 对应逻辑。 调用：`score_slider`, `self.assertEqual`, `self.assertTrue`。
 - `M L97-L139` `SliderScoringTests.test_slider_requires_bidirectional_path_match(self) -> None`：执行 `test slider requires bidirectional path match` 对应逻辑。 调用：`ScoreSpec`, `score_slider`, `self.assertEqual`, `self.assertFalse`, `self.assertLessEqual`, `self.assertTrue`。
 - `M L141-L162` `SliderScoringTests.test_slider_corridor_uses_one_point_five_radius(self) -> None`：执行 `test slider corridor uses one point five radius` 对应逻辑。 调用：`score_slider`, `self.assertFalse`, `self.assertTrue`。
+
+## `src/traning/tests/test_sequence_scoring.py`
+
+职责：Python 模块；具体职责见下方符号及调用。
+工程依赖：`traning.Lib.metrics`
+
+- `C L13-L155` `ClickSequenceScoringTests(unittest.TestCase)` [CLASS]：封装 `ClickSequenceScoringTests` 相关数据或行为。
+- `M L14-L41` `ClickSequenceScoringTests.test_first_passing_hit_resolves_target_once(self) -> None`：执行 `test first passing hit resolves target once` 对应逻辑。 调用：`PredictedClick`, `TargetObject`, `score_click_sequence`, `self.assertEqual`。
+- `M L43-L64` `ClickSequenceScoringTests.test_failed_hit_keeps_target_active_for_later_click(self) -> None`：执行 `test failed hit keeps target active for later click` 对应逻辑。 调用：`PredictedClick`, `TargetObject`, `score_click_sequence`, `self.assertEqual`, `self.assertIn`。
+- `M L66-L84` `ClickSequenceScoringTests.test_early_click_is_attributed_to_temporal_parameters(self) -> None`：执行 `test early click is attributed to temporal parameters` 对应逻辑。 调用：`PredictedClick`, `TargetObject`, `score_click_sequence`, `self.assertEqual`。
+- `M L86-L117` `ClickSequenceScoringTests.test_overlapping_targets_resolve_by_earliest_active_target(self) -> None`：执行 `test overlapping targets resolve by earliest active target` 对应逻辑。 调用：`PredictedClick`, `TargetObject`, `score_click_sequence`, `self.assertEqual`。
+- `M L119-L155` `ClickSequenceScoringTests.test_click_frequency_limit_blocks_high_rate_hits(self) -> None`：执行 `test click frequency limit blocks high rate hits` 对应逻辑。 调用：`PredictedClick`, `SequenceScoreSpec`, `TargetObject`, `score_click_sequence`, `self.assertEqual`, `self.assertTrue`。

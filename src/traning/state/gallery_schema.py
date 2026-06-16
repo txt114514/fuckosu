@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from math import isfinite
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -17,6 +18,7 @@ EVALUATION_SUBPROJECTS = (
     "spinner",
     "long_sequence",
 )
+ErrorDomain = Literal["none", "spatial", "temporal", "decision"]
 
 
 class FrameEvaluation(BaseModel):
@@ -25,6 +27,11 @@ class FrameEvaluation(BaseModel):
     passed: bool
     target_source_index: int | None = None
     predicted_osu_xy: tuple[float, float] | None = None
+    primary_error: ErrorDomain = "none"
+    error_tags: tuple[str, ...] = ()
+    spatial_error: float | None = None
+    temporal_error_ms: float | None = None
+    frequency_limited: bool = False
     metrics: dict[str, float] = Field(default_factory=dict)
 
     @field_validator("frame_index")
@@ -32,6 +39,13 @@ class FrameEvaluation(BaseModel):
     def _nonnegative_frame_index(cls, value: int) -> int:
         if value < 0:
             raise ValueError("frame_index must be nonnegative")
+        return value
+
+    @field_validator("spatial_error", "temporal_error_ms")
+    @classmethod
+    def _finite_optional_metric(cls, value: float | None) -> float | None:
+        if value is not None and not isfinite(value):
+            raise ValueError("error metrics must be finite")
         return value
 
 
@@ -91,6 +105,7 @@ def load_batch_gallery_request(path: Path) -> BatchGalleryRequest:
 __all__ = [
     "BatchGalleryRequest",
     "EVALUATION_SUBPROJECTS",
+    "ErrorDomain",
     "FrameEvaluation",
     "TrialGalleryEvaluation",
     "load_batch_gallery_request",

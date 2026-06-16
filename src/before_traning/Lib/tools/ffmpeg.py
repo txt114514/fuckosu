@@ -26,6 +26,7 @@ __all__ = [
 COMMON_FFMPEG_ARGS = ("-y", "-hide_banner", "-loglevel", "error")
 FASTSTART_ARGS = ("-movflags", "+faststart")
 AUDIO_AAC_192K_ARGS = ("-c:a", "aac", "-b:a", "192k")
+NO_AUDIO_ARGS = ("-an",)
 H264_FAST_ARGS = ("-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p")
 H264_VERYFAST_ARGS = (
     "-c:v",
@@ -154,7 +155,9 @@ def build_segment_video_args(
     *,
     trim_start_seconds: float,
     trim_duration_seconds: float,
+    include_audio: bool = False,
 ) -> tuple[str, ...]:
+    audio_args = AUDIO_AAC_192K_ARGS if include_audio else NO_AUDIO_ARGS
     return (
         *COMMON_FFMPEG_ARGS,
         "-ss",
@@ -164,7 +167,7 @@ def build_segment_video_args(
         "-t",
         f"{trim_duration_seconds:.6f}",
         *H264_VERYFAST_ARGS,
-        *AUDIO_AAC_192K_ARGS,
+        *audio_args,
         *FASTSTART_ARGS,
         str(output_video_path),
     )
@@ -176,6 +179,7 @@ def segment_video(
     *,
     start_seconds: float,
     end_seconds: float,
+    include_audio: bool = False,
 ) -> None:
     if start_seconds < 0:
         raise ValueError("视频片段开始时间不能为负数")
@@ -188,6 +192,7 @@ def segment_video(
             output_video_path,
             trim_start_seconds=start_seconds,
             trim_duration_seconds=end_seconds - start_seconds,
+            include_audio=include_audio,
         )
     )
 

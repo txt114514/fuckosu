@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+    cat <<'USAGE'
+Usage:
+  host-exec <host-command> [args...]
+  host-exec -- <host-command> [args...]
+
+Runs a command in the host namespaces from the devcontainer. This is intended
+for explicit diagnostics such as:
+
+  host-exec nvidia-smi
+  host-exec bash -lc 'systemctl status docker --no-pager'
+
+The container must run with privileged: true and pid: host.
+USAGE
+}
+
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+    usage
+    exit 0
+fi
+
+if [[ "${1:-}" == "--" ]]; then
+    shift
+fi
+
+if [[ $# -eq 0 ]]; then
+    usage >&2
+    exit 2
+fi
+
+if [[ "$(id -u)" -ne 0 ]]; then
+    exec sudo /usr/local/bin/host-exec "$@"
+fi
+
+target_pid="${HOST_EXEC_TARGET_PID:-1}"
+if [[ ! -e "/proc/${target_pid}/ns/mnt" ]]; then
+    echo "host-exec: cannot find namespace for pid ${target_pid}" >&2
+    exit 3
+fi
+
+export PATH="${HOST_EXEC_PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}"
+
+echo "[host-exec] pid=${target_pid} command: $*" >&2
+exec nsenter \
+    --target "${target_pid}" \
+    --mount \
+    --uts \
+    --ipc \
+    --net \
+    --pid \
+    -- "$@"

@@ -8,6 +8,12 @@ data_input:
     - atomic
     - long_sequence
   categories: []
+  include_items: []
+  exclude_items: []
+  train_items:
+    - item_000001
+  validation_items:
+    - item_000002
   sample_fps: 60.0
   frame_step: 1
   max_segments:
@@ -25,6 +31,9 @@ loader:
   num_workers: 0
   shuffle: true
   pin_memory: true
+
+evaluation:
+  min_click_interval_ms: 50.0
 
 visualization:
   enabled: false

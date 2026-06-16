@@ -15,6 +15,17 @@ from traning.Lib.metrics.scoring import (
     spatial_coefficient,
     temporal_coefficient,
 )
+from traning.Lib.metrics.sequence import (
+    ClickEvaluation,
+    ErrorDomain,
+    ErrorTag,
+    PredictedClick,
+    SequenceScore,
+    SequenceScoreSpec,
+    TargetObject,
+    TargetResolution,
+    score_click_sequence,
+)
 
 __all__ = [
     "SCORE_VERSION",
@@ -23,9 +34,18 @@ __all__ = [
     "Point",
     "PointScore",
     "ScoreSpec",
+    "ClickEvaluation",
+    "ErrorDomain",
+    "ErrorTag",
+    "PredictedClick",
+    "SequenceScore",
+    "SequenceScoreSpec",
     "SliderScore",
+    "TargetObject",
+    "TargetResolution",
     "combine_coefficients",
     "score_point",
+    "score_click_sequence",
     "score_slider",
     "score_slider_path",
     "spatial_coefficient",
