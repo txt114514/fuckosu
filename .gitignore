@@ -11,6 +11,9 @@
 !/project_index/**
 /project_index/__pycache__/
 
+!/configs/
+!/configs/**
+
 # 保留这几个目录及其全部内容
 !/.devcontainer/
 !/.devcontainer/**

@@ -32,6 +32,150 @@ class RuntimeSettings(BaseModel):
     device: str = "cuda"
 
 
+class InputSettings(BaseModel):
+    width: int = 1484
+    height: int = 846
+    resize: bool = False
+
+    @field_validator("width", "height")
+    @classmethod
+    def _positive_dimension(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("input dimensions must be positive")
+        return value
+
+
+class TilingConfig(BaseModel):
+    patch_height: int = 512
+    patch_width: int = 512
+    overlap_y: int = 128
+    overlap_x: int = 128
+    patch_batch_size: int = 1
+    serial: bool = True
+
+    @field_validator("patch_height", "patch_width", "patch_batch_size")
+    @classmethod
+    def _positive_integer(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("tiling dimensions and batch size must be positive")
+        return value
+
+    @field_validator("overlap_y", "overlap_x")
+    @classmethod
+    def _nonnegative_overlap(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError("tiling overlap must be nonnegative")
+        return value
+
+    @model_validator(mode="after")
+    def validate_tiling(self) -> TilingConfig:
+        if self.overlap_x >= self.patch_width:
+            raise ValueError("overlap_x must be smaller than patch_width")
+        if self.overlap_y >= self.patch_height:
+            raise ValueError("overlap_y must be smaller than patch_height")
+        if self.serial and self.patch_batch_size != 1:
+            raise ValueError("serial patch processing requires patch_batch_size=1")
+        return self
+
+
+class LocalEncoderConfig(BaseModel):
+    stem_channels: int = 8
+    feature_channels: int = 48
+    output_stride: int = 8
+    embedding_dim: int = 96
+
+    @field_validator(
+        "stem_channels",
+        "feature_channels",
+        "output_stride",
+        "embedding_dim",
+    )
+    @classmethod
+    def _positive_integer(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("local encoder dimensions must be positive")
+        return value
+
+
+class GlobalEncoderConfig(BaseModel):
+    input_height: int = 360
+    input_width: int = 640
+    feature_channels: int = 64
+    backbone: Literal[
+        "lightweight_cnn",
+        "mobilenet_v3_small",
+        "convnext_atto",
+        "dinov3_external",
+    ] = "lightweight_cnn"
+    pretrained: bool = False
+    frozen: bool = False
+
+    @field_validator("input_height", "input_width", "feature_channels")
+    @classmethod
+    def _positive_integer(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("global encoder dimensions must be positive")
+        return value
+
+
+class FusionConfig(BaseModel):
+    mode: Literal["disabled", "gated", "gated_sparse_sampling"] = (
+        "gated_sparse_sampling"
+    )
+    heads: int = 4
+    sampling_points: int = 4
+    layers: int = 2
+    hidden_dim: int = 96
+
+    @field_validator("heads", "sampling_points", "layers", "hidden_dim")
+    @classmethod
+    def _positive_integer(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("fusion dimensions must be positive")
+        return value
+
+    @model_validator(mode="after")
+    def validate_attention_shape(self) -> FusionConfig:
+        if self.hidden_dim % self.heads != 0:
+            raise ValueError("fusion hidden_dim must be divisible by heads")
+        return self
+
+
+class TemporalConfig(BaseModel):
+    enabled: bool = True
+    model_type: Literal["causal_gru"] = "causal_gru"
+    hidden_size: int = 256
+    layers: int = 2
+    history_frames: int = 8
+
+    @field_validator("hidden_size", "layers", "history_frames")
+    @classmethod
+    def _positive_integer(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("temporal dimensions must be positive")
+        return value
+
+
+class MemoryConfig(BaseModel):
+    amp_dtype: Literal["auto", "float16", "bfloat16", "float32"] = "auto"
+    gradient_checkpointing: bool = True
+    backward_per_patch: bool = True
+    cache_global_features: bool = True
+    offload_candidates_to_cpu: bool = True
+    max_vram_gib: float = 7.5
+
+    @field_validator("max_vram_gib")
+    @classmethod
+    def _positive_vram(cls, value: float) -> float:
+        if value <= 0 or value != value or value == float("inf"):
+            raise ValueError("max_vram_gib must be finite and positive")
+        return value
+
+
+class SMETConfig(BaseModel):
+    enabled: bool = False
+
+
 class LoaderSettings(BaseModel):
     batch_size: int = 1
     num_workers: int = 0
@@ -171,12 +315,18 @@ class Settings(BaseSettings):
     )
 
     runtime: RuntimeSettings = Field(default_factory=RuntimeSettings)
+    input: InputSettings = Field(default_factory=InputSettings)
+    tiling: TilingConfig = Field(default_factory=TilingConfig)
+    local_encoder: LocalEncoderConfig = Field(default_factory=LocalEncoderConfig)
+    global_encoder: GlobalEncoderConfig = Field(default_factory=GlobalEncoderConfig)
+    fusion: FusionConfig = Field(default_factory=FusionConfig)
+    temporal: TemporalConfig = Field(default_factory=TemporalConfig)
+    memory: MemoryConfig = Field(default_factory=MemoryConfig)
+    smet: SMETConfig = Field(default_factory=SMETConfig)
     data_input: DataInputSettings = Field(default_factory=DataInputSettings)
     loader: LoaderSettings = Field(default_factory=LoaderSettings)
     evaluation: EvaluationSettings = Field(default_factory=EvaluationSettings)
-    visualization: VisualizationSettings = Field(
-        default_factory=VisualizationSettings
-    )
+    visualization: VisualizationSettings = Field(default_factory=VisualizationSettings)
 
     @classmethod
     def settings_customise_sources(
@@ -234,6 +384,7 @@ def load_settings(config_path: Path | None = None) -> Settings:
     try:
         settings = Settings(**raw)
         settings.data_input.validate_tiling()
+        settings.tiling.validate_tiling()
         return settings
     except (ValidationError, ValueError) as error:
         raise SettingsError(f"invalid training config: {selected}") from error
@@ -244,11 +395,19 @@ __all__ = [
     "DataSplit",
     "DataInputSettings",
     "EvaluationSettings",
+    "FusionConfig",
+    "GlobalEncoderConfig",
+    "InputSettings",
     "LoaderSettings",
+    "LocalEncoderConfig",
+    "MemoryConfig",
     "REPO_ROOT",
     "RuntimeSettings",
+    "SMETConfig",
     "Settings",
     "SettingsError",
+    "TemporalConfig",
+    "TilingConfig",
     "VisualizationSettings",
     "load_settings",
 ]

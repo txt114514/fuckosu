@@ -1,0 +1,51 @@
+input:
+  width: 1484
+  height: 846
+  resize: false
+
+tiling:
+  patch_height: 512
+  patch_width: 512
+  overlap_y: 128
+  overlap_x: 128
+  patch_batch_size: 1
+  serial: true
+
+local_encoder:
+  stem_channels: 8
+  feature_channels: 48
+  output_stride: 8
+  embedding_dim: 96
+
+global_encoder:
+  input_height: 360
+  input_width: 640
+  feature_channels: 64
+  backbone: lightweight_cnn
+  pretrained: false
+  frozen: false
+
+fusion:
+  mode: gated_sparse_sampling
+  heads: 4
+  sampling_points: 4
+  layers: 2
+  hidden_dim: 96
+
+temporal:
+  enabled: true
+  model_type: causal_gru
+  hidden_size: 256
+  layers: 2
+  history_frames: 8
+
+memory:
+  amp_dtype: auto
+  gradient_checkpointing: true
+  backward_per_patch: true
+  cache_global_features: true
+  offload_candidates_to_cpu: true
+  max_vram_gib: 7.5
+
+smet:
+  enabled: false

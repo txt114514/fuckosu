@@ -18,8 +18,7 @@ BEFORE_CODEX_INDEX = BEFORE_SOURCE_ROOT / "docs" / "CODEX_INDEX.md"
 TRAINING_CODEX_INDEX = TRAINING_SOURCE_ROOT / "docs" / "CODEX_INDEX.md"
 
 GENERATED_NOTICE = (
-    "> 自动生成文件，请勿手工修改。运行 "
-    "`python project_index/build_index.py` 重建。"
+    "> 自动生成文件，请勿手工修改。运行 `python project_index/build_index.py` 重建。"
 )
 
 ROLE_OVERRIDES = {
@@ -92,6 +91,7 @@ TRAINING_ROLE_OVERRIDES = {
     "conf/defaults.py": "创建默认训练 Settings。",
     "core/pipeline.py": "声明训练阶段注册表；当前登记 data_input，后续扩展空间、时序和导出阶段。",
     "core/env_check.py": "收集 Python、PyTorch/CUDA、GPU、FFmpeg 和关键依赖状态，供 CLI 环境检查使用。",
+    "core/memory.py": "AMP dtype 选择、CUDA 显存快照和 OOM 降显存建议格式化。",
     "core/data_input/data_input.py": "数据输入模块公开门面；提供检查、Dataset 和 DataLoader。",
     "core/data_input/preflight.py": "扫描训练片段并生成数量、类别、维度和问题报告。",
     "core/data_input/loader.py": "把配置映射为 SegmentFrameDataset 与 PyTorch DataLoader。",
@@ -109,6 +109,18 @@ TRAINING_ROLE_OVERRIDES = {
     "Lib/visualization/display.py": "通过独立 ffplay 子进程把标注图片显示到主机 X11。",
     "Lib/visualization/gallery.py": "选择批次最高分 trial，并按通过状态和六个子项目随机保存标注帧图集。",
     "Lib/visualization/output_identity.py": "为 traning_example 输出分配进程安全的递增次数和 UTC 时间标识。",
+    "data/patch_stream.py": "基于现有 tiling 窗口生成固定尺寸 CHW patch、padding 和 PatchMeta 元数据。",
+    "data/coordinates.py": "Patch local/global 与 image/feature-grid 坐标转换辅助函数。",
+    "data/synthetic_structures.py": "生成跨 patch 圆环、边界圆、slider、spinner 和噪声合成测试图像。",
+    "models/local_encoder.py": "小显存高分辨率局部 CNN；GroupNorm、depthwise separable residual block 和 stride-8 pyramid。",
+    "models/global_encoder.py": "无网络依赖的低分辨率完整画面全局 CNN encoder。",
+    "models/global_structure_head.py": "全局对象性、圆心、圆环、slider、spinner、粗半径和 context token 预测头。",
+    "models/gated_sparse_fusion.py": "纯 PyTorch grid_sample 全局门控注入与稀疏跨区域采样融合。",
+    "models/object_heads.py": "空间多任务 dense prediction head 和对象类型表。",
+    "models/outputs.py": "空间预测与因果动作预测 dataclass 契约。",
+    "models/temporal_model.py": "因果 GRU 时序模型；提供 initial_state 与 step 流式接口。",
+    "training/losses.py": "空间多任务损失、全局局部一致性、跨 patch embedding 和时序一致性损失。",
+    "training/feature_canvas.py": "detached CPU feature canvas；按 patch 元数据累计融合特征。",
     "core/visualization/service.py": "可选可视化故障隔离、一次性告警和训练步频率控制。",
     "core/visualization/preview.py": "组装 Dataset、单帧点击标注和批次最佳参数图集。",
     "state/run_state.py": "保存 trial、课程阶段、rung、预算和全局步数的运行状态。",
@@ -318,7 +330,9 @@ class SymbolVisitor(ast.NodeVisitor):
         return ".".join([item[0] for item in self.stack] + [name])
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
-        decorators = tuple(dotted_name(item) or ast.unparse(item) for item in node.decorator_list)
+        decorators = tuple(
+            dotted_name(item) or ast.unparse(item) for item in node.decorator_list
+        )
         bases = tuple(ast.unparse(base) for base in node.bases)
         self.symbols.append(
             Symbol(
@@ -344,7 +358,9 @@ class SymbolVisitor(ast.NodeVisitor):
         self,
         node: ast.FunctionDef | ast.AsyncFunctionDef,
     ) -> None:
-        decorators = tuple(dotted_name(item) or ast.unparse(item) for item in node.decorator_list)
+        decorators = tuple(
+            dotted_name(item) or ast.unparse(item) for item in node.decorator_list
+        )
         calls = collect_calls(node)
         parent_kinds = {item[1] for item in self.stack}
         if "function" in parent_kinds:
@@ -382,9 +398,7 @@ class SymbolVisitor(ast.NodeVisitor):
 
 def source_files(source_root: Path) -> list[Path]:
     return sorted(
-        path
-        for path in source_root.rglob("*.py")
-        if "__pycache__" not in path.parts
+        path for path in source_root.rglob("*.py") if "__pycache__" not in path.parts
     )
 
 
@@ -478,14 +492,14 @@ def render_symbol_index(
     classes = len(all_symbols) - functions
     lines.extend(
         [
-        "## 符号索引",
-        "",
-        f"覆盖 `{len(parsed)}` 个 Python 文件、`{functions}` 个命名函数/方法、"
-        f"`{classes}` 个类。匿名 lambda 不单独列出。",
-        "",
-        "图例：`F` 模块函数，`M` 方法，`N` 嵌套函数，`C` 类；"
-        "`IO-R/IO-W` 文件读写，`DB` 数据库，`PROCESS` 外部进程。",
-        "",
+            "## 符号索引",
+            "",
+            f"覆盖 `{len(parsed)}` 个 Python 文件、`{functions}` 个命名函数/方法、"
+            f"`{classes}` 个类。匿名 lambda 不单独列出。",
+            "",
+            "图例：`F` 模块函数，`M` 方法，`N` 嵌套函数，`C` 类；"
+            "`IO-R/IO-W` 文件读写，`DB` 数据库，`PROCESS` 外部进程。",
+            "",
         ]
     )
 
