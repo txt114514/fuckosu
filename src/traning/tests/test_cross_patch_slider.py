@@ -4,8 +4,8 @@ import unittest
 
 import torch.nn.functional as F
 
-from traning.data import PatchStream, make_cross_patch_slider
-from traning.models import sample_global_feature
+from traning.Lib.data import PatchStream, make_cross_patch_slider
+from traning.Lib.models import sample_global_feature
 
 
 class CrossPatchSliderTests(unittest.TestCase):

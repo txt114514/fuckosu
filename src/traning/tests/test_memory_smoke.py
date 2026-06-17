@@ -4,16 +4,20 @@ import unittest
 
 import torch
 
-from traning.core.memory import autocast_context, collect_memory_snapshot
-from traning.core.memory import (
+from traning.Lib.runtime import autocast_context, collect_memory_snapshot
+from traning.Lib.runtime import (
     CudaRuntimeConfig,
     configure_torch_runtime,
     create_grad_scaler,
     module_to_device,
     tensor_to_device,
 )
-from traning.data import PatchMeta
-from traning.models import GatedSparseFusion, SmallLocalEncoder, SpatialPredictionHead
+from traning.Lib.data import PatchMeta
+from traning.Lib.models import (
+    GatedSparseFusion,
+    SmallLocalEncoder,
+    SpatialPredictionHead,
+)
 
 
 class MemorySmokeTests(unittest.TestCase):

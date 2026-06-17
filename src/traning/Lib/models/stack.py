@@ -3,12 +3,12 @@ from __future__ import annotations
 import torch
 
 from traning.conf import Settings
-from traning.data import color_cue_channel_count
-from traning.models.gated_sparse_fusion import GatedSparseFusion
-from traning.models.global_encoder import LightweightGlobalEncoder
-from traning.models.global_structure_head import GlobalStructureHead
-from traning.models.local_encoder import SmallLocalEncoder
-from traning.models.object_heads import SpatialPredictionHead
+from traning.Lib.data import color_cue_channel_count
+from traning.Lib.models.gated_sparse_fusion import GatedSparseFusion
+from traning.Lib.models.global_encoder import LightweightGlobalEncoder
+from traning.Lib.models.global_structure_head import GlobalStructureHead
+from traning.Lib.models.local_encoder import SmallLocalEncoder
+from traning.Lib.models.object_heads import SpatialPredictionHead
 
 
 def build_model_stack(settings: Settings) -> dict[str, torch.nn.Module]:

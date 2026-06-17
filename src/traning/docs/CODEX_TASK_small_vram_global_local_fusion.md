@@ -194,7 +194,7 @@ pip install torch torchvision torchaudio
 新增环境检查模块：
 
 ```text
-traning/core/env_check.py
+environment/env_check.py
 ```
 
 若实际包名不同，使用工程现有包名。
@@ -341,7 +341,7 @@ RUN pip install --no-cache-dir -e ".[train,dev]"
 新增：
 
 ```text
-scripts/check_gpu.sh
+environment/check_gpu.sh
 ```
 
 内容应等价于：
@@ -844,7 +844,7 @@ class FusedPatchFeatures:
 
 ```text
 traning/training/feature_canvas.py
-traning/core/memory.py
+traning/Lib/runtime/memory.py
 ```
 
 不要长期保存所有 Patch 的完整计算图。
@@ -1595,7 +1595,7 @@ docs/environment_setup.md
 docs/label_generation.md
 docs/codex_changes.md
 configs/model_small_vram.yaml
-scripts/check_gpu.sh
+environment/check_gpu.sh
 ```
 
 以及对应的：

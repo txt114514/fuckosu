@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from traning.data.patch_stream import PatchMeta
+from traning.Lib.data.patch_stream import PatchMeta
 
 
 def local_to_global(meta: PatchMeta, x: float, y: float) -> tuple[float, float]:

@@ -4,7 +4,7 @@ from torch.utils.data import DataLoader
 
 from traning.Lib.data import SegmentFrameDataset, collate_frame_samples
 from traning.conf import DataSplit, Settings
-from traning.core.data_input.preflight import discover_data_input
+from traning.core.dataset_import.preflight import discover_data_input
 
 
 def build_dataset(

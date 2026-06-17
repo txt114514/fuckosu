@@ -3,7 +3,7 @@ from __future__ import annotations
 import torch
 from torch import nn
 
-from traning.models.outputs import ActionPrediction
+from traning.Lib.models.outputs import ActionPrediction
 
 
 class CausalTemporalModel(nn.Module):

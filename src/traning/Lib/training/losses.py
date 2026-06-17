@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import torch
 import torch.nn.functional as F
 
-from traning.models.outputs import SpatialPrediction
+from traning.Lib.models.outputs import SpatialPrediction
 
 
 @dataclass(frozen=True)

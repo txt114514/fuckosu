@@ -1,6 +1,7 @@
 from traning.conf.defaults import DEFAULT_SETTINGS
 from traning.conf.settings import (
     CONFIG_PATH,
+    CandidateCacheSettings,
     DataSplit,
     DataInputSettings,
     EvaluationSettings,
@@ -22,6 +23,7 @@ from traning.conf.settings import (
 
 __all__ = [
     "CONFIG_PATH",
+    "CandidateCacheSettings",
     "DataSplit",
     "DEFAULT_SETTINGS",
     "DataInputSettings",

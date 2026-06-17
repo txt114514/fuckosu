@@ -5,12 +5,12 @@ import unittest
 import torch
 
 from traning.conf import Settings
-from traning.data import (
+from traning.Lib.data import (
     append_color_cues,
     color_cue_channel_count,
     extract_osu_basic_color_cues,
 )
-from traning.models import build_model_stack
+from traning.Lib.models import build_model_stack
 
 
 class ColorCueTests(unittest.TestCase):

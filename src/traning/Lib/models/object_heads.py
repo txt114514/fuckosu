@@ -4,7 +4,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-from traning.models.outputs import SpatialPrediction
+from traning.Lib.models.outputs import SpatialPrediction
 
 
 OBJECT_TYPE_NAMES: tuple[str, ...] = (

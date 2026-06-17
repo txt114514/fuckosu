@@ -6,7 +6,7 @@ from math import ceil
 import torch
 import torch.nn.functional as F
 
-from traning.data import PatchMeta
+from traning.Lib.data import PatchMeta
 
 
 @dataclass

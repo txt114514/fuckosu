@@ -16,6 +16,10 @@ class CudaConfigTests(unittest.TestCase):
         self.assertTrue(config.cudnn_benchmark)
         self.assertEqual(config.grad_scaler, "auto")
         self.assertFalse(config.compile_model)
+        self.assertEqual(config.max_vram_gib, 6.5)
+        self.assertEqual(config.reserve_vram_gib, 1.0)
+        self.assertEqual(config.max_ram_gib, 24.0)
+        self.assertEqual(config.reserve_ram_gib, 4.0)
 
     def test_loader_worker_options_require_workers(self) -> None:
         with self.assertRaises(ValidationError):

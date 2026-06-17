@@ -4,6 +4,7 @@ from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from typing import Iterator
 
+import psutil
 import torch
 from torch import nn
 
@@ -15,6 +16,38 @@ class MemorySnapshot:
     max_reserved_gib: float | None
     current_allocated_gib: float | None
     current_reserved_gib: float | None
+
+
+@dataclass(frozen=True)
+class RuntimeMemoryBudget:
+    device: str
+    ram_total_gib: float
+    ram_available_gib: float
+    ram_process_rss_gib: float
+    ram_budget_gib: float
+    ram_reserved_for_system_gib: float
+    vram_total_gib: float | None
+    vram_free_gib: float | None
+    vram_current_reserved_gib: float | None
+    vram_budget_gib: float | None
+    vram_reserved_for_system_gib: float | None
+    cuda_memory_fraction: float | None
+
+    def as_dict(self) -> dict[str, float | str | None]:
+        return {
+            "device": self.device,
+            "ram_total_gib": self.ram_total_gib,
+            "ram_available_gib": self.ram_available_gib,
+            "ram_process_rss_gib": self.ram_process_rss_gib,
+            "ram_budget_gib": self.ram_budget_gib,
+            "ram_reserved_for_system_gib": self.ram_reserved_for_system_gib,
+            "vram_total_gib": self.vram_total_gib,
+            "vram_free_gib": self.vram_free_gib,
+            "vram_current_reserved_gib": self.vram_current_reserved_gib,
+            "vram_budget_gib": self.vram_budget_gib,
+            "vram_reserved_for_system_gib": self.vram_reserved_for_system_gib,
+            "cuda_memory_fraction": self.cuda_memory_fraction,
+        }
 
 
 @dataclass(frozen=True)
@@ -34,6 +67,111 @@ class CudaRuntimeState:
     cudnn_benchmark: bool
     matmul_float32_precision: str
     grad_scaler_enabled: bool
+
+
+def enforce_runtime_memory_budget(
+    *,
+    device: torch.device,
+    max_vram_gib: float,
+    reserve_vram_gib: float,
+    max_ram_gib: float | None,
+    reserve_ram_gib: float,
+    set_cuda_fraction: bool = True,
+) -> RuntimeMemoryBudget:
+    """Validate CPU/CUDA budgets and reserve headroom for the host system."""
+
+    if max_vram_gib <= 0 or not _finite(max_vram_gib):
+        raise ValueError("max_vram_gib must be finite and positive")
+    if reserve_vram_gib < 0 or not _finite(reserve_vram_gib):
+        raise ValueError("reserve_vram_gib must be finite and nonnegative")
+    if max_ram_gib is not None and (max_ram_gib <= 0 or not _finite(max_ram_gib)):
+        raise ValueError("max_ram_gib must be finite and positive when set")
+    if reserve_ram_gib < 0 or not _finite(reserve_ram_gib):
+        raise ValueError("reserve_ram_gib must be finite and nonnegative")
+
+    ram = psutil.virtual_memory()
+    process_rss_gib = psutil.Process().memory_info().rss / 1024**3
+    ram_total_gib = ram.total / 1024**3
+    ram_available_gib = ram.available / 1024**3
+    ram_system_budget = max(ram_total_gib - reserve_ram_gib, 0.0)
+    ram_available_budget = process_rss_gib + max(
+        ram_available_gib - reserve_ram_gib,
+        0.0,
+    )
+    ram_budget_gib = min(
+        max_ram_gib if max_ram_gib is not None else ram_system_budget,
+        ram_system_budget,
+        ram_available_budget,
+    )
+    if ram_budget_gib <= 0:
+        raise RuntimeError(
+            "CPU RAM budget is zero after system reserve; lower reserve_ram_gib"
+        )
+    if ram_available_gib <= reserve_ram_gib:
+        raise RuntimeError(
+            f"available CPU RAM {ram_available_gib:.2f} GiB is at or below "
+            f"system reserve {reserve_ram_gib:.2f} GiB"
+        )
+    if process_rss_gib > ram_budget_gib:
+        raise RuntimeError(
+            f"current process RSS {process_rss_gib:.2f} GiB exceeds CPU RAM "
+            f"budget {ram_budget_gib:.2f} GiB"
+        )
+
+    vram_total_gib = None
+    vram_free_gib = None
+    vram_current_reserved_gib = None
+    vram_budget_gib = None
+    cuda_fraction = None
+    if device.type == "cuda":
+        if not torch.cuda.is_available():
+            raise RuntimeError("CUDA device requested but CUDA is not available")
+        device_index = device.index
+        if device_index is None:
+            device_index = torch.cuda.current_device()
+        free_bytes, total_bytes = torch.cuda.mem_get_info(device_index)
+        vram_total_gib = total_bytes / 1024**3
+        vram_free_gib = free_bytes / 1024**3
+        vram_current_reserved_gib = torch.cuda.memory_reserved(device_index) / 1024**3
+        vram_system_budget = max(vram_total_gib - reserve_vram_gib, 0.0)
+        vram_budget_gib = min(max_vram_gib, vram_system_budget)
+        if vram_budget_gib <= 0:
+            raise RuntimeError(
+                "CUDA VRAM budget is zero after system reserve; lower reserve_vram_gib"
+            )
+        if vram_free_gib <= reserve_vram_gib:
+            raise RuntimeError(
+                f"free CUDA VRAM {vram_free_gib:.2f} GiB is at or below "
+                f"system reserve {reserve_vram_gib:.2f} GiB"
+            )
+        if vram_current_reserved_gib > vram_budget_gib:
+            raise RuntimeError(
+                f"current CUDA reserved memory {vram_current_reserved_gib:.2f} GiB "
+                f"exceeds budget {vram_budget_gib:.2f} GiB"
+            )
+        cuda_fraction = min(max(vram_budget_gib / vram_total_gib, 0.01), 1.0)
+        if set_cuda_fraction:
+            torch.cuda.set_per_process_memory_fraction(
+                cuda_fraction,
+                device=device_index,
+            )
+
+    return RuntimeMemoryBudget(
+        device=str(device),
+        ram_total_gib=ram_total_gib,
+        ram_available_gib=ram_available_gib,
+        ram_process_rss_gib=process_rss_gib,
+        ram_budget_gib=ram_budget_gib,
+        ram_reserved_for_system_gib=reserve_ram_gib,
+        vram_total_gib=vram_total_gib,
+        vram_free_gib=vram_free_gib,
+        vram_current_reserved_gib=vram_current_reserved_gib,
+        vram_budget_gib=vram_budget_gib,
+        vram_reserved_for_system_gib=(
+            reserve_vram_gib if device.type == "cuda" else None
+        ),
+        cuda_memory_fraction=cuda_fraction,
+    )
 
 
 def resolve_amp_dtype(device: torch.device, amp_dtype: str) -> torch.dtype | None:
@@ -212,15 +350,21 @@ def format_oom_guidance(
     )
 
 
+def _finite(value: float) -> bool:
+    return value == value and value not in {float("inf"), float("-inf")}
+
+
 __all__ = [
     "CudaRuntimeConfig",
     "CudaRuntimeState",
     "MemorySnapshot",
+    "RuntimeMemoryBudget",
     "amp_uses_grad_scaler",
     "autocast_context",
     "collect_memory_snapshot",
     "configure_torch_runtime",
     "create_grad_scaler",
+    "enforce_runtime_memory_budget",
     "format_oom_guidance",
     "maybe_compile_module",
     "module_to_device",

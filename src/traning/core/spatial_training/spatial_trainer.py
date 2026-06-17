@@ -7,22 +7,23 @@ from typing import Any
 
 import torch
 
-from traning.conf import DataSplit, Settings
-from traning.core.data_input import build_dataset
-from traning.core.memory import (
+from traning.Lib.data import PatchStream, append_color_cues
+from traning.Lib.models import build_model_stack
+from traning.Lib.runtime import (
     CudaRuntimeConfig,
     autocast_context,
     collect_memory_snapshot,
     configure_torch_runtime,
     create_grad_scaler,
+    enforce_runtime_memory_budget,
     maybe_compile_module,
     module_to_device,
     tensor_to_device,
 )
-from traning.data import PatchStream, append_color_cues
-from traning.models import build_model_stack
-from traning.training.losses import compute_spatial_loss
-from traning.training.spatial_targets import build_spatial_loss_targets
+from traning.Lib.training.losses import compute_spatial_loss
+from traning.Lib.training.spatial_targets import build_spatial_loss_targets
+from traning.conf import DataSplit, Settings
+from traning.core.dataset_import import build_dataset
 
 
 @dataclass(frozen=True)
@@ -35,6 +36,10 @@ class SpatialTrainingResult:
     last_patch_count: int
     amp_dtype: str
     channels_last: bool
+    ram_budget_gib: float
+    ram_reserved_for_system_gib: float
+    vram_budget_gib: float | None
+    vram_reserved_for_system_gib: float | None
     cuda_max_allocated_gib: float | None
     cuda_max_reserved_gib: float | None
 
@@ -48,6 +53,10 @@ class SpatialTrainingResult:
             "last_patch_count": self.last_patch_count,
             "amp_dtype": self.amp_dtype,
             "channels_last": self.channels_last,
+            "ram_budget_gib": self.ram_budget_gib,
+            "ram_reserved_for_system_gib": self.ram_reserved_for_system_gib,
+            "vram_budget_gib": self.vram_budget_gib,
+            "vram_reserved_for_system_gib": self.vram_reserved_for_system_gib,
             "cuda_max_allocated_gib": self.cuda_max_allocated_gib,
             "cuda_max_reserved_gib": self.cuda_max_reserved_gib,
         }
@@ -75,6 +84,13 @@ def run_spatial_training(
 
     run_dir.mkdir(parents=True, exist_ok=True)
     torch.manual_seed(settings.runtime.seed)
+    memory_budget = enforce_runtime_memory_budget(
+        device=device,
+        max_vram_gib=settings.memory.max_vram_gib,
+        reserve_vram_gib=settings.memory.reserve_vram_gib,
+        max_ram_gib=settings.memory.max_ram_gib,
+        reserve_ram_gib=settings.memory.reserve_ram_gib,
+    )
     runtime_state = configure_torch_runtime(
         device=device,
         amp_dtype=settings.memory.amp_dtype,
@@ -205,6 +221,10 @@ def run_spatial_training(
         last_patch_count=last_patch_count,
         amp_dtype=runtime_state.amp_dtype,
         channels_last=runtime_state.channels_last,
+        ram_budget_gib=memory_budget.ram_budget_gib,
+        ram_reserved_for_system_gib=memory_budget.ram_reserved_for_system_gib,
+        vram_budget_gib=memory_budget.vram_budget_gib,
+        vram_reserved_for_system_gib=memory_budget.vram_reserved_for_system_gib,
         cuda_max_allocated_gib=snapshot.max_allocated_gib,
         cuda_max_reserved_gib=snapshot.max_reserved_gib,
     )

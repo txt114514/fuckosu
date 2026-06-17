@@ -8,7 +8,7 @@ from traning.Lib.visualization import (
     select_click_frame,
 )
 from traning.conf import Settings
-from traning.core.data_input import build_dataset
+from traning.core.dataset_import import build_dataset
 from traning.core.visualization.service import OptionalTrainingVisualizer
 from traning.state import BatchGalleryRequest
 

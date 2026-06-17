@@ -6,7 +6,6 @@ from typing import Literal
 
 from traning.Lib.metrics.scoring import (
     PathPoints,
-    Point,
     PointScore,
     ScoreSpec,
     SliderScore,
@@ -37,10 +36,7 @@ class SequenceScoreSpec:
     object_score_spec: ScoreSpec = field(default_factory=ScoreSpec)
 
     def __post_init__(self) -> None:
-        if (
-            not isfinite(self.min_click_interval_ms)
-            or self.min_click_interval_ms < 0
-        ):
+        if not isfinite(self.min_click_interval_ms) or self.min_click_interval_ms < 0:
             raise ValueError("min_click_interval_ms must be finite and nonnegative")
 
 
@@ -172,10 +168,7 @@ def _score_value(score: PointScore | SliderScore) -> float:
 def _spatial_passed(score: PointScore | SliderScore, spec: ScoreSpec) -> bool:
     if isinstance(score, PointScore):
         return score.distance_ratio <= spec.spatial_pass_ratio
-    return (
-        score.head.distance_ratio <= spec.spatial_pass_ratio
-        and score.path.passed
-    )
+    return score.head.distance_ratio <= spec.spatial_pass_ratio and score.path.passed
 
 
 def _temporal_passed(score: PointScore | SliderScore, spec: ScoreSpec) -> bool:
@@ -291,8 +284,7 @@ def score_click_sequence(
         raise ValueError("circle_radius must be finite and positive")
 
     active_targets = {
-        target.target_id: target
-        for target in sorted(targets, key=_target_sort_key)
+        target.target_id: target for target in sorted(targets, key=_target_sort_key)
     }
     if len(active_targets) != len(targets):
         raise ValueError("target_id values must be unique")
@@ -309,8 +301,7 @@ def score_click_sequence(
     for click_index, click in ordered_clicks:
         if (
             last_accepted_click_ms is not None
-            and click.time_ms - last_accepted_click_ms
-            < spec.min_click_interval_ms
+            and click.time_ms - last_accepted_click_ms < spec.min_click_interval_ms
         ):
             evaluations.append(
                 ClickEvaluation(
@@ -382,13 +373,11 @@ def score_click_sequence(
                 )
                 continue
             target, score = best
-            primary_error, tags, spatial_error, temporal_error = (
-                _error_attribution(
-                    target,
-                    click,
-                    score,
-                    spec=spec.object_score_spec,
-                )
+            primary_error, tags, spatial_error, temporal_error = _error_attribution(
+                target,
+                click,
+                score,
+                spec=spec.object_score_spec,
             )
             evaluations.append(
                 ClickEvaluation(

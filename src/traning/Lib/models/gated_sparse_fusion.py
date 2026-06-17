@@ -6,8 +6,8 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-from traning.data import PatchMeta
-from traning.models.local_encoder import LocalFeatures
+from traning.Lib.data import PatchMeta
+from traning.Lib.models.local_encoder import LocalFeatures
 
 
 @dataclass(frozen=True)

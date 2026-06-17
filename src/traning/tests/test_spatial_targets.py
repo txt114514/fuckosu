@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import unittest
 
-from traning.data import PatchMeta
-from traning.models import OBJECT_TYPE_NAMES
-from traning.training import OBJECT_TYPE_TO_ID, build_spatial_loss_targets
+from traning.Lib.data import PatchMeta
+from traning.Lib.models import OBJECT_TYPE_NAMES
+from traning.Lib.training import OBJECT_TYPE_TO_ID, build_spatial_loss_targets
 
 
 class SpatialTargetTests(unittest.TestCase):

@@ -9,13 +9,13 @@
 - 原始 osu!standard playfield 坐标为 `512 x 384`。
 - 视频像素坐标通过 `package.OsuVideoTransform` 做居中等比缩放。
 - Patch 标签先在完整视频坐标系生成，再按 `PatchMeta.x0/y0/x1/y1` 裁剪到局部。
-- `traning.training.spatial_targets.build_spatial_loss_targets` 在模型输出的 feature grid
+- `traning.Lib.training.spatial_targets.build_spatial_loss_targets` 在模型输出的 feature grid
   上直接栅格化标签。右侧/底部 patch 的 padding 区域使用 `PatchMeta.padded_width` 和
   `PatchMeta.padded_height` 对齐，padding 单元保持 background。
 
 ## 输入颜色 Cue
 
-`traning.data.color_cues` 可从 RGB 帧派生 3 个输入通道：有限色号响应、白色数字/内纹响应和
+`traning.Lib.data.color_cues` 可从 RGB 帧派生 3 个输入通道：有限色号响应、白色数字/内纹响应和
 目标相关边缘响应。它们只作为模型输入先验，用来降低背景颜色干扰；不属于原始标注，也不作为
 额外监督标签写入 `SpatialLossTargets`。
 

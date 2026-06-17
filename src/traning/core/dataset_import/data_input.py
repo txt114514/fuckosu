@@ -3,8 +3,8 @@ from __future__ import annotations
 from torch.utils.data import DataLoader
 
 from traning.conf import DataSplit, Settings, load_settings
-from traning.core.data_input.loader import build_dataloader, build_dataset
-from traning.core.data_input.preflight import DataInputReport, inspect_data_input
+from traning.core.dataset_import.loader import build_dataloader, build_dataset
+from traning.core.dataset_import.preflight import DataInputReport, inspect_data_input
 
 
 class DataInputModule:

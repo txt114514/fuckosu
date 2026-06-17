@@ -5,9 +5,14 @@ import unittest
 import torch
 import torch.nn.functional as F
 
-from traning.data import PatchMeta
-from traning.models import OBJECT_TYPE_NAMES, SpatialPrediction
-from traning.training import SpatialPredictionCanvas, decode_spatial_candidates
+from traning.Lib.data import PatchMeta
+from traning.Lib.models import OBJECT_TYPE_NAMES, SpatialPrediction
+from traning.Lib.training import (
+    SpatialPredictionCanvas,
+    SpatialPredictionMaps,
+    decode_slider_paths,
+    decode_spatial_candidates,
+)
 
 
 def _prediction(
@@ -41,7 +46,9 @@ class SpatialDecodeTests(unittest.TestCase):
         prediction.center_heatmap[0, 0, row, col] = 12.0
         prediction.xy_offset[0, 0, row, col] = 0.25
         prediction.xy_offset[0, 1, row, col] = -0.25
-        prediction.object_type_logits[0, OBJECT_TYPE_NAMES.index("hit_circle"), row, col] = 10.0
+        prediction.object_type_logits[
+            0, OBJECT_TYPE_NAMES.index("hit_circle"), row, col
+        ] = 10.0
         prediction.ring_mask[0, 0, row, col] = 8.0
         prediction.ring_radius[0, 0, row, col] = 3.0
 
@@ -121,6 +128,46 @@ class SpatialDecodeTests(unittest.TestCase):
             nms_radius_px=20.0,
         )
         self.assertEqual(len(candidates), 1)
+
+    def test_decode_slider_paths_recovers_ordered_polyline(self) -> None:
+        height, width, stride = 12, 16, 8
+        object_types = len(OBJECT_TYPE_NAMES)
+        object_type_probs = torch.zeros((object_types, height, width))
+        object_type_probs[OBJECT_TYPE_NAMES.index("slider_body"), 4, 2:10] = 0.8
+        object_type_probs[OBJECT_TYPE_NAMES.index("slider_head"), 4, 2] = 0.9
+        object_type_probs[OBJECT_TYPE_NAMES.index("slider_tail"), 4, 9] = 0.9
+        slider = torch.zeros((1, height, width))
+        slider[0, 4, 2:10] = 0.9
+        maps = SpatialPredictionMaps(
+            center=torch.zeros((1, height, width)),
+            visible=torch.ones((1, height, width)),
+            xy_offset=torch.zeros((2, height, width)),
+            object_type_probs=object_type_probs,
+            ring=torch.zeros((1, height, width)),
+            ring_radius=torch.zeros((1, height, width)),
+            slider=slider,
+            slider_direction=torch.zeros((2, height, width)),
+            spinner=torch.zeros((1, height, width)),
+            embedding=torch.zeros((4, height, width)),
+            weights=torch.ones((1, height, width)),
+            frame_width=width * stride,
+            frame_height=height * stride,
+            stride=stride,
+        )
+
+        paths = decode_slider_paths(
+            maps,
+            threshold=0.5,
+            min_cells=2,
+            sample_points=5,
+        )
+
+        self.assertEqual(len(paths), 1)
+        path = paths[0]
+        self.assertFalse(path.ambiguous)
+        self.assertEqual(len(path.polyline), 5)
+        self.assertLess(path.head[0], path.tail[0])
+        self.assertAlmostEqual(path.head[1], path.tail[1], places=4)
 
 
 if __name__ == "__main__":

@@ -169,18 +169,82 @@ class MemoryConfig(BaseModel):
     matmul_float32_precision: Literal["highest", "high", "medium"] = "high"
     grad_scaler: Literal["auto", "enabled", "disabled"] = "auto"
     compile_model: bool = False
-    max_vram_gib: float = 7.5
+    max_vram_gib: float = 6.5
+    reserve_vram_gib: float = 1.0
+    max_ram_gib: float | None = 24.0
+    reserve_ram_gib: float = 4.0
+
+    @field_validator("reserve_vram_gib", "reserve_ram_gib")
+    @classmethod
+    def _finite_nonnegative_memory(cls, value: float) -> float:
+        if value < 0 or value != value or value == float("inf"):
+            raise ValueError("memory values must be finite and nonnegative")
+        return value
 
     @field_validator("max_vram_gib")
     @classmethod
-    def _positive_vram(cls, value: float) -> float:
+    def _positive_memory(cls, value: float) -> float:
         if value <= 0 or value != value or value == float("inf"):
             raise ValueError("max_vram_gib must be finite and positive")
+        return value
+
+    @field_validator("max_ram_gib")
+    @classmethod
+    def _optional_positive_memory(cls, value: float | None) -> float | None:
+        if value is not None and (value <= 0 or value != value or value == float("inf")):
+            raise ValueError("max_ram_gib must be finite and positive when set")
         return value
 
 
 class SMETConfig(BaseModel):
     enabled: bool = False
+
+
+class CandidateCacheSettings(BaseModel):
+    output_root: Path = REPO_ROOT / "runs" / "candidate_cache"
+    max_candidates_per_frame: int = 32
+    save_dtype: Literal["float32", "float16"] = "float16"
+    storage: Literal["jsonl"] = "jsonl"
+    score_threshold: float = 0.05
+    nms_radius_px: float = 32.0
+    slider_threshold: float = 0.5
+    slider_min_cells: int = 4
+    slider_path_points: int = 32
+    max_slider_paths: int = 16
+    low_confidence_threshold: float = 0.60
+    close_score_margin: float = 0.05
+    slider_attach_distance_px: float = 48.0
+
+    @field_validator(
+        "max_candidates_per_frame",
+        "slider_min_cells",
+        "slider_path_points",
+        "max_slider_paths",
+    )
+    @classmethod
+    def _positive_integer(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("candidate cache integer settings must be positive")
+        return value
+
+    @field_validator("score_threshold", "slider_threshold")
+    @classmethod
+    def _probability(cls, value: float) -> float:
+        if not 0.0 <= value <= 1.0:
+            raise ValueError("candidate cache thresholds must be in [0, 1]")
+        return value
+
+    @field_validator(
+        "nms_radius_px",
+        "low_confidence_threshold",
+        "close_score_margin",
+        "slider_attach_distance_px",
+    )
+    @classmethod
+    def _nonnegative_float(cls, value: float) -> float:
+        if value < 0 or value != value or value == float("inf"):
+            raise ValueError("candidate cache float settings must be finite")
+        return value
 
 
 class LoaderSettings(BaseModel):
@@ -348,6 +412,9 @@ class Settings(BaseSettings):
     temporal: TemporalConfig = Field(default_factory=TemporalConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
     smet: SMETConfig = Field(default_factory=SMETConfig)
+    candidate_cache: CandidateCacheSettings = Field(
+        default_factory=CandidateCacheSettings
+    )
     data_input: DataInputSettings = Field(default_factory=DataInputSettings)
     loader: LoaderSettings = Field(default_factory=LoaderSettings)
     evaluation: EvaluationSettings = Field(default_factory=EvaluationSettings)
@@ -400,6 +467,14 @@ def _resolve_paths(raw: dict[str, Any], base_dir: Path) -> dict[str, Any]:
             path if path.is_absolute() else (base_dir / path).resolve()
         )
     resolved["visualization"] = visualization
+    candidate_cache = dict(resolved.get("candidate_cache") or {})
+    output_root = candidate_cache.get("output_root")
+    if output_root is not None:
+        path = Path(output_root).expanduser()
+        candidate_cache["output_root"] = (
+            path if path.is_absolute() else (base_dir / path).resolve()
+        )
+    resolved["candidate_cache"] = candidate_cache
     return resolved
 
 
@@ -417,6 +492,7 @@ def load_settings(config_path: Path | None = None) -> Settings:
 
 __all__ = [
     "CONFIG_PATH",
+    "CandidateCacheSettings",
     "DataSplit",
     "DataInputSettings",
     "EvaluationSettings",

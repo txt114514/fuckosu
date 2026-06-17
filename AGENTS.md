@@ -32,10 +32,10 @@
 - 需要运行 GPU/CUDA 命令时，优先通过主机桥进入正常容器 namespace：
   `host-exec docker exec -u dev osu_ai_dev bash -lc 'cd /home/dev/workspace && <command>'`
 - GPU 可用性验证命令：
-  `host-exec docker exec -u dev osu_ai_dev bash -lc 'cd /home/dev/workspace && bash scripts/check_gpu.sh'`
+  `host-exec docker exec -u dev osu_ai_dev bash -lc 'cd /home/dev/workspace && bash environment/check_gpu.sh'`
 - 训练 CLI 的 CUDA 验证示例：
   `host-exec docker exec -u dev osu_ai_dev bash -lc 'cd /home/dev/workspace && PYTHONPATH=src python -m traning.cli env-check --strict --require-cuda'`
-- 后续新增或修改 `src/traning` 训练代码时，必须优先复用 `traning.core.memory` 的 CUDA
+- 后续新增或修改 `src/traning` 训练代码时，必须优先复用 `traning.Lib.runtime` 的 CUDA
   运行时入口：`configure_torch_runtime`、`module_to_device`、`tensor_to_device`、
   `autocast_context`、`create_grad_scaler` 和 `collect_memory_snapshot`。
 - CUDA 训练路径默认使用 `optimizer.zero_grad(set_to_none=True)`、AMP、必要时 GradScaler、

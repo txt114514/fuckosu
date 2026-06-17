@@ -85,7 +85,25 @@ memory:
   matmul_float32_precision: high
   grad_scaler: auto
   compile_model: false
-  max_vram_gib: 7.5
+  max_vram_gib: 6.5
+  reserve_vram_gib: 1.0
+  max_ram_gib: 24.0
+  reserve_ram_gib: 4.0
 
 smet:
   enabled: false
+
+candidate_cache:
+  output_root: ../runs/candidate_cache
+  max_candidates_per_frame: 32
+  save_dtype: float16
+  storage: jsonl
+  score_threshold: 0.05
+  nms_radius_px: 32.0
+  slider_threshold: 0.5
+  slider_min_cells: 4
+  slider_path_points: 32
+  max_slider_paths: 16
+  low_confidence_threshold: 0.60
+  close_score_margin: 0.05
+  slider_attach_distance_px: 48.0

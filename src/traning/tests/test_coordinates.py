@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from traning.data import (
+from traning.Lib.data import (
     PatchMeta,
     feature_grid_to_image,
     global_to_local,

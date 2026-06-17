@@ -21,7 +21,7 @@ Docker 重建后可把 CUDA 作为硬门禁检查：
 
 ```bash
 PYTHONPATH=src python -m traning.cli env-check --strict --require-cuda
-scripts/check_gpu.sh
+environment/check_gpu.sh
 ```
 
 在仓库根目录执行数据集检查。默认 `--split all` 会同时检查全部样本：

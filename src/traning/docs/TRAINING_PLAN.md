@@ -409,7 +409,8 @@ stride 1 输出，但只处理少量候选区域。
 
 ### GPU 负责
 
-- 当前 patch 的空间模型前向；
+- 完整帧的 global encoder 前向；
+- 当前 patch 的 local encoder、global-local fusion 和 spatial head 前向；
 - 当前 patch 的反向传播；
 - 小型时序模型训练；
 - 当前活跃参数优化。
@@ -417,6 +418,7 @@ stride 1 输出，但只处理少量候选区域。
 ### CPU 负责
 
 - 视频解码；
+- RGB 归一化、osu 色号/白色数字/边缘 cue；
 - patch 切分；
 - 已完成 patch 的结果缓存；
 - 全图候选融合；
@@ -471,6 +473,21 @@ GPU 继续处理下一 patch
 
 可使用 pinned memory、non-blocking copy、数据预取和独立 CUDA stream。
 
+### 显存与内存保留
+
+所有训练、推理和模型 smoke 入口必须先执行 `enforce_runtime_memory_budget`。默认小显存配置：
+
+- 进程显存预算：`max_vram_gib: 6.5`
+- 系统/驱动保留显存：`reserve_vram_gib: 1.0`
+- 进程 CPU RAM 预算：`max_ram_gib: 24.0`
+- 系统保留 CPU RAM：`reserve_ram_gib: 4.0`
+
+有效 CUDA 预算按 `min(max_vram_gib, total_vram - reserve_vram_gib)` 计算，并设置
+PyTorch per-process memory fraction。CPU 侧在每个模型入口检查可用内存和当前进程 RSS；
+有效 CPU 预算按 `min(max_ram_gib, total_ram - reserve_ram_gib,
+current_rss + available_ram - reserve_ram_gib)` 计算。如果可用内存已经低于系统保留量，
+直接停止而不是继续抢占系统运行内存。
+
 ## 7. 空间与时序分阶段训练
 
 ### 7.1 阶段一：空间模型训练
@@ -496,8 +513,19 @@ GPU 继续处理下一 patch
 
 候选解码状态：`SpatialPredictionCanvas` 已能把每个 patch 的 center、visible、type、
 ring、slider、spinner 和 embedding 输出写回全图概率画布；`decode_spatial_candidates`
-已提供 Top-K、局部最大值和半径 NMS 的首版点候选解码。slider 连通域、中心线细化和候选缓存
-仍属于下一阶段。
+已提供 Top-K、局部最大值和半径 NMS 的首版点候选解码。`decode_slider_paths` 已基于
+CPU 全图 slider 稠密图完成首版连通域、端点、branch/continuity 标记和固定长度 polyline
+恢复；交叉、接触分叉或端点异常会进入 `ambiguity_reasons`，不伪装成高置信路径。
+
+单帧推理状态：`run_spatial_frame_inference` 已把这条路径封装成可复用入口。CPU 侧负责
+color cue、patch stream、detached 画布融合、候选解码和 JSON/缓存输出；GPU 侧只保留
+global/local/fusion/head 前向和必要的 tensor copy。`spatial-decode-smoke` 已复用该入口，
+并输出 `candidates.json` 与 `slider_paths.json`。
+
+空间模块闭环状态：`build-candidate-cache` 已能逐帧运行空间推理，生成
+`frames.jsonl` 与 `manifest.json`。每帧记录包含点候选、embedding、slider polyline、
+候选与 slider 的关联以及低置信/近分/路径歧义标记，可直接作为阶段二时序模型输入。
+候选局部 refiner 和条件歧义复查仍是质量增强层，首版缓存先以全图稠密融合结果为主。
 
 ### 7.2 离线缓存候选
 
@@ -516,16 +544,30 @@ ring、slider、spinner 和 embedding 输出写回全图概率画布；`decode_s
 
 ```python
 {
+    "version": "spatial-candidate-cache-v1",
+    "sample_key": "item_000001/long_sequence_000001",
+    "frame_index": 36,
     "timestamp_ms": 600.0,
     "candidates": [
         {
             "x": 508.1,
             "y": 237.3,
             "score": 0.98,
-            "type_logits": [...],
-            "embedding": [...]
+            "object_type": "slider_head",
+            "embedding": [...],
+            "slider_path_id": 0,
+            "ambiguous": false,
+            "ambiguity_reasons": []
         }
-    ]
+    ],
+    "slider_paths": [
+        {
+            "component_id": 0,
+            "polyline": [[508.1, 237.3], ...],
+            "continuity": 0.95,
+            "ambiguous": false
+        }
+    ],
 }
 ```
 

@@ -8,6 +8,7 @@ from typing import Any
 
 if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import torch
 import numpy as np
@@ -17,33 +18,36 @@ from rich.console import Console
 from rich.table import Table
 
 from traning.Lib.data import build_patch_windows
-from traning.conf import DataSplit, load_settings
-from traning.core.memory import (
+from traning.Lib.data import PatchStream, append_color_cues
+from traning.Lib.models import build_model_stack
+from traning.Lib.runtime import (
     CudaRuntimeConfig,
     autocast_context,
     collect_memory_snapshot,
     configure_torch_runtime,
     create_grad_scaler,
+    enforce_runtime_memory_budget,
     format_oom_guidance,
     maybe_compile_module,
     module_to_device,
     tensor_to_device,
 )
-from traning.core.data_input import build_dataset, inspect_data_input
-from traning.core.env_check import collect_environment_report
+from traning.conf import DataSplit, load_settings
+from traning.core.candidate_cache import generate_candidate_cache
+from traning.core.dataset_import import build_dataset, inspect_data_input
 from traning.core.pipeline import run_pipeline
+from traning.core.spatial_training import (
+    run_spatial_frame_inference,
+    run_spatial_training,
+    slider_path_to_dict,
+    spatial_candidate_to_dict,
+)
 from traning.core.visualization import (
     save_annotation_gallery,
     visualize_click_label,
 )
-from traning.data import PatchStream, append_color_cues
-from traning.models import build_model_stack
-from traning.training import (
-    SpatialPredictionCanvas,
-    decode_spatial_candidates,
-    run_spatial_training,
-)
 from traning.state import load_batch_gallery_request
+from environment import collect_environment_report
 
 
 app = typer.Typer(help="osu! video model training commands.")
@@ -117,9 +121,9 @@ def _render_env_report(report) -> None:
     console.print(package_table)
 
 
-def _run_dir(kind: str) -> Path:
+def _run_dir(kind: str, *, root: Path | None = None) -> Path:
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S_%fZ")
-    path = Path("runs") / f"{run_id}__{kind}"
+    path = (root or Path("runs")) / f"{run_id}__{kind}"
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -153,6 +157,13 @@ def _execute_model_smoke(
     backward: bool,
 ) -> dict[str, Any]:
     settings = load_settings(config)
+    memory_budget = enforce_runtime_memory_budget(
+        device=device,
+        max_vram_gib=settings.memory.max_vram_gib,
+        reserve_vram_gib=settings.memory.reserve_vram_gib,
+        max_ram_gib=settings.memory.max_ram_gib,
+        reserve_ram_gib=settings.memory.reserve_ram_gib,
+    )
     runtime_state = configure_torch_runtime(
         device=device,
         amp_dtype=settings.memory.amp_dtype,
@@ -270,6 +281,11 @@ def _execute_model_smoke(
         "matmul_precision": runtime_state.matmul_float32_precision,
         "grad_scaler": scaler.is_enabled(),
         "compile_model": settings.memory.compile_model,
+        "ram_budget_gib": memory_budget.ram_budget_gib,
+        "ram_reserved_for_system_gib": memory_budget.ram_reserved_for_system_gib,
+        "vram_budget_gib": memory_budget.vram_budget_gib,
+        "vram_reserved_for_system_gib": memory_budget.vram_reserved_for_system_gib,
+        "cuda_memory_fraction": memory_budget.cuda_memory_fraction,
         "patch_count": patch_count,
         "patch_shape": tuple(patch.shape),
         "local_shape": tuple(local_features.dense.shape),
@@ -289,6 +305,22 @@ def _render_dict_table(title: str, values: dict[str, Any]) -> None:
         rendered = f"{value:.6f}" if isinstance(value, float) else str(value)
         table.add_row(key, rendered)
     console.print(table)
+
+
+def _compact_slider_path(path: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "component_id": path["component_id"],
+        "score": path["score"],
+        "continuity": path["continuity"],
+        "ambiguous": path["ambiguous"],
+        "ambiguity_reasons": path["ambiguity_reasons"],
+        "bbox": path["bbox"],
+        "head": path["head"],
+        "tail": path["tail"],
+        "cell_count": path["cell_count"],
+        "branch_points": path["branch_points"],
+        "endpoint_count": path["endpoint_count"],
+    }
 
 
 @app.command("data-check")
@@ -399,23 +431,6 @@ def model_smoke(
     _render_dict_table("Model smoke", summary)
 
 
-def _candidate_to_dict(candidate) -> dict[str, Any]:
-    return {
-        "x": candidate.x,
-        "y": candidate.y,
-        "score": candidate.score,
-        "object_type": candidate.object_type,
-        "object_type_id": candidate.object_type_id,
-        "center_score": candidate.center_score,
-        "visible_score": candidate.visible_score,
-        "type_score": candidate.type_score,
-        "ring_score": candidate.ring_score,
-        "ring_radius_px": candidate.ring_radius_px,
-        "slider_score": candidate.slider_score,
-        "spinner_score": candidate.spinner_score,
-    }
-
-
 @app.command("spatial-decode-smoke")
 def spatial_decode_smoke(
     config: Path = typer.Option(Path("configs/model_small_vram.yaml"), "--config"),
@@ -425,6 +440,8 @@ def spatial_decode_smoke(
     max_candidates: int = typer.Option(16, "--max-candidates", min=1),
     score_threshold: float = typer.Option(0.0, "--score-threshold", min=0.0),
     nms_radius_px: float = typer.Option(32.0, "--nms-radius-px", min=0.0),
+    slider_threshold: float = typer.Option(0.5, "--slider-threshold", min=0.0, max=1.0),
+    max_slider_paths: int = typer.Option(16, "--max-slider-paths", min=1),
     patch_limit: int | None = typer.Option(None, "--patch-limit", min=1),
 ) -> None:
     settings = load_settings(config)
@@ -435,93 +452,38 @@ def spatial_decode_smoke(
             f"index {index} is outside dataset length {len(dataset)}"
         )
     sample = dataset[index]
-    frame = sample["image"]
-    if not torch.is_floating_point(frame):
-        frame = frame.float().div(255.0)
-    frame = append_color_cues(frame.contiguous(), mode=settings.input.color_cues)
-    stream = PatchStream(
-        patch_width=settings.tiling.patch_width,
-        patch_height=settings.tiling.patch_height,
-        overlap_x=settings.tiling.overlap_x,
-        overlap_y=settings.tiling.overlap_y,
-        pin_memory=settings.loader.pin_memory and selected.type == "cuda",
-    )
-    runtime_state = configure_torch_runtime(
+    result = run_spatial_frame_inference(
+        settings,
+        sample,
         device=selected,
-        amp_dtype=settings.memory.amp_dtype,
-        runtime=CudaRuntimeConfig(
-            allow_tf32=settings.memory.allow_tf32,
-            cudnn_benchmark=settings.memory.cudnn_benchmark,
-            matmul_float32_precision=settings.memory.matmul_float32_precision,
-            channels_last=settings.memory.channels_last,
-        ),
-    )
-    modules = _build_model_stack(settings)
-    for name, module in tuple(modules.items()):
-        moved = module_to_device(
-            module,
-            selected,
-            channels_last=runtime_state.channels_last,
-        )
-        moved = maybe_compile_module(moved, enabled=settings.memory.compile_model)
-        moved.eval()
-        modules[name] = moved
-    frame_device = tensor_to_device(
-        frame.unsqueeze(0),
-        selected,
-        channels_last=runtime_state.channels_last,
-        non_blocking=stream.pin_memory,
-    )
-    canvas = SpatialPredictionCanvas(
-        frame_width=sample["image"].shape[-1],
-        frame_height=sample["image"].shape[-2],
-        stride=settings.local_encoder.output_stride,
-        embedding_dim=settings.local_encoder.embedding_dim,
-    )
-    processed = 0
-    with torch.no_grad():
-        with autocast_context(selected, settings.memory.amp_dtype):
-            global_features = modules["global"](frame_device)
-            global_dense = global_features.dense.detach()
-        for patch_cpu, meta in stream.iter_patches(frame):
-            if patch_limit is not None and processed >= patch_limit:
-                break
-            patch = tensor_to_device(
-                patch_cpu.unsqueeze(0),
-                selected,
-                channels_last=runtime_state.channels_last,
-                non_blocking=stream.pin_memory,
-            )
-            with autocast_context(selected, settings.memory.amp_dtype):
-                local_features = modules["local"](patch)
-                fused = modules["fusion"](
-                    local_features=local_features,
-                    global_features=global_dense,
-                    patch_meta=meta,
-                )
-                prediction = modules["head"](fused.dense)
-            canvas.write_patch(prediction, meta)
-            processed += 1
-    candidates = decode_spatial_candidates(
-        canvas.to_maps(),
         max_candidates=max_candidates,
         score_threshold=score_threshold,
         nms_radius_px=nms_radius_px,
+        slider_threshold=slider_threshold,
+        max_slider_paths=max_slider_paths,
+        patch_limit=patch_limit,
     )
     output_dir = _run_dir("spatial_decode_smoke")
-    candidate_rows = [_candidate_to_dict(candidate) for candidate in candidates]
+    candidate_rows = [
+        spatial_candidate_to_dict(candidate) for candidate in result.candidates
+    ]
+    slider_rows = [slider_path_to_dict(path) for path in result.slider_paths]
     (output_dir / "candidates.json").write_text(
         json.dumps(candidate_rows, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
-    summary = {
-        "device": str(selected),
+    (output_dir / "slider_paths.json").write_text(
+        json.dumps(slider_rows, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    summary = result.as_summary() | {
         "sample_key": sample["sample_key"],
         "frame_index": sample["frame_index"],
         "timestamp_ms": sample["timestamp_ms"],
-        "patches_processed": processed,
-        "candidate_count": len(candidates),
         "top_candidate": candidate_rows[0] if candidate_rows else None,
+        "top_slider_path": (
+            _compact_slider_path(slider_rows[0]) if slider_rows else None
+        ),
         "run_dir": output_dir,
     }
     (output_dir / "summary.txt").write_text(
@@ -529,6 +491,51 @@ def spatial_decode_smoke(
         encoding="utf-8",
     )
     _render_dict_table("Spatial decode smoke", summary)
+
+
+@app.command("build-candidate-cache")
+def build_candidate_cache(
+    config: Path = typer.Option(Path("configs/model_small_vram.yaml"), "--config"),
+    split: DataSplit = typer.Option("train", "--split"),
+    device: str = typer.Option("cpu", "--device"),
+    max_frames: int | None = typer.Option(None, "--max-frames", min=1),
+    patch_limit: int | None = typer.Option(None, "--patch-limit", min=1),
+    max_candidates: int | None = typer.Option(None, "--max-candidates", min=1),
+    score_threshold: float | None = typer.Option(
+        None,
+        "--score-threshold",
+        min=0.0,
+        max=1.0,
+    ),
+    nms_radius_px: float | None = typer.Option(None, "--nms-radius-px", min=0.0),
+    slider_threshold: float | None = typer.Option(
+        None,
+        "--slider-threshold",
+        min=0.0,
+        max=1.0,
+    ),
+    max_slider_paths: int | None = typer.Option(None, "--max-slider-paths", min=1),
+    output: Path | None = typer.Option(None, "--output"),
+) -> None:
+    settings = load_settings(config)
+    selected = _select_device(device)
+    output_dir = output or _run_dir(
+        str(split), root=settings.candidate_cache.output_root
+    )
+    result = generate_candidate_cache(
+        settings,
+        output_dir=output_dir,
+        device=selected,
+        split=split,
+        max_frames=max_frames,
+        patch_limit=patch_limit,
+        max_candidates=max_candidates,
+        score_threshold=score_threshold,
+        nms_radius_px=nms_radius_px,
+        slider_threshold=slider_threshold,
+        max_slider_paths=max_slider_paths,
+    )
+    _render_dict_table("Candidate cache", result.as_dict())
 
 
 @app.command("memory-profile")
@@ -607,6 +614,13 @@ def visualize_fusion(
 ) -> None:
     settings = load_settings(config)
     selected = _select_device(device)
+    enforce_runtime_memory_budget(
+        device=selected,
+        max_vram_gib=settings.memory.max_vram_gib,
+        reserve_vram_gib=settings.memory.reserve_vram_gib,
+        max_ram_gib=settings.memory.max_ram_gib,
+        reserve_ram_gib=settings.memory.reserve_ram_gib,
+    )
     runtime_state = configure_torch_runtime(
         device=selected,
         amp_dtype=settings.memory.amp_dtype,

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from traning.core.env_check import (
+from environment import (
     REQUIRED_PACKAGES,
     collect_environment_report,
 )

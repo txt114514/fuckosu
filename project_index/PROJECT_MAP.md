@@ -8,6 +8,7 @@
 | 模块 | 源码目录 | 对外说明 | Codex 索引 |
 |---|---|---|---|
 | 全局共享 API | `src/package` | [`README.md`](../src/package/README.md) | 公开入口：`src/package/__init__.py` |
+| 运行环境检查 | `environment` | 环境/CUDA 诊断脚本与 Python 检查 API | 公开入口：`environment/__init__.py` |
 | 训练前处理 | `src/before_traning` | [`README.md`](../src/before_traning/docs/README.md) | [`CODEX_INDEX.md`](../src/before_traning/docs/CODEX_INDEX.md) |
 | 模型训练 | `src/traning` | [`README.md`](../src/traning/docs/README.md)、[`TRAINING_PLAN.md`](../src/traning/docs/TRAINING_PLAN.md)、[`label_generation.md`](../src/traning/docs/label_generation.md)、[`CUDA_OPTIMIZATION.md`](../src/traning/docs/CUDA_OPTIMIZATION.md)、[`TEST_PARAMETER_MECHANISM.md`](../src/traning/docs/TEST_PARAMETER_MECHANISM.md)、[`SCORING_SPEC.md`](../src/traning/docs/SCORING_SPEC.md) | [`CODEX_INDEX.md`](../src/traning/docs/CODEX_INDEX.md) |
 
@@ -36,7 +37,8 @@
 4. 处理空间监督、osu 坐标光栅化或 patch dense target 时读取
    `src/traning/docs/label_generation.md`。
 5. 运行 `python project_index/build_index.py --lookup 符号名` 定位实现。
-6. 当前首要入口是 `core/data_input`；空间、候选缓存和时序目录暂为阶段边界。
+6. 当前首要入口是 `core/dataset_import`；空间训练入口是
+   `core/spatial_training`，候选缓存和时序目录继续作为阶段边界。
 7. 批次评估图集入口是 `save-annotation-gallery`；结果契约位于
    `state/gallery_schema.py`，按最高分 trial 和六个数据子项目生成 `passed/failed`
    标注目录。

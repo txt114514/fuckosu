@@ -7,9 +7,9 @@ import math
 import torch
 
 from package.coordinates import OsuVideoTransform
-from traning.data import PatchMeta
-from traning.models import OBJECT_TYPE_NAMES
-from traning.training.losses import SpatialLossTargets
+from traning.Lib.data import PatchMeta
+from traning.Lib.models import OBJECT_TYPE_NAMES
+from traning.Lib.training.losses import SpatialLossTargets
 
 
 DEFAULT_APPROACH_PREEMPT_MS = 1000.0

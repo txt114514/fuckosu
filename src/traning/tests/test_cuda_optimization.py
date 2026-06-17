@@ -2,14 +2,16 @@ from __future__ import annotations
 
 import unittest
 
+import psutil
 import torch
 from torch import nn
 
-from traning.core.memory import (
+from traning.Lib.runtime import (
     CudaRuntimeConfig,
     amp_uses_grad_scaler,
     configure_torch_runtime,
     create_grad_scaler,
+    enforce_runtime_memory_budget,
     module_to_device,
     tensor_to_device,
 )
@@ -44,6 +46,30 @@ class CudaOptimizationTests(unittest.TestCase):
             channels_last=True,
         )
         self.assertTrue(moved.is_contiguous())
+
+    def test_cpu_memory_budget_reports_system_reserve(self) -> None:
+        budget = enforce_runtime_memory_budget(
+            device=torch.device("cpu"),
+            max_vram_gib=1.0,
+            reserve_vram_gib=0.0,
+            max_ram_gib=None,
+            reserve_ram_gib=0.1,
+        )
+        self.assertEqual(budget.device, "cpu")
+        self.assertGreater(budget.ram_budget_gib, 0.0)
+        self.assertEqual(budget.ram_reserved_for_system_gib, 0.1)
+        self.assertIsNone(budget.vram_budget_gib)
+
+    def test_cpu_memory_budget_rejects_unavailable_reserve(self) -> None:
+        total_gib = psutil.virtual_memory().total / 1024**3
+        with self.assertRaises(RuntimeError):
+            enforce_runtime_memory_budget(
+                device=torch.device("cpu"),
+                max_vram_gib=1.0,
+                reserve_vram_gib=0.0,
+                max_ram_gib=None,
+                reserve_ram_gib=total_gib + 1.0,
+            )
 
     def test_cuda_channels_last_when_available(self) -> None:
         if not torch.cuda.is_available():

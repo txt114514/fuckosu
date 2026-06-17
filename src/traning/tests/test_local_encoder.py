@@ -4,7 +4,7 @@ import unittest
 
 import torch
 
-from traning.models import SmallLocalEncoder
+from traning.Lib.models import SmallLocalEncoder
 
 
 class LocalEncoderTests(unittest.TestCase):
