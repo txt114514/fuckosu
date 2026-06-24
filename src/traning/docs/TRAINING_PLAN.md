@@ -14,6 +14,7 @@
 训练启动前的实测检查和下一步命令见 [`TRAINING_READINESS.md`](TRAINING_READINESS.md)。
 训练结果评分、归因和参数调整闭环见 [`OPTIMIZATION_MODULE.md`](OPTIMIZATION_MODULE.md)。
 `traning` 内部复用层整理见 [`LIB_STRUCTURE_AUDIT.md`](LIB_STRUCTURE_AUDIT.md)。
+`src` 总入口与完整训练启动前自检见 [`../../start/README.md`](../../start/README.md)。
 
 ## 项目目标
 
@@ -37,6 +38,7 @@
 
 ```text
 main.py
+  -> ../start                 # src 顶层入口登记、渐进检查、训练启动前自检
   -> core/dataset_import     # 训练集导入、检查、Dataset/DataLoader
   -> core/spatial            # 空间训练与单帧推理
   -> core/temporal           # 候选缓存窗口、因果时序训练 smoke
@@ -56,7 +58,8 @@ main.py
 ## 已实现能力
 
 - `conf.settings`：Pydantic 配置模型、YAML 加载、环境变量覆盖和路径解析。
-- `dataset_import`：扫描 `video.mp4` 与 `beatmap.json` 配对，按 split 生成
+- `dataset_import`：扫描 `video.mp4` 与 `beatmap.json` 配对，按
+  `package.dataset_split` 的持久化 manifest 生成 train/validation/test
   `SegmentFrameDataset` 和 `DataLoader`。
 - `spatial`：原分辨率帧、重叠 patch、全局/局部编码、稠密空间头、单帧训练 smoke 和单帧推理。
 - `decision`：离线候选缓存 JSONL/manifest，保留候选、embedding、slider polyline 和歧义标记。
@@ -65,6 +68,7 @@ main.py
 - `state`：trial 参数、checkpoint lineage、课程阶段、gallery request 和 frame evaluation schema。
 - `lib.metrics`：`point-slider-v2` 单对象评分和 `click-sequence-v1` 序列模拟底层 API。
 - `lib.runtime`：CUDA/AMP/channels-last/TF32/GradScaler/显存预算和 OOM 建议统一入口。
+- `start.checks`：完整训练每次启动前执行模块入口、环境、配置、设备和数据输入自检。
 
 ## 待实现或待扩展
 
@@ -91,3 +95,4 @@ main.py
 4. [`ENVIRONMENT.md`](ENVIRONMENT.md)：运行 CUDA、GPU、smoke test 或训练前阅读。
 5. [`LIB_STRUCTURE_AUDIT.md`](LIB_STRUCTURE_AUDIT.md)：调整 `src/traning/lib` 或公共 API
    边界前阅读。
+6. [`../../start/README.md`](../../start/README.md)：调整整体入口或启动自检前阅读。

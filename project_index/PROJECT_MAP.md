@@ -7,6 +7,7 @@
 
 | 模块 | 源码目录 | 对外说明 | Codex 索引 |
 |---|---|---|---|
+| 启动入口与自检 | `src/start` | [`README.md`](../src/start/README.md) | 公开入口：`src/start/main.py` |
 | 全局共享 API | `src/package` | [`README.md`](../src/package/README.md) | 公开入口：`src/package/__init__.py` |
 | 运行环境检查 | `environment` | 环境/CUDA 诊断脚本与 Python 检查 API | 公开入口：`environment/__init__.py` |
 | 训练前处理 | `src/before_traning` | [`README.md`](../src/before_traning/docs/README.md) | [`CODEX_INDEX.md`](../src/before_traning/docs/CODEX_INDEX.md) |
@@ -20,6 +21,23 @@
 - 子模块开始持续扩充独立功能、形成稳定契约、隔离第三方依赖或承担跨层边界时，
   即使只有一个调用方，也应迁入 `src/package`；原模块只保留编排和适配。
 - 新增全局 API 时按领域建立子模块，并在 `src/package/__init__.py` 显式导出。
+- 当前跨模块稳定 API 包括 `package.contracts`、`package.checks` 和
+  `package.dataset_split`；其中 dataset split 维护
+  `training_package/splits/dataset_split_manifest.json`，供 start 同步、traning 读取。
+
+## start 最短阅读路径
+
+1. `src/start/modules.py` 固定 `src` 顶层模块入口。
+2. `src/start/flow.py` 固定完整启动流程：before_traning 自检和新 raw-data 决策、
+   可选 before_traning 更新训练集、traning 自检、渐进/全面检测、完整训练。
+3. `src/before_traning/tests/startup_checks/runner.py` 是 before_traning 启动检测入口，
+   `before_traning:raw_data` 返回是否存在未匹配新样本。
+4. `src/traning/tests/startup_checks/runner.py` 是 traning 启动检测入口。
+5. `PYTHONPATH=src python -m start modules` 查看当前入口登记。
+6. `PYTHONPATH=src python -m start check --config configs/model_small_vram.yaml --device cpu`
+   运行训练启动前自检。
+7. `PYTHONPATH=src python -m start run --training-config configs/model_small_vram.yaml --device cpu --dry-run --test-level quick --no-before-match-probe`
+   演练完整启动流程。
 
 ## before_traning 最短阅读路径
 

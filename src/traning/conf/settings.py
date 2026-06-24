@@ -20,7 +20,7 @@ from pydantic_settings import (
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CONFIG_PATH = Path(__file__).resolve().parent / "config.yaml"
-DataSplit = Literal["all", "train", "validation"]
+DataSplit = Literal["all", "train", "validation", "test"]
 
 
 class SettingsError(Exception):
@@ -317,12 +317,14 @@ class VisualizationSettings(BaseModel):
 
 class DataInputSettings(BaseModel):
     dataset_root: Path = REPO_ROOT / "training_package" / "video_segments"
+    split_manifest_path: Path | None = None
     dimensions: tuple[str, ...] = ("atomic", "long_sequence")
     categories: tuple[str, ...] = ()
     include_items: tuple[str, ...] = ()
     exclude_items: tuple[str, ...] = ()
     train_items: tuple[str, ...] = ()
     validation_items: tuple[str, ...] = ()
+    test_items: tuple[str, ...] = ()
     sample_fps: float = 60.0
     frame_step: int = 1
     max_segments: int | None = None
@@ -370,6 +372,7 @@ class DataInputSettings(BaseModel):
         "exclude_items",
         "train_items",
         "validation_items",
+        "test_items",
     )
     @classmethod
     def _unique_nonempty_strings(cls, value: tuple[str, ...]) -> tuple[str, ...]:
@@ -382,10 +385,17 @@ class DataInputSettings(BaseModel):
 
     @model_validator(mode="after")
     def validate_item_splits(self) -> DataInputSettings:
-        overlap = set(self.train_items) & set(self.validation_items)
-        if overlap:
-            joined = ", ".join(sorted(overlap))
-            raise ValueError(f"train_items and validation_items overlap: {joined}")
+        groups = (
+            ("train_items", set(self.train_items)),
+            ("validation_items", set(self.validation_items)),
+            ("test_items", set(self.test_items)),
+        )
+        for index, (left_name, left_items) in enumerate(groups):
+            for right_name, right_items in groups[index + 1 :]:
+                overlap = left_items & right_items
+                if overlap:
+                    joined = ", ".join(sorted(overlap))
+                    raise ValueError(f"{left_name} and {right_name} overlap: {joined}")
         return self
 
     def validate_tiling(self) -> None:
@@ -456,6 +466,12 @@ def _resolve_paths(raw: dict[str, Any], base_dir: Path) -> dict[str, Any]:
     if dataset_root is not None:
         path = Path(dataset_root).expanduser()
         data_input["dataset_root"] = (
+            path if path.is_absolute() else (base_dir / path).resolve()
+        )
+    split_manifest_path = data_input.get("split_manifest_path")
+    if split_manifest_path is not None:
+        path = Path(split_manifest_path).expanduser()
+        data_input["split_manifest_path"] = (
             path if path.is_absolute() else (base_dir / path).resolve()
         )
     resolved["data_input"] = data_input

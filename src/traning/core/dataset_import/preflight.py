@@ -4,6 +4,7 @@ from collections import Counter
 from dataclasses import dataclass
 from math import ceil
 
+from package.dataset_split import default_split_manifest_path, load_split_manifest
 from traning.lib.data import DiscoveryResult, discover_segments
 from traning.lib.data.models import DatasetIssue
 from traning.conf import DataSplit, Settings
@@ -35,10 +36,20 @@ def _combine_item_filters(
 
 
 def _split_items(config, split: DataSplit) -> tuple[str, ...]:
+    if split == "all":
+        return ()
+    manifest_path = config.split_manifest_path or default_split_manifest_path(
+        config.dataset_root
+    )
+    manifest = load_split_manifest(manifest_path)
+    if manifest is not None:
+        return manifest.split_items(split)
     if split == "train":
         return config.train_items
     if split == "validation":
         return config.validation_items
+    if split == "test":
+        return config.test_items
     return ()
 
 

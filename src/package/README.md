@@ -51,3 +51,22 @@ from package import SharedType, shared_function
 
 每个 contract 都提供 `as_dict()`，支持需要时从 mapping 创建；调用方仍应优先从
 `package` 或 `package.contracts` 的公开入口导入。
+
+## Dataset Split
+
+`package.dataset_split` 管理跨 `start` 和 `traning` 共用的数据集划分清单。
+
+默认清单位置：
+
+```text
+training_package/splits/dataset_split_manifest.json
+```
+
+规则：
+
+- 划分单位是 `item`，不把同一个谱面/视频的 segment 拆到不同 split。
+- 已存在于 manifest 的 item 不自动改 split，保证历史评估可比。
+- 每次启动都可调用 `sync_dataset_split_manifest`；没有新增 item 时是 no-op。
+- 新增 item 会按配置中的旧 `train_items` / `validation_items` / `test_items` 做一次 bootstrap，
+  其余按比例补到最缺的 split。
+- `allow_test_growth=False` 时新增 item 只自动进入 `train` 或 `validation`，`test` 保持冻结。

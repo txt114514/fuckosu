@@ -82,15 +82,19 @@ ROLE_OVERRIDES = {
     "Lib/video/segment_dataset.py": "用 SQLite 管理视频片段索引、导出 CSV 并校验数据集文件完整性。",
     "Lib/video/segmentation/planner.py": "构建对象恰好归属一次的原子片段，支持稳定前置时间抖动，并将完整原子片段组合为长序列维度。",
     "Lib/video/segmentation/segmentation.py": "根据显式参数调用 planner，返回原子与长序列计划集合。",
+    "tests/startup_checks/runner.py": "before_traning 启动检测统一入口；按顺序运行配置、pipeline、分段契约和原始数据扫描检测。",
+    "tests/startup_checks/items.py": "before_traning 启动检测项；包含配置、阶段注册、分段规划和 raw-data 决策信号。",
+    "tests/startup_checks/samples.py": "只读扫描未匹配原始 .osz、候选视频、已导入待匹配样本和已匹配清单。",
+    "tests/full_checks/runner.py": "before_traning 全面检测统一入口；运行 full_checks 下的 pytest。",
 }
 
 TRAINING_ROLE_OVERRIDES = {
-    "main.py": "Typer CLI；执行数据检查、样本预览、空间训练/推理 smoke、候选缓存和训练阶段注册表。",
+    "main.py": "Typer CLI；执行环境/数据检查、端到端 run、模型 smoke、空间训练、候选缓存、时序训练、决策和结果导出。",
     "cli.py": "python -m 入口；复用 main.py 中的同一个 Typer app。",
     "conf/settings.py": "训练配置模型与 YAML 加载；解析数据集路径、item 划分、颜色 cue、候选缓存、点击频率上限并校验采样和分块参数。",
     "conf/defaults.py": "创建默认训练 Settings。",
     "core/decision/__init__.py": "决策阶段门面；导出候选缓存生成器和训练阶段注册表。",
-    "core/decision/pipeline.py": "声明训练阶段注册表；当前登记 dataset_import，后续扩展空间、决策、时序和导出阶段。",
+    "core/decision/pipeline.py": "声明完整训练阶段表；先调用 start.checks 自检，再串接 data-check、空间训练、候选缓存、时序训练和决策导出。",
     "core/decision/generator.py": "离线空间候选缓存生成器；逐帧调用空间推理并写 JSONL/manifest/temporal target。",
     "core/decision/runner.py": "加载 temporal checkpoint 和候选缓存，导出逐帧动作决策 JSONL。",
     "core/optimization/__init__.py": "训练结果闭环门面；导出评分、错误归因和参数搜索修改 API。",
@@ -117,7 +121,7 @@ TRAINING_ROLE_OVERRIDES = {
     "core/spatial/spatial_trainer.py": "首版单帧空间训练循环；冻结 global、串行 patch 前向和逐 patch backward。",
     "core/dataset_import/__init__.py": "训练集导入阶段门面；导出数据检查、Dataset 和 DataLoader。",
     "core/dataset_import/data_input.py": "训练集导入模块公开门面；提供检查、Dataset 和 DataLoader。",
-    "core/dataset_import/preflight.py": "扫描训练片段并生成数量、类别、维度和问题报告。",
+    "core/dataset_import/preflight.py": "读取 split manifest 或旧 item 配置，扫描训练片段并生成数量、类别、维度和问题报告。",
     "core/dataset_import/loader.py": "把配置映射为 SegmentFrameDataset 与 PyTorch DataLoader。",
     "core/dataset_import/pipeline.py": "训练集导入阶段注册门面；重导出 DataInputModule、Dataset 和 DataLoader。",
     "lib/runtime/memory.py": "统一 CUDA/runtime memory policy；管理 AMP、GradScaler、channels-last、TF32、显存/RAM预算、显存快照和 OOM 建议。",
@@ -155,6 +159,9 @@ TRAINING_ROLE_OVERRIDES = {
     "state/checkpoint_schema.py": "检查点 lineage 与模型/优化器/scheduler/AMP 恢复契约。",
     "state/experiment_schema.py": "三层参数、TPE/随机来源、ASHA trial、课程和独立评估契约。",
     "state/gallery_schema.py": "批次 trial 分数、稳定帧引用、错误归因和最佳参数图集输入契约。",
+    "tests/startup_checks/runner.py": "traning 启动检测统一入口；按顺序运行配置、运行设备、数据输入和 core 入口检测。",
+    "tests/startup_checks/items.py": "traning 启动检测项；检查配置、设备、数据输入和完整训练阶段注册。",
+    "tests/full_checks/runner.py": "traning 全面检测统一入口；运行 full_checks 下的 pytest。",
 }
 
 SUMMARY_OVERRIDES = {
@@ -591,6 +598,8 @@ def render_before_index(
         "```text",
         "main.py -> core/pipeline.py:TRAINING_PIPELINE -> core stages",
         "        -> Lib reusable APIs -> state / filesystem / SQLite / ffmpeg",
+        "tests/startup_checks/runner.py -> settings/pipeline/raw-data startup checks",
+        "tests/full_checks/runner.py -> full pytest checks",
         "```",
         "",
         "## 七阶段入口",
@@ -638,6 +647,9 @@ def render_training_index(
         "        -> core/optimization (评分、错误归因、参数搜索修改)",
         "        -> core/result_export (结果可视化与图集导出)",
         "        -> core/model_export (训练模型导出与迁移边界)",
+        "        -> start/checks (完整训练启动前自检)",
+        "tests/startup_checks/runner.py -> settings/runtime/data/core startup checks",
+        "tests/full_checks/runner.py -> full pytest checks",
         "        -> lib/data | lib/models | lib/training | lib/metrics | lib/runtime | lib/visualization",
         "        -> state (run / experiment / checkpoint metadata)",
         "```",
@@ -662,7 +674,7 @@ def render_training_index(
         parsed,
         source_root=TRAINING_SOURCE_ROOT,
         role_overrides=TRAINING_ROLE_OVERRIDES,
-        dependency_prefixes=("traning", "package"),
+        dependency_prefixes=("traning", "package", "start"),
     )
 
 

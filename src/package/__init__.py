@@ -44,17 +44,35 @@ from package.contracts import (
     VersionedArtifactRef,
     contract_to_dict,
 )
+from package.checks import (
+    CheckStatus,
+    StartupCheckReport,
+    StartupCheckResult,
+)
+from package.dataset_split import (
+    DatasetSplitItem,
+    DatasetSplitManifest,
+    DatasetSplitSyncResult,
+    SplitRatios,
+    default_split_manifest_path,
+    load_split_manifest,
+    sync_dataset_split_manifest,
+)
 from package.slider_path import sample_slider_path
 
 __all__ = [
     "ArtifactFileRef",
     "CandidateCacheFrameRef",
+    "CheckStatus",
     "CheckpointRef",
     "ContractMixin",
     "CoordinateSpace",
     "CurriculumStage",
     "DataSplit",
     "DatasetDimension",
+    "DatasetSplitItem",
+    "DatasetSplitManifest",
+    "DatasetSplitSyncResult",
     "DecisionFrameRecord",
     "ErrorDomain",
     "EvaluationOutcome",
@@ -78,6 +96,9 @@ __all__ = [
     "SegmentManifestEntry",
     "SegmentRef",
     "SliderPathCandidateRef",
+    "StartupCheckReport",
+    "StartupCheckResult",
+    "SplitRatios",
     "Size2D",
     "SpatialCandidateRef",
     "TemporalTargetRef",
@@ -87,5 +108,8 @@ __all__ = [
     "TrialStatus",
     "VersionedArtifactRef",
     "contract_to_dict",
+    "default_split_manifest_path",
+    "load_split_manifest",
     "sample_slider_path",
+    "sync_dataset_split_manifest",
 ]

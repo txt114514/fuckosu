@@ -33,9 +33,13 @@ from traning.lib.runtime import (
     tensor_to_device,
 )
 from traning.conf import DataSplit, load_settings
-from traning.core.decision import generate_candidate_cache, run_temporal_decision
+from traning.core.decision import (
+    FullTrainingRunConfig,
+    generate_candidate_cache,
+    run_full_training_pipeline,
+    run_temporal_decision,
+)
 from traning.core.dataset_import import build_dataset, inspect_data_input
-from traning.core.decision.pipeline import run_pipeline
 from traning.core.spatial import (
     run_spatial_frame_inference,
     run_spatial_training,
@@ -397,10 +401,61 @@ def data_preview(
 
 @app.command("run")
 def run(
-    config: Path | None = typer.Option(None, "--config"),
+    config: Path = typer.Option(Path("configs/model_small_vram.yaml"), "--config"),
+    split: DataSplit = typer.Option("train", "--split"),
+    device: str = typer.Option(
+        "auto",
+        "--device",
+        help="cpu, cuda, or auto. Use cuda through host-exec for real GPU runs.",
+    ),
+    spatial_max_steps: int = typer.Option(1, "--spatial-max-steps", min=1),
+    temporal_max_steps: int = typer.Option(1, "--temporal-max-steps", min=1),
+    spatial_learning_rate: float = typer.Option(
+        1e-4,
+        "--spatial-lr",
+        min=1e-8,
+    ),
+    temporal_learning_rate: float = typer.Option(
+        1e-4,
+        "--temporal-lr",
+        min=1e-8,
+    ),
+    patch_limit: int = typer.Option(
+        1,
+        "--patch-limit",
+        min=0,
+        help="0 means process all patches in each frame.",
+    ),
+    cache_max_frames: int = typer.Option(
+        1,
+        "--cache-max-frames",
+        min=0,
+        help="0 means no frame limit for candidate cache generation.",
+    ),
+    sequence_length: int | None = typer.Option(None, "--sequence-length", min=1),
+    candidate_slots: int | None = typer.Option(None, "--candidate-slots", min=1),
 ) -> None:
-    results = run_pipeline(load_settings(config))
-    _render_report(results["data_input"])
+    settings = load_settings(config)
+    selected = _select_device(device)
+    result = run_full_training_pipeline(
+        settings,
+        config=FullTrainingRunConfig(
+            run_dir=_run_dir("full_training"),
+            device=selected,
+            split=split,
+            spatial_max_steps=spatial_max_steps,
+            temporal_max_steps=temporal_max_steps,
+            spatial_learning_rate=spatial_learning_rate,
+            temporal_learning_rate=temporal_learning_rate,
+            patch_limit=None if patch_limit == 0 else patch_limit,
+            cache_max_frames=(
+                None if cache_max_frames == 0 else cache_max_frames
+            ),
+            sequence_length=sequence_length,
+            candidate_slots=candidate_slots,
+        ),
+    )
+    _render_dict_table("Full training pipeline", result.as_summary())
 
 
 @app.command("model-smoke")
@@ -690,29 +745,6 @@ def visualize_fusion(
     console.print(f"[green]saved[/green]: {output_path}")
 
 
-def _training_placeholder(stage: str, config: Path) -> None:
-    settings = load_settings(config)
-    output_dir = _run_dir(stage)
-    (output_dir / "summary.txt").write_text(
-        "\n".join(
-            (
-                f"stage: {stage}",
-                f"config: {config}",
-                f"device: {settings.runtime.device}",
-                "status: training loop is not implemented yet",
-            )
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    console.print(
-        f"[yellow]{stage} training entry is registered; "
-        f"full optimizer loop is still pending.[/yellow]"
-    )
-    console.print(f"run_dir: {output_dir}")
-    raise typer.Exit(1)
-
-
 @app.command("train-spatial")
 def train_spatial(
     config: Path = typer.Option(Path("configs/model_small_vram.yaml"), "--config"),
@@ -760,13 +792,6 @@ def train_spatial(
             )
         raise
     _render_dict_table("Spatial training", result.as_dict())
-
-
-@app.command("train-fusion")
-def train_fusion(
-    config: Path = typer.Option(Path("configs/model_small_vram.yaml"), "--config"),
-) -> None:
-    _training_placeholder("train_fusion", config)
 
 
 @app.command("train-temporal")

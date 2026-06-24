@@ -9,6 +9,8 @@
 ```text
 main.py -> core/pipeline.py:TRAINING_PIPELINE -> core stages
         -> Lib reusable APIs -> state / filesystem / SQLite / ffmpeg
+tests/startup_checks/runner.py -> settings/pipeline/raw-data startup checks
+tests/full_checks/runner.py -> full pytest checks
 ```
 
 ## 七阶段入口
@@ -27,7 +29,7 @@ main.py -> core/pipeline.py:TRAINING_PIPELINE -> core stages
 
 ## 符号索引
 
-覆盖 `81` 个 Python 文件、`386` 个命名函数/方法、`74` 个类。匿名 lambda 不单独列出。
+覆盖 `87` 个 Python 文件、`448` 个命名函数/方法、`84` 个类。匿名 lambda 不单独列出。
 
 图例：`F` 模块函数，`M` 方法，`N` 嵌套函数，`C` 类；`IO-R/IO-W` 文件读写，`DB` 数据库，`PROCESS` 外部进程。
 
@@ -459,7 +461,7 @@ main.py -> core/pipeline.py:TRAINING_PIPELINE -> core stages
 - `M L211-L212` `Settings.global_offset_ms(self) -> float` [PROPERTY]：执行 `global offset ms` 对应逻辑。
 - `F L215-L225` `_resolve_paths(raw: dict[str, Any], base_dir: Path) -> dict[str, Any]`：解析并定位 `paths` 对应的数据或结果。 调用：`file_management.get`, `raw.get`。
 - `F L228-L263` `_extract_nested(raw: dict[str, Any]) -> dict[str, Any]`：提取 `nested` 对应的数据或结果。 调用：`ProgressSettings`, `parameters.get`, `progress.get`, `raw.get`, `required_steps.get`, `status_steps.get`。
-- `F L266-L283` `_read_config(config_path: Path) -> dict[str, Any]` [IO-R IO-W]：读取 `config` 对应的数据或结果。 调用：`SettingsError`。
+- `F L266-L283` `_read_config(config_path: Path) -> dict[str, Any]` [IO-R IO-W]：读取 `config` 对应的数据或结果。 调用：`SettingsError`, `json.load`。
 - `F L286-L292` `load_settings(config_path: Path | None=None) -> Settings`：加载 `settings` 对应的数据或结果。 调用：`Settings`, `SettingsError`, `_extract_nested`, `_read_config`, `_resolve_paths`。
 
 ## `src/before_traning/core/audio/matching/matching.py`
@@ -799,7 +801,7 @@ main.py -> core/pipeline.py:TRAINING_PIPELINE -> core stages
 - `M L86-L97` `ProcessStatusManager._select_record(self, session: Session, folder_name: str, step: str) -> ProcessStepStatus | None` [DB]：选择 `record` 对应的数据或结果。 调用：`select`。
 - `M L99-L105` `ProcessStatusManager._has_records(self, folder_name: str) -> bool` [DB]：执行 `has records` 对应逻辑。 调用：`select`。
 - `M L107-L121` `ProcessStatusManager._migrate_legacy_status_key(self, folder_name: str) -> None` [DB]：执行 `migrate legacy status key` 对应逻辑。 调用：`select`, `self.walker.source_name_for`。
-- `M L123-L128` `ProcessStatusManager._load_legacy_json(self, folder_name: str) -> dict[str, Any] | None` [IO-R IO-W]：加载 `legacy json` 对应的数据或结果。 调用：`self.get_status_path`。
+- `M L123-L128` `ProcessStatusManager._load_legacy_json(self, folder_name: str) -> dict[str, Any] | None` [IO-R IO-W]：加载 `legacy json` 对应的数据或结果。 调用：`json.load`, `self.get_status_path`。
 - `M L130-L132` `ProcessStatusManager.get_status_path(self, folder_name: str) -> Path`：获取 `status path` 对应的数据或结果。 调用：`self._require_existing_folder`。
 - `M L134-L158` `ProcessStatusManager.load_status(self, folder_name: str) -> dict[str, Any]` [DB IO-W]：加载 `status` 对应的数据或结果。 调用：`decode_detail`, `select`, `self._default_status`, `self._has_records`, `self._load_legacy_json`, `self._migrate_legacy_status_key`。
 - `M L160-L178` `ProcessStatusManager.save_status(self, folder_name: str, status: dict[str, Any])` [DB]：执行 `save status` 对应逻辑。 调用：`ProcessStepStatus`, `encode_detail`, `self._normalize_folder_name`, `self._normalize_status`, `self._require_existing_folder`, `self._select_record`。
@@ -826,7 +828,16 @@ main.py -> core/pipeline.py:TRAINING_PIPELINE -> core stages
 - `F L97-L100` `encode_detail(detail: Any) -> str | None`：执行 `encode detail` 对应逻辑。
 - `F L103-L109` `decode_detail(detail_json: str | None) -> Any`：执行 `decode detail` 对应逻辑。
 
-## `src/before_traning/tests/test_segmentation_planner.py`
+## `src/before_traning/tests/full_checks/runner.py`
+
+职责：before_traning 全面检测统一入口；运行 full_checks 下的 pytest。
+工程依赖：`package.checks`
+
+- `F L14-L37` `run_full_checks() -> StartupCheckReport`：执行 `run full checks` 对应逻辑。 调用：`_run_pytest`, `_tail`。
+- `F L40-L52` `_run_pytest(command: tuple[str, ...]) -> subprocess.CompletedProcess[str]` [PROCESS]：执行 `run pytest` 对应逻辑。 调用：`env.get`, `subprocess.run`。
+- `F L55-L56` `_tail(text: str, *, max_lines: int=80) -> str`：执行 `tail` 对应逻辑。
+
+## `src/before_traning/tests/full_checks/test_segmentation_planner.py`
 
 职责：Python 模块；具体职责见下方符号及调用。
 工程依赖：`before_traning.Lib.beatmap.hit_objects`, `before_traning.Lib.tools.ffmpeg`, `before_traning.Lib.video.segmentation.planner`
@@ -835,3 +846,90 @@ main.py -> core/pipeline.py:TRAINING_PIPELINE -> core stages
 - `M L12-L30` `SegmentPlannerTests._plans(self)`：执行 `plans` 对应逻辑。 调用：`Circle`, `build_segment_plans`。
 - `M L32-L39` `SegmentPlannerTests.test_pre_context_jitter_is_stable_and_varied(self) -> None`：执行 `test pre context jitter is stable and varied` 对应逻辑。 调用：`self._plans`, `self.assertEqual`, `self.assertGreater`, `self.assertTrue`。
 - `M L41-L50` `SegmentPlannerTests.test_segment_video_strips_audio_by_default(self) -> None`：执行 `test segment video strips audio by default` 对应逻辑。 调用：`build_segment_video_args`, `self.assertIn`, `self.assertNotIn`。
+
+## `src/before_traning/tests/startup_checks/items.py`
+
+职责：before_traning 启动检测项；包含配置、阶段注册、分段规划和 raw-data 决策信号。
+工程依赖：`before_traning.Lib.beatmap.hit_objects`, `before_traning.Lib.tools.ffmpeg`, `before_traning.Lib.video.segmentation.planner`, `before_traning.conf`, `before_traning.core.beatmap.pipeline`, `before_traning.tests.startup_checks.samples`, `package.checks`
+
+- `F L17-L34` `check_settings_load(config_path: Path | None=None) -> tuple[StartupCheckResult, Settings]`：执行 `check settings load` 对应逻辑。 调用：`load_settings`。
+- `F L37-L67` `check_pipeline_tasks(_settings: Settings | None=None) -> tuple[StartupCheckResult, None]`：执行 `check pipeline tasks` 对应逻辑。
+- `F L70-L123` `check_segment_planner_contract(_settings: Settings | None=None) -> tuple[StartupCheckResult, None]`：执行 `check segment planner contract` 对应逻辑。 调用：`Circle`, `build_segment_plans`, `build_segment_video_args`。
+- `F L126-L156` `check_raw_training_inputs(settings: Settings, *, matched_manifest_path: Path=DEFAULT_MATCHED_MANIFEST, run_match_probe: bool=True, min_match_score: float=0.1) -> tuple[StartupCheckResult, None]`：执行 `check raw training inputs` 对应逻辑。 调用：`inspect_before_training_samples`, `inspection.as_dict`。
+
+## `src/before_traning/tests/startup_checks/runner.py`
+
+职责：before_traning 启动检测统一入口；按顺序运行配置、pipeline、分段契约和原始数据扫描检测。
+工程依赖：`before_traning.conf`, `before_traning.tests.startup_checks.items`, `before_traning.tests.startup_checks.samples`, `package.checks`
+
+- `F L16-L71` `run_startup_checks(config_path: Path | None=None, *, matched_manifest_path: Path=DEFAULT_MATCHED_MANIFEST, run_match_probe: bool=True, min_match_score: float=0.1) -> StartupCheckReport`：执行 `run startup checks` 对应逻辑。 调用：`check_raw_training_inputs`, `check_settings_load`。
+
+## `src/before_traning/tests/startup_checks/samples.py`
+
+职责：只读扫描未匹配原始 .osz、候选视频、已导入待匹配样本和已匹配清单。
+工程依赖：`before_traning.Lib.beatmap.osz`, `before_traning.conf`, `before_traning.state.status_schema`
+
+- `F L23-L24` `_utc_now() -> str` [IO-W]：执行 `utc now` 对应逻辑。 调用：`datetime.now.replace`。
+- `C L28-L48` `RawBeatmapCandidate` [CLASS]：封装 `RawBeatmapCandidate` 相关数据或行为。
+- `M L37-L38` `RawBeatmapCandidate.identity(self) -> tuple[str, str, int]` [PROPERTY]：执行 `identity` 对应逻辑。
+- `M L40-L48` `RawBeatmapCandidate.as_dict(self) -> dict[str, Any]`：执行 `as dict` 对应逻辑。
+- `C L52-L64` `VideoCandidate` [CLASS]：封装 `VideoCandidate` 相关数据或行为。
+- `M L58-L64` `VideoCandidate.as_dict(self) -> dict[str, Any]`：执行 `as dict` 对应逻辑。
+- `C L68-L78` `BeforeManifestItem` [CLASS]：封装 `BeforeManifestItem` 相关数据或行为。
+- `M L77-L78` `BeforeManifestItem.raw_identity(self) -> tuple[str, str | None, int | None]` [PROPERTY]：执行 `raw identity` 对应逻辑。
+- `C L82-L102` `PendingImportedSample` [CLASS]：封装 `PendingImportedSample` 相关数据或行为。
+- `M L91-L92` `PendingImportedSample.sample_key(self) -> str` [PROPERTY]：执行 `sample key` 对应逻辑。
+- `M L94-L102` `PendingImportedSample.as_dict(self) -> dict[str, Any]`：执行 `as dict` 对应逻辑。
+- `C L106-L165` `MatchedSample` [CLASS]：封装 `MatchedSample` 相关数据或行为。
+- `M L121-L122` `MatchedSample.identity(self) -> tuple[str, str | None, int | None]` [PROPERTY]：执行 `identity` 对应逻辑。
+- `M L124-L131` `MatchedSample.matches_raw_candidate(self, candidate: RawBeatmapCandidate) -> bool`：执行 `matches raw candidate` 对应逻辑。
+- `M L133-L147` `MatchedSample.as_dict(self) -> dict[str, Any]`：执行 `as dict` 对应逻辑。
+- `M L150-L165` `MatchedSample.from_mapping(cls, raw: Mapping[str, Any]) -> 'MatchedSample'`：执行 `from mapping` 对应逻辑。 调用：`_optional_float`, `_optional_int`, `_optional_str`, `_utc_now`, `raw.get`。
+- `C L169-L220` `MatchedSampleManifest` [CLASS]：封装 `MatchedSampleManifest` 相关数据或行为。
+- `M L174-L185` `MatchedSampleManifest.load(cls, path: Path | None=None) -> 'MatchedSampleManifest'` [IO-R]：执行 `load` 对应逻辑。 调用：`MatchedSample.from_mapping`, `manifest_path.read_text`, `payload.get`。
+- `M L187-L203` `MatchedSampleManifest.merged(self, samples: Iterable[MatchedSample]) -> 'MatchedSampleManifest'`：执行 `merged` 对应逻辑。 调用：`MatchedSampleManifest`。
+- `M L205-L217` `MatchedSampleManifest.save(self) -> None` [IO-W]：执行 `save` 对应逻辑。 调用：`_json_ready`, `_utc_now`, `sample.as_dict`, `self.path.parent.mkdir`, `self.path.with_name`, `tmp_path.replace`。
+- `M L219-L220` `MatchedSampleManifest.matches_raw_candidate(self, candidate: RawBeatmapCandidate) -> bool`：执行 `matches raw candidate` 对应逻辑。 调用：`sample.matches_raw_candidate`。
+- `C L224-L260` `MatchProbePair` [CLASS]：封装 `MatchProbePair` 相关数据或行为。
+- `M L242-L260` `MatchProbePair.as_dict(self) -> dict[str, Any]`：执行 `as dict` 对应逻辑。
+- `C L264-L285` `MatchProbeReport` [CLASS]：封装 `MatchProbeReport` 相关数据或行为。
+- `M L272-L273` `MatchProbeReport.ok(self) -> bool` [PROPERTY]：执行 `ok` 对应逻辑。
+- `M L275-L285` `MatchProbeReport.as_dict(self) -> dict[str, Any]`：执行 `as dict` 对应逻辑。 调用：`item.as_dict`。
+- `C L289-L350` `BeforeTrainingSampleInspection` [CLASS]：封装 `BeforeTrainingSampleInspection` 相关数据或行为。
+- `M L301-L302` `BeforeTrainingSampleInspection.has_unmatched_samples(self) -> bool` [PROPERTY]：执行 `has unmatched samples` 对应逻辑。
+- `M L305-L306` `BeforeTrainingSampleInspection.has_video_candidates(self) -> bool` [PROPERTY]：执行 `has video candidates` 对应逻辑。
+- `M L309-L314` `BeforeTrainingSampleInspection.should_run_before_traning(self) -> bool` [PROPERTY]：执行 `should run before traning` 对应逻辑。
+- `M L317-L326` `BeforeTrainingSampleInspection.reason(self) -> str` [PROPERTY]：执行 `reason` 对应逻辑。
+- `M L328-L350` `BeforeTrainingSampleInspection.as_dict(self) -> dict[str, Any]`：执行 `as dict` 对应逻辑。 调用：`item.as_dict`, `self.match_probe.as_dict`。
+- `F L353-L391` `inspect_before_training_samples(settings: Settings, *, matched_manifest_path: Path | None=None, run_match_probe: bool=True, min_match_score: float=0.1) -> BeforeTrainingSampleInspection`：执行 `inspect before training samples` 对应逻辑。 调用：`BeforeTrainingSampleInspection`, `MatchedSampleManifest.load`, `_filter_unmatched_raw_candidates`, `_pending_imported_samples`, `_read_before_state`, `_recover_matched_samples`。
+- `F L394-L402` `recover_matched_sample_manifest(settings: Settings, *, matched_manifest_path: Path | None=None) -> MatchedSampleManifest`：执行 `recover matched sample manifest` 对应逻辑。 调用：`MatchedSampleManifest.load`, `_read_before_state`, `_recover_matched_samples`, `manifest.merged`。
+- `F L405-L428` `probe_before_training_matches(settings: Settings, *, raw_unmatched: Iterable[RawBeatmapCandidate], pending_imported: Iterable[PendingImportedSample], videos: Iterable[VideoCandidate], min_match_score: float) -> MatchProbeReport`：执行 `probe before training matches` 对应逻辑。 调用：`MatchProbeReport`, `_run_match_probe`。
+- `F L431-L505` `_run_match_probe(settings: Settings, raw_unmatched: tuple[RawBeatmapCandidate, ...], pending_imported: tuple[PendingImportedSample, ...], videos: tuple[VideoCandidate, ...], min_match_score: float) -> MatchProbeReport`：执行 `run match probe` 对应逻辑。 调用：`MatchProbeReport`, `_StartupAudioAligner`, `_audio_samples_from_path`, `_build_probe_features`, `_probe_target_from_pending`, `_probe_target_from_raw`。
+- `C L440-L441` `_run_match_probe._StartupAudioAligner(AVCoreStepsMixin)` [CLASS]：封装 `StartupAudioAligner` 相关数据或行为。
+- `F L508-L530` `_probe_target_from_raw(settings: Settings, candidate: RawBeatmapCandidate) -> dict[str, Any]`：执行 `probe target from raw` 对应逻辑。 调用：`read_osz_entry`。
+- `F L533-L545` `_probe_target_from_pending(candidate: PendingImportedSample) -> dict[str, Any]`：执行 `probe target from pending` 对应逻辑。
+- `F L548-L616` `_score_probe_pair(aligner: Any, target: Mapping[str, Any], target_features: Mapping[str, Any], video: VideoCandidate, video_features: Mapping[str, Any]) -> MatchProbePair`：执行 `score probe pair` 对应逻辑。 调用：`MatchProbePair`, `_optional_float`, `_optional_int`, `_optional_str`, `aligner._estimate_best_start_frame`, `aligner._estimate_verify_adjustment_seconds`。
+- `F L619-L631` `_select_greedy_probe_matches(pairs: Iterable[MatchProbePair]) -> tuple[MatchProbePair, ...]`：选择 `greedy probe matches` 对应的数据或结果。
+- `F L634-L646` `_probe_sort_key(pair: MatchProbePair) -> tuple[float, float, float, float]`：执行 `probe sort key` 对应逻辑。
+- `F L649-L662` `_build_probe_features(aligner: Any, samples: Any) -> dict[str, Any]`：构建 `probe features` 对应的数据或结果。 调用：`aligner._build_feature_series`, `aligner._build_music_refine_series`。
+- `F L665-L676` `_target_audio_samples(aligner: Any, target: Mapping[str, Any]) -> Any` [IO-W]：执行 `target audio samples` 对应逻辑。 调用：`_audio_samples_from_path`, `target.get`。
+- `F L679-L683` `_audio_samples_from_path(aligner: Any, path: Path, *, from_video: bool) -> Any`：执行 `audio samples from path` 对应逻辑。 调用：`aligner._extract_audio_to_wav`, `aligner._load_wav_samples`。
+- `F L686-L719` `_scan_raw_beatmap_candidates(settings: Settings) -> tuple[list[RawBeatmapCandidate], list[str]]`：执行 `scan raw beatmap candidates` 对应逻辑。 调用：`RawBeatmapCandidate`, `read_osz_entry`。
+- `F L722-L739` `_scan_video_candidates(settings: Settings) -> list[VideoCandidate]`：执行 `scan video candidates` 对应逻辑。 调用：`VideoCandidate`。
+- `F L742-L761` `_filter_unmatched_raw_candidates(raw_candidates: Iterable[RawBeatmapCandidate], manifest_items: Iterable[BeforeManifestItem], known_matched: Iterable[MatchedSample]) -> tuple[RawBeatmapCandidate, ...]`：筛选 `unmatched raw candidates` 对应的数据或结果。 调用：`sample.matches_raw_candidate`。
+- `F L764-L782` `_read_before_state(settings: Settings) -> tuple[tuple[BeforeManifestItem, ...], dict[tuple[str, str], dict[str, Any]], tuple[str, ...]]`：读取 `before state` 对应的数据或结果。 调用：`_read_manifest_items`, `_read_status_rows`。
+- `F L785-L807` `_read_manifest_items(db_path: Path) -> tuple[BeforeManifestItem, ...]`：读取 `manifest items` 对应的数据或结果。 调用：`BeforeManifestItem`, `_optional_int`, `_optional_str`, `_sqlite_table_exists`。
+- `F L810-L827` `_read_status_rows(db_path: Path) -> dict[tuple[str, str], dict[str, Any]]`：读取 `status rows` 对应的数据或结果。 调用：`_sqlite_table_exists`, `decode_detail`。
+- `F L830-L835` `_sqlite_table_exists(connection: sqlite3.Connection, table_name: str) -> bool`：执行 `sqlite table exists` 对应逻辑。
+- `F L838-L869` `_recover_matched_samples(settings: Settings, manifest_items: Iterable[BeforeManifestItem], status_rows: Mapping[tuple[str, str], Mapping[str, Any]]) -> tuple[MatchedSample, ...]`：执行 `recover matched samples` 对应逻辑。 调用：`MatchedSample`, `_detail_float`, `_first_folder_video`, `_folder_has_video`, `_status_detail`, `_status_done`。
+- `F L872-L901` `_pending_imported_samples(settings: Settings, manifest_items: Iterable[BeforeManifestItem], status_rows: Mapping[tuple[str, str], Mapping[str, Any]]) -> tuple[PendingImportedSample, ...]`：执行 `pending imported samples` 对应逻辑。 调用：`PendingImportedSample`, `_folder_has_video`, `_status_done`。
+- `F L904-L905` `_folder_has_video(settings: Settings, folder_name: str) -> bool`：执行 `folder has video` 对应逻辑。 调用：`_first_folder_video`。
+- `F L908-L916` `_first_folder_video(settings: Settings, folder_name: str) -> Path | None`：执行 `first folder video` 对应逻辑。
+- `F L919-L925` `_status_done(status_rows: Mapping[tuple[str, str], Mapping[str, Any]], folder_name: str, step: str) -> bool`：执行 `status done` 对应逻辑。 调用：`row.get`, `status_rows.get`。
+- `F L928-L934` `_status_detail(status_rows: Mapping[tuple[str, str], Mapping[str, Any]], folder_name: str, step: str) -> Any`：执行 `status detail` 对应逻辑。 调用：`row.get`, `status_rows.get`。
+- `F L937-L941` `_video_path_from_detail(detail: Any) -> Path | None`：执行 `video path from detail` 对应逻辑。 调用：`detail.get`。
+- `F L944-L947` `_detail_float(detail: Any, key: str) -> float | None`：执行 `detail float` 对应逻辑。 调用：`_optional_float`, `detail.get`。
+- `F L950-L954` `_optional_str(value: Any) -> str | None`：执行 `optional str` 对应逻辑。
+- `F L957-L960` `_optional_int(value: Any) -> int | None`：执行 `optional int` 对应逻辑。
+- `F L963-L969` `_optional_float(value: Any) -> float | None`：执行 `optional float` 对应逻辑。
+- `F L972-L981` `_json_ready(value: Any) -> Any`：执行 `json ready` 对应逻辑。 调用：`_json_ready`。

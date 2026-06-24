@@ -6,6 +6,7 @@ input:
 
 data_input:
   dataset_root: ../training_package/video_segments
+  split_manifest_path: ../training_package/splits/dataset_split_manifest.json
   dimensions:
     - atomic
     - long_sequence
@@ -16,6 +17,7 @@ data_input:
     - item_000001
   validation_items:
     - item_000002
+  test_items: []
   sample_fps: 60.0
   frame_step: 1
   max_segments:
