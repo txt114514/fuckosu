@@ -17,10 +17,10 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from traning.Lib.data import build_patch_windows
-from traning.Lib.data import PatchStream, append_color_cues
-from traning.Lib.models import build_model_stack
-from traning.Lib.runtime import (
+from traning.lib.data import build_patch_windows
+from traning.lib.data import PatchStream, append_color_cues
+from traning.lib.models import build_model_stack
+from traning.lib.runtime import (
     CudaRuntimeConfig,
     autocast_context,
     collect_memory_snapshot,
@@ -33,16 +33,17 @@ from traning.Lib.runtime import (
     tensor_to_device,
 )
 from traning.conf import DataSplit, load_settings
-from traning.core.candidate_cache import generate_candidate_cache
+from traning.core.decision import generate_candidate_cache, run_temporal_decision
 from traning.core.dataset_import import build_dataset, inspect_data_input
-from traning.core.pipeline import run_pipeline
-from traning.core.spatial_training import (
+from traning.core.decision.pipeline import run_pipeline
+from traning.core.spatial import (
     run_spatial_frame_inference,
     run_spatial_training,
     slider_path_to_dict,
     spatial_candidate_to_dict,
 )
-from traning.core.visualization import (
+from traning.core.temporal import run_temporal_training
+from traning.core.result_export import (
     save_annotation_gallery,
     visualize_click_label,
 )
@@ -771,8 +772,80 @@ def train_fusion(
 @app.command("train-temporal")
 def train_temporal(
     config: Path = typer.Option(Path("configs/model_small_vram.yaml"), "--config"),
+    cache: Path = typer.Option(
+        ...,
+        "--cache",
+        exists=True,
+        file_okay=False,
+        dir_okay=True,
+        readable=True,
+        help="Candidate cache directory containing manifest.json and frames.jsonl.",
+    ),
+    device: str = typer.Option(
+        "auto",
+        "--device",
+        help="cpu, cuda, or auto. Use cuda through host-exec for real GPU runs.",
+    ),
+    max_steps: int = typer.Option(1, "--max-steps", min=1),
+    learning_rate: float = typer.Option(1e-4, "--lr", min=1e-8),
+    sequence_length: int | None = typer.Option(None, "--sequence-length", min=1),
+    candidate_slots: int | None = typer.Option(None, "--candidate-slots", min=1),
 ) -> None:
-    _training_placeholder("train_temporal", config)
+    settings = load_settings(config)
+    selected = _select_device(device)
+    output_dir = _run_dir("train_temporal")
+    result = run_temporal_training(
+        settings,
+        cache_dir=cache,
+        device=selected,
+        run_dir=output_dir,
+        max_steps=max_steps,
+        learning_rate=learning_rate,
+        sequence_length=sequence_length,
+        candidate_slots=candidate_slots,
+    )
+    _render_dict_table("Temporal training", result.as_dict())
+
+
+@app.command("run-decision")
+def run_decision(
+    config: Path = typer.Option(Path("configs/model_small_vram.yaml"), "--config"),
+    cache: Path = typer.Option(
+        ...,
+        "--cache",
+        exists=True,
+        file_okay=False,
+        dir_okay=True,
+        readable=True,
+        help="Candidate cache directory containing manifest.json and frames.jsonl.",
+    ),
+    checkpoint: Path = typer.Option(
+        ...,
+        "--checkpoint",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        readable=True,
+        help="Temporal checkpoint produced by train-temporal.",
+    ),
+    output: Path | None = typer.Option(None, "--output"),
+    device: str = typer.Option(
+        "auto",
+        "--device",
+        help="cpu, cuda, or auto. Use cuda through host-exec for real GPU runs.",
+    ),
+) -> None:
+    settings = load_settings(config)
+    selected = _select_device(device)
+    output_dir = output or _run_dir("decision")
+    result = run_temporal_decision(
+        settings,
+        cache_dir=cache,
+        checkpoint_path=checkpoint,
+        output_dir=output_dir,
+        device=selected,
+    )
+    _render_dict_table("Temporal decision", result.as_dict())
 
 
 @app.command("visualize-label")

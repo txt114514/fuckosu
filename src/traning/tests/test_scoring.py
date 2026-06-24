@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from traning.Lib.metrics import (
+from traning.lib.metrics import (
     ScoreSpec,
     score_point,
     score_slider,

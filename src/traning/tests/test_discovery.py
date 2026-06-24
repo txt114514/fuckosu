@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from traning.Lib.data import discover_segments
+from traning.lib.data import discover_segments
 
 
 def _write_segment(root: Path, item_name: str, segment_id: str) -> None:

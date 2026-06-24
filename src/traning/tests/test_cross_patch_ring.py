@@ -4,8 +4,8 @@ import unittest
 
 import torch.nn.functional as F
 
-from traning.Lib.data import PatchStream, make_cross_patch_ring
-from traning.Lib.models import sample_global_feature
+from traning.lib.data import PatchStream, make_cross_patch_ring
+from traning.lib.models import sample_global_feature
 
 
 class CrossPatchRingTests(unittest.TestCase):

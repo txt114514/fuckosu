@@ -5,9 +5,9 @@ import unittest
 import torch
 import torch.nn.functional as F
 
-from traning.Lib.data import PatchMeta
-from traning.Lib.models import OBJECT_TYPE_NAMES, SpatialPrediction
-from traning.Lib.training import (
+from traning.lib.data import PatchMeta
+from traning.lib.models import OBJECT_TYPE_NAMES, SpatialPrediction
+from traning.lib.training import (
     SpatialPredictionCanvas,
     SpatialPredictionMaps,
     decode_slider_paths,

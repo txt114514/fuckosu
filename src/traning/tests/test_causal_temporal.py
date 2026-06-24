@@ -4,7 +4,7 @@ import unittest
 
 import torch
 
-from traning.Lib.models import CausalTemporalModel
+from traning.lib.models import CausalTemporalModel
 
 
 class CausalTemporalTests(unittest.TestCase):

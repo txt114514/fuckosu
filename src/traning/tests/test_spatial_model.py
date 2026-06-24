@@ -4,7 +4,7 @@ import unittest
 
 import torch
 
-from traning.Lib.models import OBJECT_TYPE_NAMES, SpatialPredictionHead
+from traning.lib.models import OBJECT_TYPE_NAMES, SpatialPredictionHead
 
 
 class SpatialModelTests(unittest.TestCase):

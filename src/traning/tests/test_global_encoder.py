@@ -4,7 +4,7 @@ import unittest
 
 import torch
 
-from traning.Lib.models import GlobalStructureHead, LightweightGlobalEncoder
+from traning.lib.models import GlobalStructureHead, LightweightGlobalEncoder
 
 
 class GlobalEncoderTests(unittest.TestCase):

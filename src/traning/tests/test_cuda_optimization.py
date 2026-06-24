@@ -6,7 +6,7 @@ import psutil
 import torch
 from torch import nn
 
-from traning.Lib.runtime import (
+from traning.lib.runtime import (
     CudaRuntimeConfig,
     amp_uses_grad_scaler,
     configure_torch_runtime,

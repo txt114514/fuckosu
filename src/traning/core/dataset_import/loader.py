@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from torch.utils.data import DataLoader
 
-from traning.Lib.data import SegmentFrameDataset, collate_frame_samples
+from traning.lib.data import SegmentFrameDataset, collate_frame_samples
 from traning.conf import DataSplit, Settings
 from traning.core.dataset_import.preflight import discover_data_input
 

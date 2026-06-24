@@ -4,8 +4,8 @@ from collections import Counter
 from dataclasses import dataclass
 from math import ceil
 
-from traning.Lib.data import DiscoveryResult, discover_segments
-from traning.Lib.data.models import DatasetIssue
+from traning.lib.data import DiscoveryResult, discover_segments
+from traning.lib.data.models import DatasetIssue
 from traning.conf import DataSplit, Settings
 
 

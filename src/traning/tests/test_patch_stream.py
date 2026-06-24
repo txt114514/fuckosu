@@ -4,7 +4,7 @@ import unittest
 
 import torch
 
-from traning.Lib.data import PatchStream
+from traning.lib.data import PatchStream
 
 
 class PatchStreamTests(unittest.TestCase):

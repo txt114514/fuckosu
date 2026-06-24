@@ -4,8 +4,8 @@ import unittest
 
 import torch
 
-from traning.Lib.data import PatchMeta
-from traning.Lib.models import sample_global_feature
+from traning.lib.data import PatchMeta
+from traning.lib.models import sample_global_feature
 
 
 class GlobalSamplingTests(unittest.TestCase):

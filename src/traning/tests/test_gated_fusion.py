@@ -4,9 +4,9 @@ import unittest
 
 import torch
 
-from traning.Lib.data import PatchMeta
-from traning.Lib.models import GatedSparseFusion
-from traning.Lib.models.local_encoder import LocalFeatures
+from traning.lib.data import PatchMeta
+from traning.lib.models import GatedSparseFusion
+from traning.lib.models.local_encoder import LocalFeatures
 
 
 class GatedFusionTests(unittest.TestCase):

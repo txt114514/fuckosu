@@ -33,3 +33,21 @@ from package import SharedType, shared_function
 ```
 
 新增导出时同步维护 `__all__`，并避免在公开入口执行文件 I/O、网络访问或重量级初始化。
+
+## Contracts
+
+`package.contracts` 用于放置跨顶层模块共享的稳定数据契约。它只收纳需要长期维护、
+版本化或写入文件/manifest/artifact/cache 的结构体，不收纳单个模块内部的训练中间态。
+
+当前契约分组：
+
+- `geometry`：`Point2D`、`Size2D`、`Rect2D` 和 `CoordinateSpace`。
+- `osu`：`OsuHitObject`、`OsuTimingPoint`、`OsuDifficulty` 和谱面对象类型。
+- `dataset`：`TrainingItemRef`、`SegmentRef`、`FrameSampleRef` 和数据 split/category/dimension。
+- `candidate`：候选缓存帧、空间候选、slider path 候选、时序目标和决策帧记录。
+- `experiment`：trial、checkpoint、score version、搜索方法、课程阶段和 trial 状态。
+- `evaluation`：`FrameRef`、`PredictionEvent`、`ScoreSummary`、`EvaluationOutcome`、动作和错误域枚举。
+- `artifacts`：`ArtifactFileRef` 和 `VersionedArtifactRef`。
+
+每个 contract 都提供 `as_dict()`，支持需要时从 mapping 创建；调用方仍应优先从
+`package` 或 `package.contracts` 的公开入口导入。

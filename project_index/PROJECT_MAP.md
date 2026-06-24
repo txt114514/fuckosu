@@ -10,7 +10,7 @@
 | 全局共享 API | `src/package` | [`README.md`](../src/package/README.md) | 公开入口：`src/package/__init__.py` |
 | 运行环境检查 | `environment` | 环境/CUDA 诊断脚本与 Python 检查 API | 公开入口：`environment/__init__.py` |
 | 训练前处理 | `src/before_traning` | [`README.md`](../src/before_traning/docs/README.md) | [`CODEX_INDEX.md`](../src/before_traning/docs/CODEX_INDEX.md) |
-| 模型训练 | `src/traning` | [`README.md`](../src/traning/docs/README.md)、[`TRAINING_PLAN.md`](../src/traning/docs/TRAINING_PLAN.md)、[`label_generation.md`](../src/traning/docs/label_generation.md)、[`CUDA_OPTIMIZATION.md`](../src/traning/docs/CUDA_OPTIMIZATION.md)、[`TEST_PARAMETER_MECHANISM.md`](../src/traning/docs/TEST_PARAMETER_MECHANISM.md)、[`SCORING_SPEC.md`](../src/traning/docs/SCORING_SPEC.md) | [`CODEX_INDEX.md`](../src/traning/docs/CODEX_INDEX.md) |
+| 模型训练 | `src/traning` | [`TRAINING_PLAN.md`](../src/traning/docs/TRAINING_PLAN.md)、[`TRAINING_READINESS.md`](../src/traning/docs/TRAINING_READINESS.md)、[`OPTIMIZATION_MODULE.md`](../src/traning/docs/OPTIMIZATION_MODULE.md)、[`LIB_STRUCTURE_AUDIT.md`](../src/traning/docs/LIB_STRUCTURE_AUDIT.md)、[`DATASET_IMPORT_PLAN.md`](../src/traning/docs/DATASET_IMPORT_PLAN.md)、[`SPATIAL_PLAN.md`](../src/traning/docs/SPATIAL_PLAN.md)、[`TEMPORAL_PLAN.md`](../src/traning/docs/TEMPORAL_PLAN.md)、[`DECISION_PLAN.md`](../src/traning/docs/DECISION_PLAN.md)、[`RESULT_EXPORT_PLAN.md`](../src/traning/docs/RESULT_EXPORT_PLAN.md)、[`MODEL_EXPORT_PLAN.md`](../src/traning/docs/MODEL_EXPORT_PLAN.md)、[`ENVIRONMENT.md`](../src/traning/docs/ENVIRONMENT.md) | [`CODEX_INDEX.md`](../src/traning/docs/CODEX_INDEX.md) |
 
 ## 全局 API 约定
 
@@ -31,21 +31,28 @@
 ## traning 最短阅读路径
 
 1. 先读 `src/traning/docs/CODEX_INDEX.md`，确认当前阶段和数据契约。
-2. 需要模型目标和长期路线时读取 `src/traning/docs/TRAINING_PLAN.md`。
-3. 处理 CUDA、显存、AMP、channels-last 或训练 step 时读取
-   `src/traning/docs/CUDA_OPTIMIZATION.md`。
-4. 处理空间监督、osu 坐标光栅化或 patch dense target 时读取
-   `src/traning/docs/label_generation.md`。
-5. 运行 `python project_index/build_index.py --lookup 符号名` 定位实现。
-6. 当前首要入口是 `core/dataset_import`；空间训练入口是
-   `core/spatial_training`，候选缓存和时序目录继续作为阶段边界。
-7. 批次评估图集入口是 `save-annotation-gallery`；结果契约位于
+2. 需要当前整体进度和长期目标时读取 `src/traning/docs/TRAINING_PLAN.md`。
+3. 需要确认是否可以开训时读取 `src/traning/docs/TRAINING_READINESS.md`。
+4. 处理训练结果评分、错误归因和参数调整时读取 `src/traning/docs/OPTIMIZATION_MODULE.md`。
+5. 调整 `src/traning/lib` 或内部复用 API 边界时读取
+   `src/traning/docs/LIB_STRUCTURE_AUDIT.md`。
+6. 按六个 core 阶段读取对应 plan：`DATASET_IMPORT_PLAN.md`、`SPATIAL_PLAN.md`、
+   `TEMPORAL_PLAN.md`、`DECISION_PLAN.md`、`RESULT_EXPORT_PLAN.md`、
+   `MODEL_EXPORT_PLAN.md`。
+7. 处理 CUDA、显存、AMP、channels-last、GPU bridge 或训练 step 时读取
+   `src/traning/docs/ENVIRONMENT.md`。
+8. 运行 `python project_index/build_index.py --lookup 符号名` 定位实现。
+9. 当前 core 阶段目录：`core/dataset_import`、`core/spatial`、
+   `core/temporal`、`core/decision`、`core/result_export`、`core/model_export`。
+   训练闭环控制目录是 `core/optimization`。空间训练入口是 `core/spatial`，
+   候选缓存与阶段编排入口是 `core/decision`。
+10. 批次评估图集入口是 `save-annotation-gallery`；结果契约位于
    `state/gallery_schema.py`，按最高分 trial 和六个数据子项目生成 `passed/failed`
    标注目录。
-8. 参数搜索、score 和通过机制的已实现/待实现边界见
-   `src/traning/docs/TEST_PARAMETER_MECHANISM.md`。
-9. 点与 slider 的 `point-slider-v2` 公式见
-   `src/traning/docs/SCORING_SPEC.md`。
+11. 参数搜索、score、通过机制和 `point-slider-v2` / `click-sequence-v1` 边界见
+   `src/traning/docs/DECISION_PLAN.md`。
+12. 批次图集、`passed/failed` 和可视化导出边界见
+   `src/traning/docs/RESULT_EXPORT_PLAN.md`。
 
 ## 索引维护
 

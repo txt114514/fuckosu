@@ -10,13 +10,13 @@ from unittest.mock import patch
 import torch
 
 from traning.conf import Settings
-from traning.core.candidate_cache import (
+from traning.core.decision import (
     CANDIDATE_CACHE_VERSION,
     build_candidate_cache_record,
     generate_candidate_cache,
 )
-from traning.Lib.training import SliderPathCandidate
-from traning.Lib.training.spatial_decode import SpatialCandidate
+from traning.lib.training import SliderPathCandidate
+from traning.lib.training.spatial_decode import SpatialCandidate
 
 
 def _candidate(
@@ -62,7 +62,21 @@ class CandidateCacheTests(unittest.TestCase):
     def test_record_keeps_embedding_and_candidate_ambiguity(self) -> None:
         candidates = (_candidate(score=0.55), _candidate(score=0.53))
         record = build_candidate_cache_record(
-            {"sample_key": "sample-a", "frame_index": 2, "timestamp_ms": 33.3},
+            {
+                "sample_key": "sample-a",
+                "frame_index": 2,
+                "timestamp_ms": 100.0,
+                "hit_objects": (
+                    {
+                        "type": "circle",
+                        "start_ms": 100,
+                        "end_ms": 100,
+                        "x": 64.0,
+                        "y": 64.0,
+                        "source_index": 0,
+                    },
+                ),
+            },
             candidates,
             (_slider_path(ambiguous=True),),
             frame_width=128,
@@ -84,6 +98,8 @@ class CandidateCacheTests(unittest.TestCase):
             "slider_path_ambiguous",
             record["candidates"][0]["ambiguity_reasons"],
         )
+        self.assertEqual(record["temporal_target"]["action"], "press")
+        self.assertEqual(record["temporal_target"]["action_id"], 1)
         self.assertEqual(len(record["candidates"][0]["embedding"]), 3)
         self.assertEqual(record["slider_paths"][0]["component_id"], 4)
 
@@ -103,7 +119,7 @@ class CandidateCacheTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             output_dir = Path(temporary)
             with patch(
-                "traning.core.candidate_cache.generator.run_spatial_frame_inference",
+                "traning.core.decision.generator.run_spatial_frame_inference",
                 return_value=fake_result,
             ):
                 result = generate_candidate_cache(

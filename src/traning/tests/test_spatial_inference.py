@@ -5,7 +5,7 @@ import unittest
 import torch
 
 from traning.conf import Settings
-from traning.core.spatial_training import (
+from traning.core.spatial import (
     SPATIAL_CPU_TASKS,
     SPATIAL_GPU_TASKS,
     run_spatial_frame_inference,

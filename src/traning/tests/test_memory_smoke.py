@@ -4,16 +4,16 @@ import unittest
 
 import torch
 
-from traning.Lib.runtime import autocast_context, collect_memory_snapshot
-from traning.Lib.runtime import (
+from traning.lib.runtime import autocast_context, collect_memory_snapshot
+from traning.lib.runtime import (
     CudaRuntimeConfig,
     configure_torch_runtime,
     create_grad_scaler,
     module_to_device,
     tensor_to_device,
 )
-from traning.Lib.data import PatchMeta
-from traning.Lib.models import (
+from traning.lib.data import PatchMeta
+from traning.lib.models import (
     GatedSparseFusion,
     SmallLocalEncoder,
     SpatialPredictionHead,

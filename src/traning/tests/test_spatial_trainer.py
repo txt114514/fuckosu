@@ -8,7 +8,7 @@ from pathlib import Path
 import torch
 
 from traning.conf import Settings
-from traning.core.spatial_training import run_spatial_training
+from traning.core.spatial import run_spatial_training
 
 
 class SpatialTrainerTests(unittest.TestCase):
