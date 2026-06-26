@@ -34,6 +34,9 @@ PYTHONPATH=src python -m start run --training-config configs/model_small_vram.ya
    `traning.tests.full_checks.runner.run_full_checks`。
 6. 检测通过后执行完整训练。
 
+推荐训练入口现在是 `PYTHONPATH=src:. python -m traning.main full-flow`；
+`start run` 仍保留为启动前处理和固定小预算训练的组合入口。
+
 完整训练入口 `traning.core.decision.run_full_training_pipeline` 每次启动都会先调用
 `start.checks.run_training_startup_checks`。自检失败时训练不会继续；自检结果写入
 `full_training_summary.json`。

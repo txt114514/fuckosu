@@ -29,7 +29,7 @@ tests/full_checks/runner.py -> full pytest checks
 
 ## 符号索引
 
-覆盖 `87` 个 Python 文件、`448` 个命名函数/方法、`84` 个类。匿名 lambda 不单独列出。
+覆盖 `88` 个 Python 文件、`459` 个命名函数/方法、`85` 个类。匿名 lambda 不单独列出。
 
 图例：`F` 模块函数，`M` 方法，`N` 嵌套函数，`C` 类；`IO-R/IO-W` 文件读写，`DB` 数据库，`PROCESS` 外部进程。
 
@@ -762,14 +762,22 @@ tests/full_checks/runner.py -> full pytest checks
 - `F L29-L30` `_skip(default: bool, skip_flag: bool) -> bool`：执行 `skip` 对应逻辑。
 - `F L33-L60` `_settings(config: Path | None, overwrite: bool | None=None, continue_on_error: bool | None=None, use_audio_match_experiment: bool | None=None, global_offset_ms: float | None=None) -> Settings`：执行 `settings` 对应逻辑。 调用：`_resolve`, `load_settings`。
 - `F L63-L72` `_render(results: dict[str, bool], elapsed: float)`：执行 `render` 对应逻辑。
-- `F L75-L83` `_run(settings: Settings, **stages: bool | None) -> int`：执行 `run` 对应逻辑。 调用：`_render`, `os.environ.get`。
-- `F L87-L131` `run_command(config: Path | None=typer.Option(None, '--config', help='config.yaml/json path.'), overwrite: bool | None=typer.Option(None, '--overwrite/--no-overwrite'), continue_on_error: bool | None=typer.Option(None, '--continue-on-error/--stop-on-error'), skip_get_files: bool=typer.Option(False, '--skip-get-files'), skip_verify_export: bool=typer.Option(False, '--skip-verify-export'), skip_difficulty_export: bool=typer.Option(False, '--skip-difficulty-export'), skip_video_match: bool=typer.Option(False, '--skip-video-match'), skip_av_correspondence: bool=typer.Option(False, '--skip-av-correspondence'), skip_clip: bool=typer.Option(False, '--skip-clip'), skip_segment: bool=typer.Option(False, '--skip-segment'), use_audio_match_experiment: bool | None=typer.Option(None, '--use-audio-match-experiment/--disable-audio-match-experiment'), global_offset_ms: float | None=typer.Option(None, '--global-offset-ms'))` [CLI]：执行 `run command` 对应逻辑。 调用：`_run`, `_settings`, `_skip`。
-- `F L135-L151` `verify_command(config: Path | None=typer.Option(None, '--config', help='config.yaml/json path.'), overwrite: bool | None=typer.Option(None, '--overwrite/--no-overwrite'), continue_on_error: bool | None=typer.Option(None, '--continue-on-error/--stop-on-error'))` [CLI]：执行 `verify command` 对应逻辑。 调用：`_run`, `_settings`。
-- `F L155-L175` `match_command(config: Path | None=typer.Option(None, '--config', help='config.yaml/json path.'), overwrite: bool | None=typer.Option(None, '--overwrite/--no-overwrite'), continue_on_error: bool | None=typer.Option(None, '--continue-on-error/--stop-on-error'), use_audio_match_experiment: bool | None=typer.Option(None, '--use-audio-match-experiment/--disable-audio-match-experiment'))` [CLI]：匹配 `command` 对应的数据或结果。 调用：`_run`, `_settings`。
-- `F L179-L196` `clip_command(config: Path | None=typer.Option(None, '--config', help='config.yaml/json path.'), overwrite: bool | None=typer.Option(None, '--overwrite/--no-overwrite'), continue_on_error: bool | None=typer.Option(None, '--continue-on-error/--stop-on-error'), global_offset_ms: float | None=typer.Option(None, '--global-offset-ms'))` [CLI]：执行 `clip command` 对应逻辑。 调用：`_run`, `_settings`。
-- `F L200-L216` `segment_command(config: Path | None=typer.Option(None, '--config', help='config.yaml/json path.'), overwrite: bool | None=typer.Option(None, '--overwrite/--no-overwrite'), continue_on_error: bool | None=typer.Option(None, '--continue-on-error/--stop-on-error'))` [CLI]：执行 `segment command` 对应逻辑。 调用：`_run`, `_settings`。
-- `F L220-L222` `default_command(ctx: typer.Context)` [CLI]：执行 `default command` 对应逻辑。 调用：`_run`, `load_settings`。
-- `F L225-L233` `main(argv: list[str] | None=None) -> int`：独立脚本入口，构建处理器并执行。
+- `F L75-L83` `run_training_pipeline(settings: Settings, **stages: bool | None) -> dict[str, bool]`：执行 `run training pipeline` 对应逻辑。 调用：`os.environ.get`。
+- `F L86-L87` `pipeline_exit_code(results: dict[str, bool]) -> int`：执行 `pipeline exit code` 对应逻辑。
+- `F L90-L130` `run_data_workflow(*, config: Path | None=None, overwrite: bool | None=None, continue_on_error: bool | None=None, skip_get_files: bool=False, skip_verify_export: bool=False, skip_difficulty_export: bool=False, skip_video_match: bool=False, skip_av_correspondence: bool=False, skip_clip: bool=False, skip_segment: bool=False, use_audio_match_experiment: bool | None=None, global_offset_ms: float | None=None) -> dict[str, bool]`：执行 `run data workflow` 对应逻辑。 调用：`_settings`, `_skip`, `run_training_pipeline`。
+- `F L133-L148` `run_verify_workflow(*, config: Path | None=None, overwrite: bool | None=None, continue_on_error: bool | None=None) -> dict[str, bool]`：执行 `run verify workflow` 对应逻辑。 调用：`_settings`, `run_training_pipeline`。
+- `F L151-L167` `run_match_workflow(*, config: Path | None=None, overwrite: bool | None=None, continue_on_error: bool | None=None, use_audio_match_experiment: bool | None=None) -> dict[str, bool]`：执行 `run match workflow` 对应逻辑。 调用：`_settings`, `run_training_pipeline`。
+- `F L170-L186` `run_clip_workflow(*, config: Path | None=None, overwrite: bool | None=None, continue_on_error: bool | None=None, global_offset_ms: float | None=None) -> dict[str, bool]`：执行 `run clip workflow` 对应逻辑。 调用：`_settings`, `run_training_pipeline`。
+- `F L189-L204` `run_segment_workflow(*, config: Path | None=None, overwrite: bool | None=None, continue_on_error: bool | None=None) -> dict[str, bool]`：执行 `run segment workflow` 对应逻辑。 调用：`_settings`, `run_training_pipeline`。
+- `F L207-L208` `run_default_workflow() -> dict[str, bool]`：执行 `run default workflow` 对应逻辑。 调用：`load_settings`, `run_training_pipeline`。
+- `F L211-L213` `_render_workflow_result(results: dict[str, bool], started_at: float) -> int`：执行 `render workflow result` 对应逻辑。 调用：`_render`, `pipeline_exit_code`。
+- `F L217-L249` `run_command(config: Path | None=typer.Option(None, '--config', help='config.yaml/json path.'), overwrite: bool | None=typer.Option(None, '--overwrite/--no-overwrite'), continue_on_error: bool | None=typer.Option(None, '--continue-on-error/--stop-on-error'), skip_get_files: bool=typer.Option(False, '--skip-get-files'), skip_verify_export: bool=typer.Option(False, '--skip-verify-export'), skip_difficulty_export: bool=typer.Option(False, '--skip-difficulty-export'), skip_video_match: bool=typer.Option(False, '--skip-video-match'), skip_av_correspondence: bool=typer.Option(False, '--skip-av-correspondence'), skip_clip: bool=typer.Option(False, '--skip-clip'), skip_segment: bool=typer.Option(False, '--skip-segment'), use_audio_match_experiment: bool | None=typer.Option(None, '--use-audio-match-experiment/--disable-audio-match-experiment'), global_offset_ms: float | None=typer.Option(None, '--global-offset-ms'))` [CLI]：执行 `run command` 对应逻辑。 调用：`_render_workflow_result`, `run_data_workflow`。
+- `F L253-L264` `verify_command(config: Path | None=typer.Option(None, '--config', help='config.yaml/json path.'), overwrite: bool | None=typer.Option(None, '--overwrite/--no-overwrite'), continue_on_error: bool | None=typer.Option(None, '--continue-on-error/--stop-on-error'))` [CLI]：执行 `verify command` 对应逻辑。 调用：`_render_workflow_result`, `run_verify_workflow`。
+- `F L268-L284` `match_command(config: Path | None=typer.Option(None, '--config', help='config.yaml/json path.'), overwrite: bool | None=typer.Option(None, '--overwrite/--no-overwrite'), continue_on_error: bool | None=typer.Option(None, '--continue-on-error/--stop-on-error'), use_audio_match_experiment: bool | None=typer.Option(None, '--use-audio-match-experiment/--disable-audio-match-experiment'))` [CLI]：匹配 `command` 对应的数据或结果。 调用：`_render_workflow_result`, `run_match_workflow`。
+- `F L288-L301` `clip_command(config: Path | None=typer.Option(None, '--config', help='config.yaml/json path.'), overwrite: bool | None=typer.Option(None, '--overwrite/--no-overwrite'), continue_on_error: bool | None=typer.Option(None, '--continue-on-error/--stop-on-error'), global_offset_ms: float | None=typer.Option(None, '--global-offset-ms'))` [CLI]：执行 `clip command` 对应逻辑。 调用：`_render_workflow_result`, `run_clip_workflow`。
+- `F L305-L318` `segment_command(config: Path | None=typer.Option(None, '--config', help='config.yaml/json path.'), overwrite: bool | None=typer.Option(None, '--overwrite/--no-overwrite'), continue_on_error: bool | None=typer.Option(None, '--continue-on-error/--stop-on-error'))` [CLI]：执行 `segment command` 对应逻辑。 调用：`_render_workflow_result`, `run_segment_workflow`。
+- `F L322-L326` `default_command(ctx: typer.Context)` [CLI]：执行 `default command` 对应逻辑。 调用：`_render_workflow_result`, `run_default_workflow`。
+- `F L329-L337` `main(argv: list[str] | None=None) -> int`：独立脚本入口，构建处理器并执行。
 
 ## `src/before_traning/state/__init__.py`
 
@@ -836,6 +844,16 @@ tests/full_checks/runner.py -> full pytest checks
 - `F L14-L37` `run_full_checks() -> StartupCheckReport`：执行 `run full checks` 对应逻辑。 调用：`_run_pytest`, `_tail`。
 - `F L40-L52` `_run_pytest(command: tuple[str, ...]) -> subprocess.CompletedProcess[str]` [PROCESS]：执行 `run pytest` 对应逻辑。 调用：`env.get`, `subprocess.run`。
 - `F L55-L56` `_tail(text: str, *, max_lines: int=80) -> str`：执行 `tail` 对应逻辑。
+
+## `src/before_traning/tests/full_checks/test_cli_adapters.py`
+
+职责：Python 模块；具体职责见下方符号及调用。
+工程依赖：`before_traning`, `before_traning.conf`
+
+- `C L13-L71` `BeforeTrainingCliAdapterTests(unittest.TestCase)` [CLASS]：封装 `BeforeTrainingCliAdapterTests` 相关数据或行为。
+- `M L14-L35` `BeforeTrainingCliAdapterTests.test_business_workflow_calls_pipeline_without_typer(self) -> None`：执行 `test business workflow calls pipeline without typer` 对应逻辑。 调用：`Settings`, `before_main.run_data_workflow`, `self.assertEqual`, `self.assertFalse`, `self.assertTrue`。
+- `M L37-L61` `BeforeTrainingCliAdapterTests.test_run_cli_passes_arguments_to_business_function(self) -> None`：执行 `test run cli passes arguments to business function` 对应逻辑。 调用：`self.assertEqual`, `self.assertTrue`。
+- `M L63-L71` `BeforeTrainingCliAdapterTests.test_run_cli_uses_pipeline_result_as_exit_code(self) -> None`：执行 `test run cli uses pipeline result as exit code` 对应逻辑。 调用：`self.assertEqual`。
 
 ## `src/before_traning/tests/full_checks/test_segmentation_planner.py`
 

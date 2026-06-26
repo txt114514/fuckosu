@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +29,22 @@ from traning.lib.runtime import (
     module_to_device,
     tensor_to_device,
 )
+from traning.core.training_inheritance import (
+    TrainingPosition,
+    atomic_torch_save_checkpoint,
+    build_training_checkpoint,
+    load_training_checkpoint,
+    restore_module_state,
+    restore_rng_state,
+)
+from visualization.lib import (
+    DatasetUsageState,
+    NullReporter,
+    ResourceState,
+    TrainingEvent,
+    TrainingReporter,
+    collect_resource_state,
+)
 
 
 @dataclass(frozen=True)
@@ -48,6 +65,14 @@ class TemporalTrainingResult:
     target_strategy: str
     cuda_max_allocated_gib: float | None
     cuda_max_reserved_gib: float | None
+    loss_weights: Mapping[str, float] = field(
+        default_factory=lambda: {
+            "action": 1.0,
+            "candidate": 1.0,
+            "xy": 1.0,
+            "time_offset": 0.01,
+        }
+    )
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -64,6 +89,7 @@ class TemporalTrainingResult:
             "candidate_loss": self.candidate_loss,
             "xy_loss": self.xy_loss,
             "time_loss": self.time_loss,
+            "loss_weights": dict(self.loss_weights),
             "target_strategy": self.target_strategy,
             "cuda_max_allocated_gib": self.cuda_max_allocated_gib,
             "cuda_max_reserved_gib": self.cuda_max_reserved_gib,
@@ -81,6 +107,9 @@ def run_temporal_training(
     sequence_length: int | None = None,
     candidate_slots: int | None = None,
     dataset: Sequence[TemporalWindow] | None = None,
+    reporter: TrainingReporter = NullReporter(),
+    resume_checkpoint_path: Path | None = None,
+    resume_policy: str = "none",
 ) -> TemporalTrainingResult:
     if max_steps <= 0:
         raise ValueError("max_steps must be positive")
@@ -99,6 +128,7 @@ def run_temporal_training(
     )
     if len(source) <= 0:
         raise ValueError("temporal training dataset must not be empty")
+    torch.manual_seed(settings.runtime.seed)
     first = source[0]
     input_size = int(first.features.shape[-1])
     model = CausalTemporalModel(
@@ -134,6 +164,15 @@ def run_temporal_training(
         amp_dtype=settings.memory.amp_dtype,
         mode=settings.memory.grad_scaler,
     )
+    resume = _restore_temporal_training_state(
+        model=model,
+        optimizer=optimizer,
+        scaler=scaler,
+        checkpoint_path=resume_checkpoint_path,
+        policy=resume_policy,
+        reporter=reporter,
+    )
+    start_step = resume.temporal_step
     if device.type == "cuda":
         torch.cuda.reset_peak_memory_stats()
     metrics = {
@@ -143,27 +182,84 @@ def run_temporal_training(
         "xy_loss": 0.0,
         "time_loss": 0.0,
     }
-    for step in range(max_steps):
-        window = source[step % len(source)]
-        batch = _window_to_device(window, device=device)
-        optimizer.zero_grad(set_to_none=True)
-        with autocast_context(device, runtime_state.amp_dtype):
-            outputs, _ = model(batch["features"])
-            loss, loss_parts = _compute_temporal_loss(
-                outputs,
-                action_target=batch["action_target"],
-                selected_candidate_target=batch["selected_candidate_target"],
-                xy_target=batch["xy_target"],
-                time_offset_target=batch["time_offset_target"],
-                frame_mask=batch["frame_mask"],
+    last_committed = start_step
+    try:
+        for step in range(start_step, max_steps):
+            window = source[step % len(source)]
+            batch = _window_to_device(window, device=device)
+            optimizer.zero_grad(set_to_none=True)
+            with autocast_context(device, runtime_state.amp_dtype):
+                outputs, _ = model(batch["features"])
+                loss, loss_parts = _compute_temporal_loss(
+                    outputs,
+                    action_target=batch["action_target"],
+                    selected_candidate_target=batch["selected_candidate_target"],
+                    xy_target=batch["xy_target"],
+                    time_offset_target=batch["time_offset_target"],
+                    frame_mask=batch["frame_mask"],
+                    weights=settings.training.temporal_loss_weights,
+                )
+            if not torch.isfinite(loss.detach()).all():
+                raise FloatingPointError("temporal loss became NaN or Inf")
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+            optimizer.zero_grad(set_to_none=True)
+            metrics = {
+                "loss": float(loss.detach().cpu()),
+                **{
+                    key: float(value.detach().cpu())
+                    for key, value in loss_parts.items()
+                },
+            }
+            if not math.isfinite(metrics["loss"]):
+                raise FloatingPointError("temporal committed loss is not finite")
+            last_committed = step + 1
+            _report_temporal_step(
+                reporter,
+                step=last_committed,
+                target=max_steps,
+                loss=metrics["loss"],
+                window=window,
+                total_windows=len(source),
+                device=device,
             )
-        scaler.scale(loss).backward()
-        scaler.step(optimizer)
-        scaler.update()
-        metrics = {
-            "loss": float(loss.detach().cpu()),
-            **{key: float(value.detach().cpu()) for key, value in loss_parts.items()},
-        }
+    except BaseException:
+        emergency = TemporalTrainingResult(
+            run_dir=run_dir,
+            checkpoint_path=run_dir / "temporal_emergency.pt",
+            device=str(device),
+            steps=last_committed,
+            windows=len(source),
+            sequence_length=selected_sequence_length,
+            candidate_slots=selected_candidate_slots,
+            input_size=input_size,
+            final_loss=metrics["loss"],
+            action_loss=metrics["action_loss"],
+            candidate_loss=metrics["candidate_loss"],
+            xy_loss=metrics["xy_loss"],
+            time_loss=metrics["time_loss"],
+            loss_weights=settings.training.temporal_loss_weights.model_dump(mode="json"),
+            target_strategy=first.target_strategy,
+            cuda_max_allocated_gib=None,
+            cuda_max_reserved_gib=None,
+        )
+        _write_checkpoint(
+            emergency,
+            model=model,
+            optimizer=optimizer,
+            scaler=scaler,
+            hidden_size=settings.temporal.hidden_size,
+            layers=settings.temporal.layers,
+            position=TrainingPosition(
+                global_step=last_committed,
+                temporal_step=last_committed,
+                next_batch_index=last_committed % len(source),
+                last_committed_step=last_committed,
+            ),
+            checkpoint_kind="emergency",
+        )
+        raise
     snapshot = collect_memory_snapshot()
     result = TemporalTrainingResult(
         run_dir=run_dir,
@@ -179,6 +275,7 @@ def run_temporal_training(
         candidate_loss=metrics["candidate_loss"],
         xy_loss=metrics["xy_loss"],
         time_loss=metrics["time_loss"],
+        loss_weights=settings.training.temporal_loss_weights.model_dump(mode="json"),
         target_strategy=first.target_strategy,
         cuda_max_allocated_gib=snapshot.max_allocated_gib,
         cuda_max_reserved_gib=snapshot.max_reserved_gib,
@@ -187,8 +284,17 @@ def run_temporal_training(
     _write_checkpoint(
         result,
         model=model,
+        optimizer=optimizer,
+        scaler=scaler,
         hidden_size=settings.temporal.hidden_size,
         layers=settings.temporal.layers,
+        position=TrainingPosition(
+            global_step=max_steps,
+            temporal_step=max_steps,
+            next_batch_index=max_steps % len(source),
+            last_committed_step=max_steps,
+        ),
+        checkpoint_kind="latest",
     )
     return result
 
@@ -223,6 +329,7 @@ def _compute_temporal_loss(
     xy_target: torch.Tensor,
     time_offset_target: torch.Tensor,
     frame_mask: torch.Tensor,
+    weights,
 ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
     action_logits = torch.cat([output.action_logits for output in outputs], dim=0)
     candidate_logits = torch.cat(
@@ -255,7 +362,12 @@ def _compute_temporal_loss(
     else:
         xy_loss = action_logits.sum() * 0.0
         time_loss = action_logits.sum() * 0.0
-    loss = action_loss + candidate_loss + xy_loss + 0.01 * time_loss
+    loss = (
+        float(weights.action) * action_loss
+        + float(weights.candidate) * candidate_loss
+        + float(weights.xy) * xy_loss
+        + float(weights.time_offset) * time_loss
+    )
     return loss, {
         "action_loss": action_loss,
         "candidate_loss": candidate_loss,
@@ -276,27 +388,164 @@ def _write_checkpoint(
     result: TemporalTrainingResult,
     *,
     model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    scaler,
     hidden_size: int,
     layers: int,
+    position: TrainingPosition,
+    checkpoint_kind: str,
 ) -> None:
     result.run_dir.mkdir(parents=True, exist_ok=True)
     state_source = getattr(model, "_orig_mod", model)
-    torch.save(
+    model_state = state_source.state_dict()
+    model_config = {
+        "input_size": result.input_size,
+        "hidden_size": hidden_size,
+        "layers": layers,
+        "candidate_slots": result.candidate_slots,
+        "action_classes": 4,
+    }
+    payload = build_training_checkpoint(
+        checkpoint_kind=checkpoint_kind,
+        run_id=result.run_dir.name,
+        trial_id="temporal",
+        models={"temporal": model_state},
+        optimizer=optimizer,
+        scheduler=None,
+        scaler=scaler,
+        position=position,
+        dataset_state={
+            "windows": result.windows,
+            "sequence_length": result.sequence_length,
+            "candidate_slots": result.candidate_slots,
+        },
+        resolved_config=model_config,
+        extra={
+            "legacy_version": "temporal-decision-v1",
+            "target_strategy": result.target_strategy,
+            "final_loss": result.final_loss,
+        },
+    )
+    payload.update(
         {
             "version": "temporal-decision-v1",
-            "model_state": state_source.state_dict(),
-            "model_config": {
-                "input_size": result.input_size,
-                "hidden_size": hidden_size,
-                "layers": layers,
-                "candidate_slots": result.candidate_slots,
-                "action_classes": 4,
-            },
+            "model_state": model_state,
+            "model_config": model_config,
             "sequence_length": result.sequence_length,
             "target_strategy": result.target_strategy,
-        },
-        result.checkpoint_path,
+        }
     )
+    atomic_torch_save_checkpoint(
+        payload,
+        result.checkpoint_path,
+        expected_kind=checkpoint_kind,
+    )
+
+
+def _restore_temporal_training_state(
+    *,
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    scaler,
+    checkpoint_path: Path | None,
+    policy: str,
+    reporter: TrainingReporter,
+) -> TrainingPosition:
+    if checkpoint_path is None or policy == "none":
+        return TrainingPosition()
+    raw = load_training_checkpoint(checkpoint_path)
+    model_state = raw.get("model_state")
+    if model_state is None and isinstance(raw.get("models"), Mapping):
+        model_state = raw["models"].get("temporal")
+    if not isinstance(model_state, Mapping):
+        raise ValueError("temporal resume checkpoint missing model state")
+    strict = policy == "strict"
+    restored: list[str] = []
+    loaded, skipped = restore_module_state(model, model_state, strict=strict)
+    if loaded:
+        restored.append("model:temporal")
+    if policy != "weights-only":
+        if raw.get("optimizer") is not None:
+            optimizer.load_state_dict(raw["optimizer"])
+            _optimizer_state_to_device(optimizer, next(model.parameters()).device)
+            restored.append("optimizer")
+        elif strict:
+            raise ValueError("strict temporal resume requires optimizer state")
+        if raw.get("scaler") is not None:
+            scaler.load_state_dict(raw["scaler"])
+            restored.append("scaler")
+        elif strict:
+            raise ValueError("strict temporal resume requires scaler state")
+        if restore_rng_state(raw.get("rng_state")):
+            restored.append("rng")
+        elif strict:
+            raise ValueError("strict temporal resume requires rng state")
+    position = TrainingPosition.from_mapping(raw.get("training_position"))
+    if policy == "weights-only":
+        position = TrainingPosition()
+    reporter.emit_event(
+        TrainingEvent.create(
+            event_type="resume.completed",
+            severity="success" if not skipped else "warning",
+            message_key="inheritance_loaded",
+            message_args={"path": str(checkpoint_path)},
+            raw_message=(
+                "时序训练恢复："
+                f"已恢复 {','.join(restored) or '无'}；"
+                f"未恢复 {','.join(skipped) or '无'}；"
+                f"从 step {position.temporal_step} 继续"
+            ),
+        )
+    )
+    return position
+
+
+def _optimizer_state_to_device(
+    optimizer: torch.optim.Optimizer,
+    device: torch.device,
+) -> None:
+    for state in optimizer.state.values():
+        for key, value in list(state.items()):
+            if torch.is_tensor(value):
+                state[key] = value.to(device=device)
+
+
+def _report_temporal_step(
+    reporter: TrainingReporter,
+    *,
+    step: int,
+    target: int,
+    loss: float,
+    window: TemporalWindow,
+    total_windows: int,
+    device: torch.device,
+) -> None:
+    reporter.update_metrics(
+        temporal_step=step,
+        temporal_target=target,
+        global_step=step,
+        target_global_steps=target,
+        loss=loss,
+    )
+    reporter.report_dataset_usage(
+        DatasetUsageState(
+            total_segments=total_windows,
+            sampled_segments=step,
+            unique_segments=min(step, total_windows),
+            sampled_frames=step * int(window.frame_mask.sum().item()),
+            trained_frames=step * int(window.frame_mask.sum().item()),
+            unique_frames=min(step, total_windows),
+            total_frames=total_windows,
+            duplicate_samples=max(step - total_windows, 0),
+            used_sequences=step,
+            current_segment=window.sample_keys[-1] if window.sample_keys else None,
+        )
+    )
+    if device.type == "cuda":
+        try:
+            reporter.report_resource(collect_resource_state())
+        except Exception:
+            reporter.report_resource(ResourceState())
 
 
 __all__ = [

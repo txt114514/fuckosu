@@ -1,9 +1,12 @@
 """Stable APIs shared by multiple top-level modules under src."""
 
 from package.coordinates import (
+    COORDINATE_TRANSFORM_VERSION,
+    CoordinateTransformSpec,
     OSU_PLAYFIELD_HEIGHT,
     OSU_PLAYFIELD_WIDTH,
     OsuVideoTransform,
+    PlayfieldRect,
 )
 from package.contracts import (
     ArtifactFileRef,
@@ -65,8 +68,10 @@ __all__ = [
     "CandidateCacheFrameRef",
     "CheckStatus",
     "CheckpointRef",
+    "COORDINATE_TRANSFORM_VERSION",
     "ContractMixin",
     "CoordinateSpace",
+    "CoordinateTransformSpec",
     "CurriculumStage",
     "DataSplit",
     "DatasetDimension",
@@ -85,6 +90,7 @@ __all__ = [
     "OsuObjectType",
     "OsuTimingPoint",
     "OsuVideoTransform",
+    "PlayfieldRect",
     "Point2D",
     "PredictionAction",
     "PredictionEvent",

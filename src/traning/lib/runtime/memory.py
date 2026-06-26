@@ -8,6 +8,8 @@ import psutil
 import torch
 from torch import nn
 
+AmpDType = str | torch.dtype | None
+
 
 @dataclass(frozen=True)
 class MemorySnapshot:
@@ -174,20 +176,29 @@ def enforce_runtime_memory_budget(
     )
 
 
-def resolve_amp_dtype(device: torch.device, amp_dtype: str) -> torch.dtype | None:
-    if device.type != "cuda" or amp_dtype == "float32":
+def resolve_amp_dtype(device: torch.device, amp_dtype: AmpDType) -> torch.dtype | None:
+    if device.type != "cuda" or amp_dtype is None:
         return None
-    if amp_dtype == "float16":
+    if isinstance(amp_dtype, torch.dtype):
+        if amp_dtype == torch.float32:
+            return None
+        if amp_dtype in {torch.float16, torch.bfloat16}:
+            return amp_dtype
+        raise ValueError(f"unsupported amp dtype: {amp_dtype}")
+    normalized = amp_dtype.removeprefix("torch.").lower()
+    if normalized in {"none", "float32"}:
+        return None
+    if normalized == "float16":
         return torch.float16
-    if amp_dtype == "bfloat16":
+    if normalized == "bfloat16":
         return torch.bfloat16
-    if amp_dtype != "auto":
+    if normalized != "auto":
         raise ValueError(f"unsupported amp dtype: {amp_dtype}")
     return torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
 
 
 @contextmanager
-def autocast_context(device: torch.device, amp_dtype: str) -> Iterator[None]:
+def autocast_context(device: torch.device, amp_dtype: AmpDType) -> Iterator[None]:
     dtype = resolve_amp_dtype(device, amp_dtype)
     if dtype is None:
         with nullcontext():
@@ -200,7 +211,7 @@ def autocast_context(device: torch.device, amp_dtype: str) -> Iterator[None]:
 def configure_torch_runtime(
     *,
     device: torch.device,
-    amp_dtype: str,
+    amp_dtype: AmpDType,
     runtime: CudaRuntimeConfig = CudaRuntimeConfig(),
 ) -> CudaRuntimeState:
     """Apply CUDA runtime defaults used by training and smoke tests."""
@@ -233,7 +244,7 @@ def configure_torch_runtime(
     )
 
 
-def amp_uses_grad_scaler(device: torch.device, amp_dtype: str) -> bool:
+def amp_uses_grad_scaler(device: torch.device, amp_dtype: AmpDType) -> bool:
     return (
         device.type == "cuda" and resolve_amp_dtype(device, amp_dtype) == torch.float16
     )
@@ -242,7 +253,7 @@ def amp_uses_grad_scaler(device: torch.device, amp_dtype: str) -> bool:
 def create_grad_scaler(
     *,
     device: torch.device,
-    amp_dtype: str,
+    amp_dtype: AmpDType,
     mode: str = "auto",
 ) -> torch.amp.GradScaler:
     if mode not in {"auto", "enabled", "disabled"}:

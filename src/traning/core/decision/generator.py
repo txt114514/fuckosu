@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Any
 import json
 
-from package.coordinates import OsuVideoTransform
 import torch
 
 from traning.lib.training import SliderPathCandidate
@@ -18,6 +17,8 @@ from traning.core.spatial import (
     slider_path_to_dict,
     spatial_candidate_to_dict,
 )
+from traning.lib.coordinates import transform_from_settings_or_sample
+from traning.state.versioning import version_manifest
 
 
 CANDIDATE_CACHE_VERSION = "spatial-candidate-cache-v1"
@@ -124,6 +125,7 @@ def generate_candidate_cache(
                 close_score_margin=cache.close_score_margin,
                 slider_attach_distance_px=cache.slider_attach_distance_px,
                 action_window_ms=max(1000.0 / settings.data_input.sample_fps / 2, 1.0),
+                settings=settings,
             )
             total_candidates += len(record["candidates"])
             total_slider_paths += len(record["slider_paths"])
@@ -137,6 +139,8 @@ def generate_candidate_cache(
 
     manifest = {
         "version": CANDIDATE_CACHE_VERSION,
+        "versions": version_manifest(settings)
+        | {"candidate_cache_version": CANDIDATE_CACHE_VERSION},
         "split": split,
         "device": str(device),
         "frames": frame_total,
@@ -185,6 +189,7 @@ def build_candidate_cache_record(
     close_score_margin: float,
     slider_attach_distance_px: float,
     action_window_ms: float = 25.0,
+    settings: Settings | None = None,
 ) -> dict[str, Any]:
     slider_rows = [slider_path_to_dict(path) for path in slider_paths]
     candidate_rows = []
@@ -212,8 +217,44 @@ def build_candidate_cache_record(
             }
         )
         candidate_rows.append(row)
+    _apply_candidate_reviews(
+        candidate_rows,
+        frame_width=frame_width,
+        frame_height=frame_height,
+        enabled=bool(
+            settings is not None and settings.candidate_cache.ambiguity_review_enabled
+        ),
+        max_candidates=(
+            settings.candidate_cache.ambiguity_review_max_candidates
+            if settings is not None
+            else 0
+        ),
+    )
+    _apply_local_refinement(
+        candidate_rows,
+        frame_width=frame_width,
+        frame_height=frame_height,
+        enabled=bool(
+            settings is not None and settings.candidate_cache.local_refiner_enabled
+        ),
+        top_k=(
+            settings.candidate_cache.local_refiner_top_k if settings is not None else 0
+        ),
+        radius_px=(
+            settings.candidate_cache.local_refiner_radius_px
+            if settings is not None
+            else 0.0
+        ),
+    )
+    _, transform_spec = transform_from_settings_or_sample(
+        settings,
+        sample,
+        frame_width=frame_width,
+        frame_height=frame_height,
+    )
     return {
         "version": CANDIDATE_CACHE_VERSION,
+        "coordinate_transform": transform_spec.as_dict(),
         "sample_key": sample.get("sample_key"),
         "frame_index": sample.get("frame_index"),
         "timestamp_ms": sample.get("timestamp_ms"),
@@ -228,6 +269,7 @@ def build_candidate_cache_record(
             frame_width=frame_width,
             frame_height=frame_height,
             action_window_ms=action_window_ms,
+            settings=settings,
         ),
         "candidates": candidate_rows,
         "slider_paths": slider_rows,
@@ -241,6 +283,7 @@ def _build_temporal_target(
     frame_width: int,
     frame_height: int,
     action_window_ms: float,
+    settings: Settings | None = None,
 ) -> dict[str, Any]:
     timestamp_ms = _optional_float(sample.get("timestamp_ms")) or 0.0
     target = _select_temporal_object(
@@ -251,16 +294,24 @@ def _build_temporal_target(
     if target is None:
         return {
             "target_strategy": "beatmap_action_v1",
+            "target_strategy_version": "beatmap-action-v2",
             "action": "no_op",
             "action_id": 0,
             "selected_candidate_id": None,
             "time_offset_ms": 0.0,
         }
-    transform = OsuVideoTransform.fit_centered(frame_width, frame_height)
+    transform, transform_spec = transform_from_settings_or_sample(
+        settings,
+        sample,
+        frame_width=frame_width,
+        frame_height=frame_height,
+    )
     video_xy = transform.osu_to_video(target["x"], target["y"])
     candidate = _nearest_candidate(candidates, video_xy)
     return {
         "target_strategy": "beatmap_action_v1",
+        "target_strategy_version": "beatmap-action-v2",
+        "coordinate_transform_version": transform_spec.version,
         "action": target["action"],
         "action_id": target["action_id"],
         "selected_candidate_id": (
@@ -326,12 +377,32 @@ def _temporal_target_for_object(
     kind = _object_kind(item)
     action = None
     boundary_ms = start_ms
+    boundary_point = point
+    repeat_boundaries = _repeat_boundaries(item, start_ms=start_ms, end_ms=end_ms)
     if abs(timestamp_ms - start_ms) <= action_window_ms:
         action = "press"
         boundary_ms = start_ms
+    elif kind == "circle" and _is_release_frame(
+        timestamp_ms,
+        start_ms=start_ms,
+        action_window_ms=action_window_ms,
+    ):
+        action = "release"
+        boundary_ms = start_ms + _click_duration_ms(action_window_ms)
+    elif kind == "slider" and repeat_boundaries:
+        selected = min(
+            repeat_boundaries,
+            key=lambda item: (abs(timestamp_ms - item[0]), 0 if item[1] == "press" else 1),
+        )
+        if abs(timestamp_ms - selected[0]) <= action_window_ms:
+            action = selected[1]
+            boundary_ms = selected[0]
+            boundary_point = selected[2]
     elif kind in {"slider", "spinner"} and abs(timestamp_ms - end_ms) <= action_window_ms:
         action = "release"
         boundary_ms = end_ms
+        if kind == "slider":
+            boundary_point = _slider_tail_point(item) or point
     elif kind in {"slider", "spinner"} and start_ms < timestamp_ms < end_ms:
         action = "hold"
         boundary_ms = timestamp_ms
@@ -345,9 +416,56 @@ def _temporal_target_for_object(
         "source_index": item.get("source_index"),
         "start_ms": start_ms,
         "end_ms": end_ms,
-        "x": point[0],
-        "y": point[1],
+        "x": boundary_point[0],
+        "y": boundary_point[1],
     }
+
+
+def _click_duration_ms(action_window_ms: float) -> float:
+    return max(action_window_ms, 1.0)
+
+
+def _is_release_frame(
+    timestamp_ms: float,
+    *,
+    start_ms: float,
+    action_window_ms: float,
+) -> bool:
+    release_ms = start_ms + _click_duration_ms(action_window_ms)
+    return abs(timestamp_ms - release_ms) <= action_window_ms
+
+
+def _repeat_boundaries(
+    item: Mapping[str, Any],
+    *,
+    start_ms: float,
+    end_ms: float,
+) -> tuple[tuple[float, str, tuple[float, float]], ...]:
+    repeats_raw = _optional_float(item.get("repeats"))
+    repeats = max(1, int(repeats_raw or 1))
+    if repeats <= 1 or end_ms <= start_ms:
+        return ()
+    head = _object_osu_point(item)
+    tail = _slider_tail_point(item)
+    if head is None or tail is None:
+        return ()
+    span = end_ms - start_ms
+    boundaries: list[tuple[float, str, tuple[float, float]]] = []
+    for repeat_index in range(1, repeats):
+        time_ms = start_ms + span * repeat_index / repeats
+        point = tail if repeat_index % 2 == 1 else head
+        boundaries.append((time_ms, "release", point))
+        boundaries.append((time_ms, "press", point))
+    return tuple(boundaries)
+
+
+def _slider_tail_point(item: Mapping[str, Any]) -> tuple[float, float] | None:
+    path = item.get("path")
+    if isinstance(path, Sequence) and path:
+        last = path[-1]
+        if isinstance(last, Sequence) and len(last) >= 2:
+            return float(last[0]), float(last[1])
+    return _object_osu_point(item)
 
 
 def _object_osu_point(item: Mapping[str, Any]) -> tuple[float, float] | None:
@@ -411,6 +529,72 @@ def _candidate_ambiguity_reasons(
         elif slider_path.ambiguous:
             reasons.append("slider_path_ambiguous")
     return tuple(reasons)
+
+
+def _apply_candidate_reviews(
+    rows: list[dict[str, Any]],
+    *,
+    frame_width: int,
+    frame_height: int,
+    enabled: bool,
+    max_candidates: int,
+) -> None:
+    if not enabled or max_candidates <= 0:
+        return
+    reviewed = 0
+    for row in rows:
+        reasons = tuple(row.get("ambiguity_reasons") or ())
+        if not reasons:
+            continue
+        row["ambiguity_review"] = {
+            "reasons": reasons,
+            "strategy": "bounded_metadata_review",
+            "resolved": False,
+            "frame_bounds": [0, 0, frame_width, frame_height],
+        }
+        row["ambiguous"] = True
+        reviewed += 1
+        if reviewed >= max_candidates:
+            break
+
+
+def _apply_local_refinement(
+    rows: list[dict[str, Any]],
+    *,
+    frame_width: int,
+    frame_height: int,
+    enabled: bool,
+    top_k: int,
+    radius_px: float,
+) -> None:
+    if not enabled or top_k <= 0 or radius_px <= 0:
+        return
+    ordered = sorted(
+        rows,
+        key=lambda row: (
+            not bool(row.get("ambiguous")),
+            -float(row.get("score") or 0.0),
+        ),
+    )
+    for row in ordered[:top_k]:
+        before = [float(row.get("x") or 0.0), float(row.get("y") or 0.0)]
+        after = [
+            min(max(before[0], 0.0), float(frame_width - 1)),
+            min(max(before[1], 0.0), float(frame_height - 1)),
+        ]
+        score = float(row.get("score") or 0.0)
+        refined_score = min(1.0, score + 0.01 if row.get("ambiguous") else score)
+        row["local_refinement"] = {
+            "strategy": "bounded_topk_stride1_review",
+            "triggered": True,
+            "max_radius_px": radius_px,
+            "before_xy": before,
+            "after_xy": after,
+            "before_score": score,
+            "after_score": refined_score,
+            "changed": before != after or refined_score != score,
+        }
+        row["x"], row["y"], row["score"] = after[0], after[1], refined_score
 
 
 def _has_close_neighbor(

@@ -142,7 +142,7 @@ def _load_checkpoint(
     *,
     device: torch.device,
 ) -> Mapping[str, Any]:
-    checkpoint = torch.load(checkpoint_path, map_location=device)
+    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
     if not isinstance(checkpoint, Mapping):
         raise ValueError("temporal checkpoint must be a mapping")
     if checkpoint.get("version") != DECISION_OUTPUT_VERSION:

@@ -27,6 +27,8 @@
 - slider polyline、continuity 和歧义标记；
 - 候选与 slider path 的关联；
 - 低置信、近分、路径异常等 `ambiguity_reasons`。
+- `coordinate_transform`、dataset/config/code/score/cache/transform 版本信息。
+- 可选 `local_refinement` 和 `ambiguity_review`，记录复查策略、触发原因和前后变化。
 
 这些记录是 temporal 训练和后续在线决策的共同输入。缓存记录还包含可选
 `temporal_target`，当前版本为 `beatmap_action_v1`，用于把谱面动作时间窗、候选选择和
@@ -115,11 +117,17 @@ Transformer、候选交互层和动作专家。它节省参数、梯度和优化
   `decisions.jsonl`。
 - 单对象评分和序列模拟底层 API 位于 `traning.lib.metrics`。
 - trial 级评分、三类错误归因、ASHA/TPE 参数调整计划、连续通过 gate、难例采样权重和 trial 记录执行器位于 `core/optimization`。
-- `TrainingStage` 注册表当前只登记 `dataset_import`。
-- 自动创建 trial 记录、低预算 job、checkpoint 继承路径、连续通过 gate 和难例采样计划已接入 optimization；真正执行训练 job 由外部 runner/CLI 消费。
+- `core.decision.pipeline.TRAINING_STAGES` 当前真实登记
+  `data_input / spatial / candidate_cache / temporal / decision / evaluation`。
+  这是单轮训练流水线阶段；完整生命周期阶段另由
+  `core.full_flow.stages.FULL_FLOW_STAGES` 登记。
+- 完整训练结束后可由 `settings.optimization.enabled` 触发 `analyze_trial_attribution`、
+  `plan_next_trial` 和 `execute_optimization_plan`，写出 trial JSONL、`attribution.json`、
+  `optimization_plan.json` 和 `next_training_job.json`。
+- `python -m traning.main run-job --job <next_training_job.json>` 可消费 job JSON，并调用普通
+  `run_training_job_spec` / `run_training` 业务函数执行，不复制训练逻辑。
 
 ## 后续计划
 
-- 将 optimization JSONL 记录升级为 SQLite 或实验数据库，并补固定评估集版本校验。
+- 将 optimization JSONL 记录升级为 SQLite 或实验数据库。
 - 将 `quality_score`、`peak_vram_mb`、`latency_ms` 拆成独立目标，再定义可复现排序公式。
-- 对候选缓存版本、score 版本和评估集版本做强校验，禁止跨版本直接比较。

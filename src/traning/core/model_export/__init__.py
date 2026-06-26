@@ -7,6 +7,9 @@ from traning.core.model_export.artifact import (
     ModelArtifactResult,
     ModelArtifactSpec,
     export_model_artifact,
+    import_model_artifact,
+    migrate_settings_file,
+    smoke_test_model_artifact,
     validate_model_artifact,
 )
 
@@ -17,5 +20,8 @@ __all__ = [
     "ModelArtifactResult",
     "ModelArtifactSpec",
     "export_model_artifact",
+    "import_model_artifact",
+    "migrate_settings_file",
+    "smoke_test_model_artifact",
     "validate_model_artifact",
 ]

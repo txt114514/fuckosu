@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Literal
 
+from package.coordinates import COORDINATE_TRANSFORM_VERSION
 import yaml
 from pydantic import (
     BaseModel,
@@ -44,6 +45,43 @@ class InputSettings(BaseModel):
         if value <= 0:
             raise ValueError("input dimensions must be positive")
         return value
+
+
+class PlayfieldRectSettings(BaseModel):
+    left: float
+    top: float
+    width: float
+    height: float
+
+    @field_validator("left", "top", "width", "height")
+    @classmethod
+    def _finite_number(cls, value: float) -> float:
+        if value != value or value in (float("inf"), float("-inf")):
+            raise ValueError("playfield rect values must be finite")
+        return value
+
+    @field_validator("width", "height")
+    @classmethod
+    def _positive_dimension(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("playfield rect dimensions must be positive")
+        return value
+
+
+class CoordinateTransformSettings(BaseModel):
+    version: str = COORDINATE_TRANSFORM_VERSION
+    mode: Literal["explicit_rect", "legacy_centered"] = "legacy_centered"
+    playfield_rect: PlayfieldRectSettings | None = None
+
+    @model_validator(mode="after")
+    def validate_transform(self) -> CoordinateTransformSettings:
+        if self.version != COORDINATE_TRANSFORM_VERSION:
+            raise ValueError(
+                f"coordinate transform version must be {COORDINATE_TRANSFORM_VERSION}"
+            )
+        if self.mode == "explicit_rect" and self.playfield_rect is None:
+            raise ValueError("explicit_rect mode requires playfield_rect")
+        return self
 
 
 class TilingConfig(BaseModel):
@@ -157,6 +195,42 @@ class TemporalConfig(BaseModel):
         return value
 
 
+class TemporalLossWeights(BaseModel):
+    action: float = 1.0
+    candidate: float = 1.0
+    xy: float = 1.0
+    time_offset: float = 0.01
+
+    @field_validator("action", "candidate", "xy", "time_offset")
+    @classmethod
+    def _finite_nonnegative(cls, value: float) -> float:
+        if value < 0 or value != value or value == float("inf"):
+            raise ValueError("temporal loss weights must be finite and nonnegative")
+        return value
+
+
+class SpatialConsistencyLossWeights(BaseModel):
+    embedding: float = 0.0
+    ring_radius: float = 0.0
+    slider_continuity: float = 0.0
+
+    @field_validator("embedding", "ring_radius", "slider_continuity")
+    @classmethod
+    def _finite_nonnegative(cls, value: float) -> float:
+        if value < 0 or value != value or value == float("inf"):
+            raise ValueError("spatial consistency loss weights must be finite and nonnegative")
+        return value
+
+
+class TrainingSettings(BaseModel):
+    temporal_loss_weights: TemporalLossWeights = Field(
+        default_factory=TemporalLossWeights
+    )
+    spatial_consistency_loss_weights: SpatialConsistencyLossWeights = Field(
+        default_factory=SpatialConsistencyLossWeights
+    )
+
+
 class MemoryConfig(BaseModel):
     amp_dtype: Literal["auto", "float16", "bfloat16", "float32"] = "auto"
     gradient_checkpointing: bool = True
@@ -214,12 +288,18 @@ class CandidateCacheSettings(BaseModel):
     low_confidence_threshold: float = 0.60
     close_score_margin: float = 0.05
     slider_attach_distance_px: float = 48.0
+    local_refiner_enabled: bool = False
+    local_refiner_top_k: int = 4
+    local_refiner_radius_px: float = 12.0
+    ambiguity_review_enabled: bool = True
+    ambiguity_review_max_candidates: int = 8
 
     @field_validator(
         "max_candidates_per_frame",
         "slider_min_cells",
         "slider_path_points",
         "max_slider_paths",
+        "local_refiner_top_k",
     )
     @classmethod
     def _positive_integer(cls, value: int) -> int:
@@ -239,11 +319,30 @@ class CandidateCacheSettings(BaseModel):
         "low_confidence_threshold",
         "close_score_margin",
         "slider_attach_distance_px",
+        "local_refiner_radius_px",
     )
     @classmethod
     def _nonnegative_float(cls, value: float) -> float:
         if value < 0 or value != value or value == float("inf"):
             raise ValueError("candidate cache float settings must be finite")
+        return value
+
+
+class OptimizationSettings(BaseModel):
+    enabled: bool = False
+    max_generated_jobs: int = 1
+    execute_generated_jobs: bool = False
+    dry_run: bool = False
+    job_only: bool = True
+    max_trials: int = 1
+    max_stage: str = "basic"
+    trial_store_path: Path = REPO_ROOT / "runs" / "optimization" / "trials.jsonl"
+
+    @field_validator("max_generated_jobs", "max_trials")
+    @classmethod
+    def _positive_integer(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("optimization counts must be positive")
         return value
 
 
@@ -415,7 +514,11 @@ class Settings(BaseSettings):
 
     runtime: RuntimeSettings = Field(default_factory=RuntimeSettings)
     input: InputSettings = Field(default_factory=InputSettings)
+    coordinate_transform: CoordinateTransformSettings = Field(
+        default_factory=CoordinateTransformSettings
+    )
     tiling: TilingConfig = Field(default_factory=TilingConfig)
+    training: TrainingSettings = Field(default_factory=TrainingSettings)
     local_encoder: LocalEncoderConfig = Field(default_factory=LocalEncoderConfig)
     global_encoder: GlobalEncoderConfig = Field(default_factory=GlobalEncoderConfig)
     fusion: FusionConfig = Field(default_factory=FusionConfig)
@@ -425,6 +528,7 @@ class Settings(BaseSettings):
     candidate_cache: CandidateCacheSettings = Field(
         default_factory=CandidateCacheSettings
     )
+    optimization: OptimizationSettings = Field(default_factory=OptimizationSettings)
     data_input: DataInputSettings = Field(default_factory=DataInputSettings)
     loader: LoaderSettings = Field(default_factory=LoaderSettings)
     evaluation: EvaluationSettings = Field(default_factory=EvaluationSettings)
@@ -509,6 +613,7 @@ def load_settings(config_path: Path | None = None) -> Settings:
 __all__ = [
     "CONFIG_PATH",
     "CandidateCacheSettings",
+    "CoordinateTransformSettings",
     "DataSplit",
     "DataInputSettings",
     "EvaluationSettings",
@@ -518,13 +623,17 @@ __all__ = [
     "LoaderSettings",
     "LocalEncoderConfig",
     "MemoryConfig",
+    "OptimizationSettings",
+    "PlayfieldRectSettings",
     "REPO_ROOT",
     "RuntimeSettings",
     "SMETConfig",
     "Settings",
     "SettingsError",
     "TemporalConfig",
+    "TemporalLossWeights",
     "TilingConfig",
+    "TrainingSettings",
     "VisualizationSettings",
     "load_settings",
 ]

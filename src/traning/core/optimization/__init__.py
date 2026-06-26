@@ -26,11 +26,14 @@ from traning.core.optimization.parameter_search import (
 )
 from traning.core.optimization.scoring import (
     AGGREGATE_SCORE_VERSION,
+    DEFAULT_CIRCLE_RADIUS_OSU,
+    DecisionOutputScoreResult,
     SampleScoreReport,
     SampleScoringInput,
     TrialScoreReport,
     TrialScoreSpec,
     build_batch_gallery_request,
+    score_decision_outputs,
     score_sample,
     score_trial,
 )
@@ -42,6 +45,8 @@ __all__ = [
     "ATTRIBUTION_DOMAINS",
     "AttributionSummary",
     "CurriculumGateResult",
+    "DEFAULT_CIRCLE_RADIUS_OSU",
+    "DecisionOutputScoreResult",
     "HardExampleSamplingPlan",
     "HardExample",
     "JsonlTrialStore",
@@ -62,6 +67,7 @@ __all__ = [
     "evaluate_curriculum_gate",
     "execute_optimization_plan",
     "plan_next_trial",
+    "score_decision_outputs",
     "score_sample",
     "score_trial",
 ]

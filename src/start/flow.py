@@ -34,6 +34,11 @@ from traning.core.decision import (
     FullTrainingRunResult,
     run_full_training_pipeline,
 )
+from visualization.lib import (
+    NullReporter,
+    PipelineStageState,
+    TrainingReporter,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -118,7 +123,12 @@ class StartupFlowConfig:
     cache_max_frames: int | None = 1
     sequence_length: int | None = None
     candidate_slots: int | None = None
+    parameter_group_id: str = "pg-0001"
+    render_gallery: bool = True
+    gallery_output_root: Path | None = None
+    gallery_samples_per_group: int | None = None
     run_dir: Path | None = None
+    reporter: TrainingReporter = field(default_factory=NullReporter)
 
 
 @dataclass(frozen=True)
@@ -161,6 +171,13 @@ class StartupFlowResult:
 
 
 def run_startup_flow(config: StartupFlowConfig) -> StartupFlowResult:
+    config.reporter.update_pipeline_stage(
+        PipelineStageState(
+            stage_id="before_raw_scan",
+            name="原始数据扫描",
+            status="scanning",
+        )
+    )
     before_startup = run_before_startup_checks(
         config.before_config,
         matched_manifest_path=config.matched_manifest_path,
@@ -168,7 +185,38 @@ def run_startup_flow(config: StartupFlowConfig) -> StartupFlowResult:
         min_match_score=config.before_min_match_score,
     )
     before_startup.raise_for_errors()
+    raw_result = next(
+        (
+            result
+            for result in before_startup.results
+            if result.key == "before_traning:raw_data"
+        ),
+        None,
+    )
+    config.reporter.update_pipeline_stage(
+        PipelineStageState(
+            stage_id="before_raw_scan",
+            name="原始数据变更检测",
+            status="passed" if raw_result is None or raw_result.status == "passed" else raw_result.status,
+            processed=0,
+            total=0,
+            warning_count=len(before_startup.warnings),
+            error_reason=raw_result.message if raw_result and raw_result.status == "failed" else None,
+            message=(
+                "原始数据未发生变化，无需重新转换"
+                if raw_result is not None and "no unmatched" in raw_result.message.lower()
+                else raw_result.message if raw_result is not None else None
+            ),
+        )
+    )
     before_settings = load_before_settings(config.before_config)
+    config.reporter.update_pipeline_stage(
+        PipelineStageState(
+            stage_id="before_conversion",
+            name="训练集转换",
+            status="converting" if config.run_before_traning else "skipped",
+        )
+    )
     before_run = _maybe_run_before_traning(
         before_settings,
         before_startup=before_startup,
@@ -176,9 +224,34 @@ def run_startup_flow(config: StartupFlowConfig) -> StartupFlowResult:
     )
     if not before_run.ok:
         raise RuntimeError(f"before_traning startup step failed: {before_run.message}")
+    config.reporter.update_pipeline_stage(
+        PipelineStageState(
+            stage_id="before_conversion",
+            name="训练集转换",
+            status=before_run.status,
+            message=before_run.message,
+        )
+    )
 
     training_settings = load_training_settings(config.training_config)
+    config.reporter.update_pipeline_stage(
+        PipelineStageState(
+            stage_id="split_sync",
+            name="split 生成或检查",
+            status="checking",
+        )
+    )
     split_sync = _sync_dataset_splits(training_settings, config=config)
+    config.reporter.update_pipeline_stage(
+        PipelineStageState(
+            stage_id="split_sync",
+            name="split 生成或检查",
+            status="passed",
+            processed=len(split_sync.manifest.items),
+            total=len(split_sync.manifest.items),
+            output_path=str(split_sync.manifest_path),
+        )
+    )
     training_startup = run_traning_startup_checks(
         config.training_config,
         split=config.split,
@@ -186,6 +259,16 @@ def run_startup_flow(config: StartupFlowConfig) -> StartupFlowResult:
         require_cuda=config.require_cuda,
     )
     training_startup.raise_for_errors()
+    config.reporter.update_pipeline_stage(
+        PipelineStageState(
+            stage_id="training_startup",
+            name="模型和配置检查",
+            status="passed",
+            processed=len(training_startup.results),
+            total=len(training_startup.results),
+            warning_count=len(training_startup.warnings),
+        )
+    )
 
     tests = run_progressive_tests(
         config.test_level,
@@ -301,6 +384,11 @@ def _full_training_config(config: StartupFlowConfig) -> FullTrainingRunConfig:
         cache_max_frames=config.cache_max_frames,
         sequence_length=config.sequence_length,
         candidate_slots=config.candidate_slots,
+        parameter_group_id=config.parameter_group_id,
+        render_gallery=config.render_gallery,
+        gallery_output_root=config.gallery_output_root,
+        gallery_samples_per_group=config.gallery_samples_per_group,
+        reporter=config.reporter,
     )
 
 

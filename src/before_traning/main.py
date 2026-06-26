@@ -72,15 +72,145 @@ def _render(results: dict[str, bool], elapsed: float):
     console.print(f"[bold]Total:[/bold] {elapsed:.2f}s")
 
 
-def _run(settings: Settings, **stages: bool | None) -> int:
-    started_at = perf_counter()
-    results = TRAINING_PIPELINE(
+def run_training_pipeline(
+    settings: Settings,
+    **stages: bool | None,
+) -> dict[str, bool]:
+    return TRAINING_PIPELINE(
         settings,
         overrides=stages,
         use_prefect=os.environ.get("TRAINING_PREFECT_ENGINE") == "1",
     )
-    _render(results, perf_counter() - started_at)
+
+
+def pipeline_exit_code(results: dict[str, bool]) -> int:
     return 1 if any(not success for success in results.values()) else 0
+
+
+def run_data_workflow(
+    *,
+    config: Path | None = None,
+    overwrite: bool | None = None,
+    continue_on_error: bool | None = None,
+    skip_get_files: bool = False,
+    skip_verify_export: bool = False,
+    skip_difficulty_export: bool = False,
+    skip_video_match: bool = False,
+    skip_av_correspondence: bool = False,
+    skip_clip: bool = False,
+    skip_segment: bool = False,
+    use_audio_match_experiment: bool | None = None,
+    global_offset_ms: float | None = None,
+) -> dict[str, bool]:
+    settings = _settings(
+        config,
+        overwrite,
+        continue_on_error,
+        use_audio_match_experiment,
+        global_offset_ms,
+    )
+    return run_training_pipeline(
+        settings,
+        run_get_files=_skip(settings.check_data.run_get_files, skip_get_files),
+        run_verify_export=_skip(settings.check_data.run_verify_export, skip_verify_export),
+        run_difficulty_export=_skip(
+            settings.check_data.run_difficulty_export,
+            skip_difficulty_export,
+        ),
+        run_video_match=_skip(settings.video_clip.run_video_match, skip_video_match),
+        run_av_correspondence=_skip(
+            settings.video_clip.run_av_correspondence,
+            skip_av_correspondence,
+        ),
+        run_clip_stage=_skip(settings.video_clip.run_clip_stage, skip_clip),
+        run_segment_stage=_skip(
+            settings.video_clip.run_segment_stage,
+            skip_segment,
+        ),
+    )
+
+
+def run_verify_workflow(
+    *,
+    config: Path | None = None,
+    overwrite: bool | None = None,
+    continue_on_error: bool | None = None,
+) -> dict[str, bool]:
+    return run_training_pipeline(
+        _settings(config, overwrite, continue_on_error),
+        run_get_files=False,
+        run_verify_export=True,
+        run_difficulty_export=False,
+        run_video_match=False,
+        run_av_correspondence=False,
+        run_clip_stage=False,
+        run_segment_stage=False,
+    )
+
+
+def run_match_workflow(
+    *,
+    config: Path | None = None,
+    overwrite: bool | None = None,
+    continue_on_error: bool | None = None,
+    use_audio_match_experiment: bool | None = None,
+) -> dict[str, bool]:
+    return run_training_pipeline(
+        _settings(config, overwrite, continue_on_error, use_audio_match_experiment),
+        run_get_files=False,
+        run_verify_export=False,
+        run_difficulty_export=False,
+        run_video_match=True,
+        run_av_correspondence=False,
+        run_clip_stage=False,
+        run_segment_stage=False,
+    )
+
+
+def run_clip_workflow(
+    *,
+    config: Path | None = None,
+    overwrite: bool | None = None,
+    continue_on_error: bool | None = None,
+    global_offset_ms: float | None = None,
+) -> dict[str, bool]:
+    return run_training_pipeline(
+        _settings(config, overwrite, continue_on_error, global_offset_ms=global_offset_ms),
+        run_get_files=False,
+        run_verify_export=False,
+        run_difficulty_export=False,
+        run_video_match=False,
+        run_av_correspondence=True,
+        run_clip_stage=True,
+        run_segment_stage=True,
+    )
+
+
+def run_segment_workflow(
+    *,
+    config: Path | None = None,
+    overwrite: bool | None = None,
+    continue_on_error: bool | None = None,
+) -> dict[str, bool]:
+    return run_training_pipeline(
+        _settings(config, overwrite, continue_on_error),
+        run_get_files=False,
+        run_verify_export=False,
+        run_difficulty_export=False,
+        run_video_match=False,
+        run_av_correspondence=False,
+        run_clip_stage=False,
+        run_segment_stage=True,
+    )
+
+
+def run_default_workflow() -> dict[str, bool]:
+    return run_training_pipeline(load_settings())
+
+
+def _render_workflow_result(results: dict[str, bool], started_at: float) -> int:
+    _render(results, perf_counter() - started_at)
+    return pipeline_exit_code(results)
 
 
 @app.command("run")
@@ -101,34 +231,22 @@ def run_command(
     ),
     global_offset_ms: float | None = typer.Option(None, "--global-offset-ms"),
 ):
-    settings = _settings(
-        config,
-        overwrite,
-        continue_on_error,
-        use_audio_match_experiment,
-        global_offset_ms,
+    started_at = perf_counter()
+    results = run_data_workflow(
+        config=config,
+        overwrite=overwrite,
+        continue_on_error=continue_on_error,
+        skip_get_files=skip_get_files,
+        skip_verify_export=skip_verify_export,
+        skip_difficulty_export=skip_difficulty_export,
+        skip_video_match=skip_video_match,
+        skip_av_correspondence=skip_av_correspondence,
+        skip_clip=skip_clip,
+        skip_segment=skip_segment,
+        use_audio_match_experiment=use_audio_match_experiment,
+        global_offset_ms=global_offset_ms,
     )
-    raise typer.Exit(
-        _run(
-            settings,
-            run_get_files=_skip(settings.check_data.run_get_files, skip_get_files),
-            run_verify_export=_skip(settings.check_data.run_verify_export, skip_verify_export),
-            run_difficulty_export=_skip(
-                settings.check_data.run_difficulty_export,
-                skip_difficulty_export,
-            ),
-            run_video_match=_skip(settings.video_clip.run_video_match, skip_video_match),
-            run_av_correspondence=_skip(
-                settings.video_clip.run_av_correspondence,
-                skip_av_correspondence,
-            ),
-            run_clip_stage=_skip(settings.video_clip.run_clip_stage, skip_clip),
-            run_segment_stage=_skip(
-                settings.video_clip.run_segment_stage,
-                skip_segment,
-            ),
-        )
-    )
+    raise typer.Exit(_render_workflow_result(results, started_at))
 
 
 @app.command("verify")
@@ -137,18 +255,13 @@ def verify_command(
     overwrite: bool | None = typer.Option(None, "--overwrite/--no-overwrite"),
     continue_on_error: bool | None = typer.Option(None, "--continue-on-error/--stop-on-error"),
 ):
-    raise typer.Exit(
-        _run(
-            _settings(config, overwrite, continue_on_error),
-            run_get_files=False,
-            run_verify_export=True,
-            run_difficulty_export=False,
-            run_video_match=False,
-            run_av_correspondence=False,
-            run_clip_stage=False,
-            run_segment_stage=False,
-        )
+    started_at = perf_counter()
+    results = run_verify_workflow(
+        config=config,
+        overwrite=overwrite,
+        continue_on_error=continue_on_error,
     )
+    raise typer.Exit(_render_workflow_result(results, started_at))
 
 
 @app.command("match")
@@ -161,18 +274,14 @@ def match_command(
         "--use-audio-match-experiment/--disable-audio-match-experiment",
     ),
 ):
-    raise typer.Exit(
-        _run(
-            _settings(config, overwrite, continue_on_error, use_audio_match_experiment),
-            run_get_files=False,
-            run_verify_export=False,
-            run_difficulty_export=False,
-            run_video_match=True,
-            run_av_correspondence=False,
-            run_clip_stage=False,
-            run_segment_stage=False,
-        )
+    started_at = perf_counter()
+    results = run_match_workflow(
+        config=config,
+        overwrite=overwrite,
+        continue_on_error=continue_on_error,
+        use_audio_match_experiment=use_audio_match_experiment,
     )
+    raise typer.Exit(_render_workflow_result(results, started_at))
 
 
 @app.command("clip")
@@ -182,18 +291,14 @@ def clip_command(
     continue_on_error: bool | None = typer.Option(None, "--continue-on-error/--stop-on-error"),
     global_offset_ms: float | None = typer.Option(None, "--global-offset-ms"),
 ):
-    raise typer.Exit(
-        _run(
-            _settings(config, overwrite, continue_on_error, global_offset_ms=global_offset_ms),
-            run_get_files=False,
-            run_verify_export=False,
-            run_difficulty_export=False,
-            run_video_match=False,
-            run_av_correspondence=True,
-            run_clip_stage=True,
-            run_segment_stage=True,
-        )
+    started_at = perf_counter()
+    results = run_clip_workflow(
+        config=config,
+        overwrite=overwrite,
+        continue_on_error=continue_on_error,
+        global_offset_ms=global_offset_ms,
     )
+    raise typer.Exit(_render_workflow_result(results, started_at))
 
 
 @app.command("segment")
@@ -202,24 +307,23 @@ def segment_command(
     overwrite: bool | None = typer.Option(None, "--overwrite/--no-overwrite"),
     continue_on_error: bool | None = typer.Option(None, "--continue-on-error/--stop-on-error"),
 ):
+    started_at = perf_counter()
+    results = run_segment_workflow(
+        config=config,
+        overwrite=overwrite,
+        continue_on_error=continue_on_error,
+    )
     raise typer.Exit(
-        _run(
-            _settings(config, overwrite, continue_on_error),
-            run_get_files=False,
-            run_verify_export=False,
-            run_difficulty_export=False,
-            run_video_match=False,
-            run_av_correspondence=False,
-            run_clip_stage=False,
-            run_segment_stage=True,
-        )
+        _render_workflow_result(results, started_at)
     )
 
 
 @app.callback(invoke_without_command=True)
 def default_command(ctx: typer.Context):
     if ctx.invoked_subcommand is None:
-        raise typer.Exit(_run(load_settings()))
+        started_at = perf_counter()
+        results = run_default_workflow()
+        raise typer.Exit(_render_workflow_result(results, started_at))
 
 
 def main(argv: list[str] | None = None) -> int:

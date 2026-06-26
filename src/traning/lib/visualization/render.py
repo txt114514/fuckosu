@@ -9,6 +9,7 @@ import torch
 from PIL import Image, ImageDraw, ImageFont
 
 from package import OsuVideoTransform, sample_slider_path
+from traning.lib.coordinates import transform_from_settings_or_sample
 
 
 VISIBLE_COLOR = (46, 220, 255)
@@ -153,11 +154,17 @@ def render_annotated_frame(
     target_source_index: int | None = None,
     include_all_objects: bool = False,
     predicted_osu_xy: tuple[float, float] | None = None,
+    predicted_video_xy: tuple[float, float] | None = None,
     metadata_lines: Sequence[str] = (),
 ) -> Image.Image:
     image = _image_from_tensor(sample["image"])
     width, height = image.size
-    transform = OsuVideoTransform.fit_centered(width, height)
+    transform, transform_spec = transform_from_settings_or_sample(
+        None,
+        sample,
+        frame_width=width,
+        frame_height=height,
+    )
     draw = ImageDraw.Draw(image)
     font = ImageFont.load_default()
 
@@ -215,6 +222,7 @@ def render_annotated_frame(
         f"sample={sample['sample_key']}",
         f"frame={sample['frame_index']} t={sample['timestamp_ms']:.3f}ms",
         f"visible={len(sample['visible_hit_objects'])}",
+        f"transform={transform_spec.version}:{transform_spec.source}",
     ]
     if target_point is not None:
         osu_point = transform.video_to_osu(*target_point)
@@ -225,12 +233,21 @@ def render_annotated_frame(
         )
     elif spinner_target:
         lines.append("target=spinner")
-    if predicted_osu_xy is not None:
-        predicted_point = _point(
-            transform,
-            predicted_osu_xy[0],
-            predicted_osu_xy[1],
+    if predicted_video_xy is not None:
+        predicted_point = (
+            round(predicted_video_xy[0]),
+            round(predicted_video_xy[1]),
         )
+        _draw_cross(draw, predicted_point, (255, 80, 255), size=16, width=4)
+        line = (
+            "prediction "
+            f"video=({predicted_point[0]}, {predicted_point[1]})"
+        )
+        if predicted_osu_xy is not None:
+            line += f" osu=({predicted_osu_xy[0]:.2f}, {predicted_osu_xy[1]:.2f})"
+        lines.append(line)
+    elif predicted_osu_xy is not None:
+        predicted_point = _point(transform, predicted_osu_xy[0], predicted_osu_xy[1])
         _draw_cross(draw, predicted_point, (255, 80, 255), size=16, width=4)
         lines.append(
             "prediction "

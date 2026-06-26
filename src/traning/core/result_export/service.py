@@ -13,10 +13,10 @@ from traning.lib.visualization import (
     launch_image_window,
     render_annotated_frame,
     save_annotated_frame,
-    save_best_trial_gallery,
 )
 from traning.conf import VisualizationSettings
 from traning.state import BatchGalleryRequest
+from visualization.lib.gallery_api import export_best_trial_gallery
 
 
 class OptionalTrainingVisualizer:
@@ -143,7 +143,7 @@ class OptionalTrainingVisualizer:
             else samples_per_group
         )
         try:
-            output_dir, saved_count, issues = save_best_trial_gallery(
+            output_dir, saved_count, issues = export_best_trial_gallery(
                 dataset,
                 request,
                 output_root=output_root or self.settings.output_dir,

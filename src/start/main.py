@@ -26,6 +26,109 @@ class TestLevelOption(str, Enum):
     full = "full"
 
 
+class CliParameterError(ValueError):
+    """Raised when a plain business entry receives an invalid CLI-like value."""
+
+
+def select_device(device: str) -> torch.device:
+    selected = "cuda" if device == "auto" and torch.cuda.is_available() else device
+    if selected == "auto":
+        selected = "cpu"
+    if selected not in {"cpu", "cuda"}:
+        raise CliParameterError("device must be cpu, cuda, or auto")
+    return torch.device(selected)
+
+
+def collect_startup_check_result(
+    *,
+    config: Path | None = None,
+    split: DataSplit = "train",
+    device: str = "auto",
+    require_cuda: bool = False,
+) -> tuple[object, dict]:
+    if config is None:
+        report = run_startup_checks(require_cuda=require_cuda)
+        return report, report.as_dict()
+
+    settings = load_settings(config)
+    selected = select_device(device)
+    training_report = run_training_startup_checks(
+        settings,
+        split=split,
+        device=selected,
+        require_cuda=require_cuda or selected.type == "cuda",
+    )
+    return training_report.report, training_report.as_dict()
+
+
+def run_training_startup_flow(
+    *,
+    training_config: Path,
+    before_config: Path | None = None,
+    split: DataSplit = "train",
+    device: str = "auto",
+    require_cuda: bool | None = None,
+    matched_manifest: Path = DEFAULT_MATCHED_MANIFEST,
+    dry_run: bool = False,
+    skip_before_traning: bool = False,
+    before_match_probe: bool = True,
+    before_min_match_score: float = 0.1,
+    split_manifest: Path | None = None,
+    split_seed: int = 2026,
+    train_ratio: float = 0.8,
+    validation_ratio: float = 0.1,
+    test_ratio: float = 0.1,
+    allow_test_growth: bool = False,
+    test_level: str = "quick",
+    spatial_max_steps: int = 1,
+    temporal_max_steps: int = 1,
+    spatial_learning_rate: float = 1e-4,
+    temporal_learning_rate: float = 1e-4,
+    patch_limit: int = 1,
+    cache_max_frames: int = 1,
+    sequence_length: int | None = None,
+    candidate_slots: int | None = None,
+    parameter_group_id: str = "pg-0001",
+    render_gallery: bool = True,
+    gallery_output_root: Path | None = None,
+    gallery_samples_per_group: int | None = None,
+):
+    selected = select_device(device)
+    return run_startup_flow(
+        StartupFlowConfig(
+            training_config=training_config,
+            before_config=before_config,
+            split=split,
+            device=selected,
+            require_cuda=require_cuda,
+            matched_manifest_path=matched_manifest,
+            run_before_traning=not skip_before_traning,
+            before_match_probe=before_match_probe,
+            before_min_match_score=before_min_match_score,
+            split_manifest_path=split_manifest,
+            split_seed=split_seed,
+            train_ratio=train_ratio,
+            validation_ratio=validation_ratio,
+            test_ratio=test_ratio,
+            allow_test_growth=allow_test_growth,
+            test_level=test_level,
+            dry_run=dry_run,
+            spatial_max_steps=spatial_max_steps,
+            temporal_max_steps=temporal_max_steps,
+            spatial_learning_rate=spatial_learning_rate,
+            temporal_learning_rate=temporal_learning_rate,
+            patch_limit=None if patch_limit == 0 else patch_limit,
+            cache_max_frames=None if cache_max_frames == 0 else cache_max_frames,
+            sequence_length=sequence_length,
+            candidate_slots=candidate_slots,
+            parameter_group_id=parameter_group_id,
+            render_gallery=render_gallery,
+            gallery_output_root=gallery_output_root,
+            gallery_samples_per_group=gallery_samples_per_group,
+        )
+    )
+
+
 def _render_modules_table() -> None:
     table = Table(title="src module entries")
     table.add_column("Key")
@@ -52,6 +155,53 @@ def _render_check_table(report) -> None:
     for result in report.results:
         table.add_row(result.key, result.status, result.message)
     console.print(table)
+
+
+def _render_check_detail_table(title: str, report) -> None:
+    table = Table(title=title)
+    table.add_column("Check")
+    table.add_column("Status")
+    table.add_column("Message")
+    table.add_column("Details")
+    for item in report.results:
+        details = _compact_details(getattr(item, "details", {}) or {})
+        table.add_row(item.key, item.status, item.message, details)
+    console.print(table)
+
+
+def _render_parameter_group_score(evaluation) -> None:
+    table = Table(title="parameter group score")
+    table.add_column("Group")
+    table.add_column("Quality")
+    table.add_column("Passed")
+    table.add_column("Targets")
+    table.add_column("Hits")
+    table.add_column("Misses")
+    table.add_column("Unresolved")
+    table.add_column("Freq limited")
+    table.add_column("No-op")
+    table.add_column("Actions")
+    table.add_column("Gallery")
+    table.add_row(
+        str(evaluation.parameter_group_id),
+        f"{evaluation.quality_score:.6f}",
+        "yes" if evaluation.passed else "no",
+        str(evaluation.target_count),
+        str(evaluation.hit_count),
+        str(evaluation.miss_count),
+        str(evaluation.unresolved_count),
+        str(evaluation.frequency_limited_count),
+        str(evaluation.no_op_frame_count),
+        str(evaluation.action_frame_count),
+        (
+            f"{evaluation.gallery_status}: {evaluation.gallery_output_dir}"
+            if evaluation.gallery_output_dir is not None
+            else evaluation.gallery_status
+        ),
+    )
+    console.print(table)
+    if evaluation.gallery_warning:
+        console.print(f"[yellow]{evaluation.gallery_warning}[/yellow]")
 
 
 def _render_flow_table(result) -> None:
@@ -103,6 +253,28 @@ def _render_flow_table(result) -> None:
         ),
     )
     console.print(table)
+    _render_check_detail_table(
+        "before_traning startup checks",
+        result.before_startup,
+    )
+    _render_check_detail_table(
+        "traning startup checks",
+        result.training_startup,
+    )
+    printed_scopes = {
+        result.before_startup.scope,
+        result.training_startup.scope,
+    }
+    for report in result.tests.reports:
+        if report.scope in printed_scopes:
+            continue
+        printed_scopes.add(report.scope)
+        _render_check_detail_table(
+            f"progressive checks: {report.scope}",
+            report,
+        )
+    if result.full_training is not None:
+        _render_parameter_group_score(result.full_training.evaluation)
 
 
 def _raw_data_details(report) -> dict:
@@ -110,6 +282,21 @@ def _raw_data_details(report) -> dict:
         if item.key == "before_traning:raw_data":
             return dict(item.details)
     return {}
+
+
+def _compact_details(details: dict) -> str:
+    if not details:
+        return ""
+    rendered = []
+    for key, value in details.items():
+        if isinstance(value, (dict, list, tuple)):
+            rendered_value = json.dumps(value, ensure_ascii=False, default=str)
+        else:
+            rendered_value = str(value)
+        if len(rendered_value) > 80:
+            rendered_value = rendered_value[:77] + "..."
+        rendered.append(f"{key}={rendered_value}")
+    return ", ".join(rendered)
 
 
 @app.command("modules")
@@ -125,20 +312,15 @@ def check(
     require_cuda: bool = typer.Option(False, "--require-cuda/--no-require-cuda"),
     json_output: Path | None = typer.Option(None, "--json-output"),
 ) -> None:
-    if config is None:
-        report = run_startup_checks(require_cuda=require_cuda)
-        output = report.as_dict()
-    else:
-        settings = load_settings(config)
-        selected = _select_device(device)
-        training_report = run_training_startup_checks(
-            settings,
+    try:
+        report, output = collect_startup_check_result(
+            config=config,
             split=split,
-            device=selected,
-            require_cuda=require_cuda or selected.type == "cuda",
+            device=device,
+            require_cuda=require_cuda,
         )
-        report = training_report.report
-        output = training_report.as_dict()
+    except CliParameterError as error:
+        raise typer.BadParameter(str(error)) from error
     _render_check_table(report)
     if json_output is not None:
         json_output.parent.mkdir(parents=True, exist_ok=True)
@@ -206,53 +388,59 @@ def run(
     ),
     sequence_length: int | None = typer.Option(None, "--sequence-length", min=1),
     candidate_slots: int | None = typer.Option(None, "--candidate-slots", min=1),
+    parameter_group_id: str = typer.Option("pg-0001", "--parameter-group-id"),
+    render_gallery: bool = typer.Option(
+        True,
+        "--render-gallery/--no-render-gallery",
+        help="Render the best parameter group gallery after one training round.",
+    ),
+    gallery_output_root: Path | None = typer.Option(None, "--gallery-output-root"),
+    gallery_samples_per_group: int | None = typer.Option(
+        None,
+        "--gallery-samples-per-group",
+        min=1,
+    ),
 ) -> None:
-    selected = _select_device(device)
-    result = run_startup_flow(
-        StartupFlowConfig(
+    try:
+        result = run_training_startup_flow(
             training_config=training_config,
             before_config=before_config,
             split=split,
-            device=selected,
+            device=device,
             require_cuda=require_cuda,
-            matched_manifest_path=matched_manifest,
-            run_before_traning=not skip_before_traning,
+            matched_manifest=matched_manifest,
+            dry_run=dry_run,
+            skip_before_traning=skip_before_traning,
             before_match_probe=before_match_probe,
             before_min_match_score=before_min_match_score,
-            split_manifest_path=split_manifest,
+            split_manifest=split_manifest,
             split_seed=split_seed,
             train_ratio=train_ratio,
             validation_ratio=validation_ratio,
             test_ratio=test_ratio,
             allow_test_growth=allow_test_growth,
             test_level=test_level.value,
-            dry_run=dry_run,
             spatial_max_steps=spatial_max_steps,
             temporal_max_steps=temporal_max_steps,
             spatial_learning_rate=spatial_learning_rate,
             temporal_learning_rate=temporal_learning_rate,
-            patch_limit=None if patch_limit == 0 else patch_limit,
-            cache_max_frames=None if cache_max_frames == 0 else cache_max_frames,
+            patch_limit=patch_limit,
+            cache_max_frames=cache_max_frames,
             sequence_length=sequence_length,
             candidate_slots=candidate_slots,
+            parameter_group_id=parameter_group_id,
+            render_gallery=render_gallery,
+            gallery_output_root=gallery_output_root,
+            gallery_samples_per_group=gallery_samples_per_group,
         )
-    )
+    except CliParameterError as error:
+        raise typer.BadParameter(str(error)) from error
     _render_flow_table(result)
     if json_output is not None:
         write_startup_flow_report(result, json_output)
         console.print(f"[green]saved[/green]: {json_output}")
     if not result.ok:
         raise typer.Exit(1)
-
-
-def _select_device(device: str) -> torch.device:
-    selected = "cuda" if device == "auto" and torch.cuda.is_available() else device
-    if selected == "auto":
-        selected = "cpu"
-    if selected not in {"cpu", "cuda"}:
-        raise typer.BadParameter("device must be cpu, cuda, or auto")
-    return torch.device(selected)
-
 
 if __name__ == "__main__":
     app()

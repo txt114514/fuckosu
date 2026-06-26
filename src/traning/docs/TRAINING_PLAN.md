@@ -12,6 +12,7 @@
 
 环境与 CUDA 运行约束见 [`ENVIRONMENT.md`](ENVIRONMENT.md)。
 训练启动前的实测检查和下一步命令见 [`TRAINING_READINESS.md`](TRAINING_READINESS.md)。
+计划缺口审计见 [`PLAN_GAP_AUDIT.md`](PLAN_GAP_AUDIT.md)。
 训练结果评分、归因和参数调整闭环见 [`OPTIMIZATION_MODULE.md`](OPTIMIZATION_MODULE.md)。
 `traning` 内部复用层整理见 [`LIB_STRUCTURE_AUDIT.md`](LIB_STRUCTURE_AUDIT.md)。
 `src` 总入口与完整训练启动前自检见 [`../../start/README.md`](../../start/README.md)。
@@ -44,6 +45,7 @@ main.py
   -> core/temporal           # 候选缓存窗口、因果时序训练 smoke
   -> core/decision           # 候选缓存、评分、阶段编排
   -> core/optimization       # 训练结果评分、错误归因、参数搜索修改
+  -> core/full_flow          # 完整生命周期编排、plan/dry-run/status/execute
   -> core/result_export      # 标注预览、评估图集导出
   -> core/model_export       # 模型导出与迁移边界
   -> lib                     # traning 作用域内可复用 API
@@ -69,14 +71,15 @@ main.py
 - `lib.metrics`：`point-slider-v2` 单对象评分和 `click-sequence-v1` 序列模拟底层 API。
 - `lib.runtime`：CUDA/AMP/channels-last/TF32/GradScaler/显存预算和 OOM 建议统一入口。
 - `start.checks`：完整训练每次启动前执行模块入口、环境、配置、设备和数据输入自检。
+- `core.training_inheritance`：保存和加载 `training-checkpoint-v1`，支持 strict/auto/weights-only/none 恢复策略。
+- `core.full_flow`：统一完整流程入口，串接 before_traning、split、preflight、resume、ramp、artifact 和 inheritance 报告。
 
-## 待实现或待扩展
+## 已实现但仍需持续扩展
 
-- `temporal` 已有候选缓存 Dataset/window builder、`beatmap_action_v1` 动作标签、
-  temporal checkpoint、训练 CLI 和决策导出 CLI。
-- `optimization` 已能创建 trial 记录、生成低预算 job、保存 checkpoint 继承路径、输出连续通过 gate 和难例采样权重。
-- `model_export` 已能导出可校验 PyTorch artifact；完整一帧推理 smoke 需要正式空间+时间 checkpoint 组合。
-- 候选局部 refiner、条件歧义复查、SMET 动态拓扑属于质量增强层，首版不阻塞主链路。
+- `full-flow` 是推荐的一条命令入口；`ramp-to-full` 保留为渐进放大兼容入口。
+- `run` 保留为单轮完整训练入口；`train-spatial`、`train-temporal` 等分步命令仍用于诊断。
+- `model_export` 已执行 CPU artifact smoke；更大规模 GPU 训练仍需按 `TRAINING_READINESS.md` 分级推进。
+- SMET 动态拓扑仍是可选质量增强层，当前配置默认关闭。
 
 ## 核心技术约束
 
@@ -96,3 +99,4 @@ main.py
 5. [`LIB_STRUCTURE_AUDIT.md`](LIB_STRUCTURE_AUDIT.md)：调整 `src/traning/lib` 或公共 API
    边界前阅读。
 6. [`../../start/README.md`](../../start/README.md)：调整整体入口或启动自检前阅读。
+7. [`../../../docs/codex/FULL_FLOW.md`](../../../docs/codex/FULL_FLOW.md)：调整完整流程或 resume 编排前阅读。

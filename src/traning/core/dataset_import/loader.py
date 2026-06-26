@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from torch.utils.data import DataLoader
 
+from package.coordinates import COORDINATE_TRANSFORM_VERSION
 from traning.lib.data import SegmentFrameDataset, collate_frame_samples
 from traning.conf import DataSplit, Settings
 from traning.core.dataset_import.preflight import discover_data_input
@@ -22,6 +23,16 @@ def build_dataset(
         raise ValueError(f"no {split} segments matched the data input filters")
 
     config = settings.data_input
+    transform_config = settings.coordinate_transform
+    coordinate_transform = None
+    if transform_config.mode == "explicit_rect":
+        if transform_config.playfield_rect is None:
+            raise ValueError("explicit coordinate transform is missing playfield_rect")
+        coordinate_transform = {
+            "version": COORDINATE_TRANSFORM_VERSION,
+            "source": "settings.explicit_rect",
+            "rect": transform_config.playfield_rect.model_dump(mode="json"),
+        }
     return SegmentFrameDataset(
         result.records,
         sample_fps=config.sample_fps,
@@ -29,6 +40,7 @@ def build_dataset(
         max_frames_per_segment=config.max_frames_per_segment,
         visibility_post_ms=config.visibility_post_ms,
         normalize_images=config.normalize_images,
+        coordinate_transform=coordinate_transform,
     )
 
 

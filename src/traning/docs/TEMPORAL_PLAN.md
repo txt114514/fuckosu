@@ -90,9 +90,10 @@ layers: 1-2
 ## 训练计划
 
 1. 从候选缓存读取固定长度窗口，构建 `[T, K, D]`。
-2. 候选缓存生成阶段写入 `beatmap_action_v1`：根据 `beatmap.json` 的 hit object 时间窗派生
-   `no_op / press / hold / release`，并用 `OsuVideoTransform` 把 osu 坐标转换到视频坐标，
-   选择最近候选作为监督。
+2. 候选缓存生成阶段写入 `beatmap_action_v1` / `beatmap-action-v2` 元数据：根据
+   `beatmap.json` 的 hit object 时间窗派生 `no_op / press / hold / release`，普通
+   circle 产生 release，slider 使用 `repeats` 生成边界 press/release，spinner 产生
+   start/hold/release；坐标通过显式 playfield transform 转到视频像素坐标并选择最近候选。
 3. 旧缓存没有 `temporal_target` 时 fallback 到 `top_candidate_proxy`：有候选学
    `press + top candidate`，无候选学 `no_op`。
 4. 训练输出 `temporal_model.pt`，供决策导出加载。
@@ -111,11 +112,11 @@ layers: 1-2
   `decisions.jsonl` 和 manifest，包含动作、动作概率、候选选择和预测时间偏移。
 - `CausalTemporalModel`、`initial_state` 和 `step` 流式接口已有基础测试。
 - trial 级评估聚合位于 `core/optimization/scoring`，复用 `click-sequence-v1` 并输出稳定 score 版本。
+- `run_temporal_training` 已从 `Settings.training.temporal_loss_weights` 读取 action、
+  candidate、xy 和 time offset 权重，默认保持 `1/1/1/0.01`。
+- `evaluation.min_click_interval_ms` 已由完整训练 pipeline 注入 `TrialScoreSpec`。
+- 因果一致性测试覆盖 future window mutation、分段/连续一致和 batch 样本隔离。
 
 ## 后续计划
 
-- 改进 `beatmap_action_v1` 的边界帧策略，尤其是 circle release、slider repeat、spinner
-  长按和极密集重复点。
-- 明确正式候选选择 loss、动作分类 loss、坐标 loss、时间 offset loss 的权重。
-- 把 `evaluation.min_click_interval_ms` 纳入时序评估和决策错误归因。
-- 增加因果一致性测试：未来窗口变化不能影响过去输出。
+- 在真实长训练后继续调优 press/release 时间窗和极密集对象的课程采样权重。

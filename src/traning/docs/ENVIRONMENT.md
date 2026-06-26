@@ -15,7 +15,7 @@ host-exec docker exec -u dev osu_ai_dev bash -lc 'cd /home/dev/workspace && bash
 训练 CLI 的 CUDA 严格检查示例：
 
 ```bash
-host-exec docker exec -u dev osu_ai_dev bash -lc 'cd /home/dev/workspace && PYTHONPATH=src python -m traning.cli env-check --strict --require-cuda'
+host-exec docker exec -u dev osu_ai_dev bash -lc 'cd /home/dev/workspace && PYTHONPATH=src:. python -m traning.main env-check --strict --require-cuda'
 ```
 
 ## 环境检查
@@ -23,8 +23,8 @@ host-exec docker exec -u dev osu_ai_dev bash -lc 'cd /home/dev/workspace && PYTH
 常用命令：
 
 ```bash
-PYTHONPATH=src python -m traning.cli env-check
-PYTHONPATH=src python -m traning.cli model-smoke --config configs/model_small_vram.yaml
+PYTHONPATH=src:. python -m traning.main env-check
+PYTHONPATH=src:. python -m traning.main model-smoke --config configs/model_small_vram.yaml
 PYTHONPATH=src python -m pytest src/traning/tests -q
 python project_index/build_index.py --check
 ```
@@ -98,4 +98,3 @@ BF16、显存和依赖导入状态。
 - 再降低 batch/window 相关设置。
 - 保持输入原始分辨率作为优先目标，不把整体 resize 当作首选解决方案。
 - OOM 报告应包含显存 snapshot、有效预算、当前 patch 规格和建议动作。
-

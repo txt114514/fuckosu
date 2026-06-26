@@ -38,62 +38,75 @@ tests/full_checks/runner.py -> full pytest checks
 
 ## 符号索引
 
-覆盖 `120` 个 Python 文件、`517` 个命名函数/方法、`150` 个类。匿名 lambda 不单独列出。
+覆盖 `139` 个 Python 文件、`730` 个命名函数/方法、`183` 个类。匿名 lambda 不单独列出。
 
 图例：`F` 模块函数，`M` 方法，`N` 嵌套函数，`C` 类；`IO-R/IO-W` 文件读写，`DB` 数据库，`PROCESS` 外部进程。
 
 ## `src/traning/conf/settings.py`
 
 职责：训练配置模型与 YAML 加载；解析数据集路径、item 划分、颜色 cue、候选缓存、点击频率上限并校验采样和分块参数。
+工程依赖：`package.coordinates`
 
-- `C L26-L27` `SettingsError(Exception)` [CLASS]：封装 `SettingsError` 相关数据或行为。
-- `C L30-L32` `RuntimeSettings(BaseModel)` [CLASS]：封装 `RuntimeSettings` 相关数据或行为。
-- `C L35-L46` `InputSettings(BaseModel)` [CLASS]：封装 `InputSettings` 相关数据或行为。
-- `M L43-L46` `InputSettings._positive_dimension(cls, value: int) -> int` [VALIDATOR]：执行 `positive dimension` 对应逻辑。
-- `C L49-L79` `TilingConfig(BaseModel)` [CLASS]：封装 `TilingConfig` 相关数据或行为。
-- `M L59-L62` `TilingConfig._positive_integer(cls, value: int) -> int` [VALIDATOR]：执行 `positive integer` 对应逻辑。
-- `M L66-L69` `TilingConfig._nonnegative_overlap(cls, value: int) -> int` [VALIDATOR]：执行 `nonnegative overlap` 对应逻辑。
-- `M L72-L79` `TilingConfig.validate_tiling(self) -> TilingConfig` [VALIDATOR]：校验 `tiling` 对应的数据或结果。
-- `C L82-L98` `LocalEncoderConfig(BaseModel)` [CLASS]：封装 `LocalEncoderConfig` 相关数据或行为。
-- `M L95-L98` `LocalEncoderConfig._positive_integer(cls, value: int) -> int` [VALIDATOR]：执行 `positive integer` 对应逻辑。
-- `C L101-L119` `GlobalEncoderConfig(BaseModel)` [CLASS]：封装 `GlobalEncoderConfig` 相关数据或行为。
-- `M L116-L119` `GlobalEncoderConfig._positive_integer(cls, value: int) -> int` [VALIDATOR]：执行 `positive integer` 对应逻辑。
-- `C L122-L142` `FusionConfig(BaseModel)` [CLASS]：封装 `FusionConfig` 相关数据或行为。
-- `M L133-L136` `FusionConfig._positive_integer(cls, value: int) -> int` [VALIDATOR]：执行 `positive integer` 对应逻辑。
-- `M L139-L142` `FusionConfig.validate_attention_shape(self) -> FusionConfig` [VALIDATOR]：校验 `attention shape` 对应的数据或结果。
-- `C L145-L157` `TemporalConfig(BaseModel)` [CLASS]：封装 `TemporalConfig` 相关数据或行为。
-- `M L154-L157` `TemporalConfig._positive_integer(cls, value: int) -> int` [VALIDATOR]：执行 `positive integer` 对应逻辑。
-- `C L160-L196` `MemoryConfig(BaseModel)` [CLASS]：封装 `MemoryConfig` 相关数据或行为。
-- `M L179-L182` `MemoryConfig._finite_nonnegative_memory(cls, value: float) -> float` [VALIDATOR]：执行 `finite nonnegative memory` 对应逻辑。
-- `M L186-L189` `MemoryConfig._positive_memory(cls, value: float) -> float` [VALIDATOR]：执行 `positive memory` 对应逻辑。
-- `M L193-L196` `MemoryConfig._optional_positive_memory(cls, value: float | None) -> float | None` [VALIDATOR]：执行 `optional positive memory` 对应逻辑。
-- `C L199-L200` `SMETConfig(BaseModel)` [CLASS]：封装 `SMETConfig` 相关数据或行为。
-- `C L203-L247` `CandidateCacheSettings(BaseModel)` [CLASS]：封装 `CandidateCacheSettings` 相关数据或行为。
-- `M L225-L228` `CandidateCacheSettings._positive_integer(cls, value: int) -> int` [VALIDATOR]：执行 `positive integer` 对应逻辑。
-- `M L232-L235` `CandidateCacheSettings._probability(cls, value: float) -> float` [VALIDATOR]：执行 `probability` 对应逻辑。
-- `M L244-L247` `CandidateCacheSettings._nonnegative_float(cls, value: float) -> float` [VALIDATOR]：执行 `nonnegative float` 对应逻辑。
-- `C L250-L286` `LoaderSettings(BaseModel)` [CLASS]：封装 `LoaderSettings` 相关数据或行为。
-- `M L261-L264` `LoaderSettings._positive_batch_size(cls, value: int) -> int` [VALIDATOR]：执行 `positive batch size` 对应逻辑。
-- `M L268-L271` `LoaderSettings._nonnegative_workers(cls, value: int) -> int` [VALIDATOR]：执行 `nonnegative workers` 对应逻辑。
-- `M L275-L278` `LoaderSettings._optional_positive_prefetch(cls, value: int | None) -> int | None` [VALIDATOR]：执行 `optional positive prefetch` 对应逻辑。
-- `M L281-L286` `LoaderSettings.validate_worker_options(self) -> LoaderSettings` [VALIDATOR]：校验 `worker options` 对应的数据或结果。
-- `C L289-L297` `EvaluationSettings(BaseModel)` [CLASS]：封装 `EvaluationSettings` 相关数据或行为。
-- `M L294-L297` `EvaluationSettings._nonnegative_interval(cls, value: float) -> float` [VALIDATOR]：执行 `nonnegative interval` 对应逻辑。
-- `C L300-L315` `VisualizationSettings(BaseModel)` [CLASS]：封装 `VisualizationSettings` 相关数据或行为。
-- `M L312-L315` `VisualizationSettings._positive_interval(cls, value: int) -> int` [VALIDATOR]：执行 `positive interval` 对应逻辑。
-- `C L318-L405` `DataInputSettings(BaseModel)` [CLASS]：封装 `DataInputSettings` 相关数据或行为。
-- `M L342-L345` `DataInputSettings._positive_fps(cls, value: float) -> float` [VALIDATOR]：执行 `positive fps` 对应逻辑。
-- `M L349-L352` `DataInputSettings._positive_integer(cls, value: int) -> int` [VALIDATOR]：执行 `positive integer` 对应逻辑。
-- `M L356-L359` `DataInputSettings._optional_positive_integer(cls, value: int | None) -> int | None` [VALIDATOR]：执行 `optional positive integer` 对应逻辑。
-- `M L363-L366` `DataInputSettings._nonnegative_visibility(cls, value: float) -> float` [VALIDATOR]：执行 `nonnegative visibility` 对应逻辑。
-- `M L378-L384` `DataInputSettings._unique_nonempty_strings(cls, value: tuple[str, ...]) -> tuple[str, ...]` [VALIDATOR]：执行 `unique nonempty strings` 对应逻辑。
-- `M L387-L399` `DataInputSettings.validate_item_splits(self) -> DataInputSettings` [VALIDATOR]：校验 `item splits` 对应的数据或结果。
-- `M L401-L405` `DataInputSettings.validate_tiling(self) -> None`：校验 `tiling` 对应的数据或结果。
-- `C L408-L447` `Settings(BaseSettings)` [CLASS]：封装 `Settings` 相关数据或行为。
-- `M L434-L447` `Settings.settings_customise_sources(cls, settings_cls: type[BaseSettings], init_settings: PydanticBaseSettingsSource, env_settings: PydanticBaseSettingsSource, dotenv_settings: PydanticBaseSettingsSource, file_secret_settings: PydanticBaseSettingsSource) -> tuple[PydanticBaseSettingsSource, ...]`：执行 `settings customise sources` 对应逻辑。
-- `F L450-L459` `_read_config(config_path: Path) -> dict[str, Any]` [IO-R]：读取 `config` 对应的数据或结果。 调用：`SettingsError`。
-- `F L462-L494` `_resolve_paths(raw: dict[str, Any], base_dir: Path) -> dict[str, Any]`：解析并定位 `paths` 对应的数据或结果。
-- `F L497-L506` `load_settings(config_path: Path | None=None) -> Settings`：加载 `settings` 对应的数据或结果。 调用：`Settings`, `SettingsError`, `_read_config`, `_resolve_paths`, `settings.data_input.validate_tiling`, `settings.tiling.validate_tiling`。
+- `C L27-L28` `SettingsError(Exception)` [CLASS]：封装 `SettingsError` 相关数据或行为。
+- `C L31-L33` `RuntimeSettings(BaseModel)` [CLASS]：封装 `RuntimeSettings` 相关数据或行为。
+- `C L36-L47` `InputSettings(BaseModel)` [CLASS]：封装 `InputSettings` 相关数据或行为。
+- `M L44-L47` `InputSettings._positive_dimension(cls, value: int) -> int` [VALIDATOR]：执行 `positive dimension` 对应逻辑。
+- `C L50-L68` `PlayfieldRectSettings(BaseModel)` [CLASS]：封装 `PlayfieldRectSettings` 相关数据或行为。
+- `M L58-L61` `PlayfieldRectSettings._finite_number(cls, value: float) -> float` [VALIDATOR]：执行 `finite number` 对应逻辑。
+- `M L65-L68` `PlayfieldRectSettings._positive_dimension(cls, value: float) -> float` [VALIDATOR]：执行 `positive dimension` 对应逻辑。
+- `C L71-L84` `CoordinateTransformSettings(BaseModel)` [CLASS]：封装 `CoordinateTransformSettings` 相关数据或行为。
+- `M L77-L84` `CoordinateTransformSettings.validate_transform(self) -> CoordinateTransformSettings` [VALIDATOR]：校验 `transform` 对应的数据或结果。
+- `C L87-L117` `TilingConfig(BaseModel)` [CLASS]：封装 `TilingConfig` 相关数据或行为。
+- `M L97-L100` `TilingConfig._positive_integer(cls, value: int) -> int` [VALIDATOR]：执行 `positive integer` 对应逻辑。
+- `M L104-L107` `TilingConfig._nonnegative_overlap(cls, value: int) -> int` [VALIDATOR]：执行 `nonnegative overlap` 对应逻辑。
+- `M L110-L117` `TilingConfig.validate_tiling(self) -> TilingConfig` [VALIDATOR]：校验 `tiling` 对应的数据或结果。
+- `C L120-L136` `LocalEncoderConfig(BaseModel)` [CLASS]：封装 `LocalEncoderConfig` 相关数据或行为。
+- `M L133-L136` `LocalEncoderConfig._positive_integer(cls, value: int) -> int` [VALIDATOR]：执行 `positive integer` 对应逻辑。
+- `C L139-L157` `GlobalEncoderConfig(BaseModel)` [CLASS]：封装 `GlobalEncoderConfig` 相关数据或行为。
+- `M L154-L157` `GlobalEncoderConfig._positive_integer(cls, value: int) -> int` [VALIDATOR]：执行 `positive integer` 对应逻辑。
+- `C L160-L180` `FusionConfig(BaseModel)` [CLASS]：封装 `FusionConfig` 相关数据或行为。
+- `M L171-L174` `FusionConfig._positive_integer(cls, value: int) -> int` [VALIDATOR]：执行 `positive integer` 对应逻辑。
+- `M L177-L180` `FusionConfig.validate_attention_shape(self) -> FusionConfig` [VALIDATOR]：校验 `attention shape` 对应的数据或结果。
+- `C L183-L195` `TemporalConfig(BaseModel)` [CLASS]：封装 `TemporalConfig` 相关数据或行为。
+- `M L192-L195` `TemporalConfig._positive_integer(cls, value: int) -> int` [VALIDATOR]：执行 `positive integer` 对应逻辑。
+- `C L198-L209` `TemporalLossWeights(BaseModel)` [CLASS]：封装 `TemporalLossWeights` 相关数据或行为。
+- `M L206-L209` `TemporalLossWeights._finite_nonnegative(cls, value: float) -> float` [VALIDATOR]：执行 `finite nonnegative` 对应逻辑。
+- `C L212-L222` `SpatialConsistencyLossWeights(BaseModel)` [CLASS]：封装 `SpatialConsistencyLossWeights` 相关数据或行为。
+- `M L219-L222` `SpatialConsistencyLossWeights._finite_nonnegative(cls, value: float) -> float` [VALIDATOR]：执行 `finite nonnegative` 对应逻辑。
+- `C L225-L231` `TrainingSettings(BaseModel)` [CLASS]：封装 `TrainingSettings` 相关数据或行为。
+- `C L234-L270` `MemoryConfig(BaseModel)` [CLASS]：封装 `MemoryConfig` 相关数据或行为。
+- `M L253-L256` `MemoryConfig._finite_nonnegative_memory(cls, value: float) -> float` [VALIDATOR]：执行 `finite nonnegative memory` 对应逻辑。
+- `M L260-L263` `MemoryConfig._positive_memory(cls, value: float) -> float` [VALIDATOR]：执行 `positive memory` 对应逻辑。
+- `M L267-L270` `MemoryConfig._optional_positive_memory(cls, value: float | None) -> float | None` [VALIDATOR]：执行 `optional positive memory` 对应逻辑。
+- `C L273-L274` `SMETConfig(BaseModel)` [CLASS]：封装 `SMETConfig` 相关数据或行为。
+- `C L277-L328` `CandidateCacheSettings(BaseModel)` [CLASS]：封装 `CandidateCacheSettings` 相关数据或行为。
+- `M L305-L308` `CandidateCacheSettings._positive_integer(cls, value: int) -> int` [VALIDATOR]：执行 `positive integer` 对应逻辑。
+- `M L312-L315` `CandidateCacheSettings._probability(cls, value: float) -> float` [VALIDATOR]：执行 `probability` 对应逻辑。
+- `M L325-L328` `CandidateCacheSettings._nonnegative_float(cls, value: float) -> float` [VALIDATOR]：执行 `nonnegative float` 对应逻辑。
+- `C L331-L346` `OptimizationSettings(BaseModel)` [CLASS]：封装 `OptimizationSettings` 相关数据或行为。
+- `M L343-L346` `OptimizationSettings._positive_integer(cls, value: int) -> int` [VALIDATOR]：执行 `positive integer` 对应逻辑。
+- `C L349-L385` `LoaderSettings(BaseModel)` [CLASS]：封装 `LoaderSettings` 相关数据或行为。
+- `M L360-L363` `LoaderSettings._positive_batch_size(cls, value: int) -> int` [VALIDATOR]：执行 `positive batch size` 对应逻辑。
+- `M L367-L370` `LoaderSettings._nonnegative_workers(cls, value: int) -> int` [VALIDATOR]：执行 `nonnegative workers` 对应逻辑。
+- `M L374-L377` `LoaderSettings._optional_positive_prefetch(cls, value: int | None) -> int | None` [VALIDATOR]：执行 `optional positive prefetch` 对应逻辑。
+- `M L380-L385` `LoaderSettings.validate_worker_options(self) -> LoaderSettings` [VALIDATOR]：校验 `worker options` 对应的数据或结果。
+- `C L388-L396` `EvaluationSettings(BaseModel)` [CLASS]：封装 `EvaluationSettings` 相关数据或行为。
+- `M L393-L396` `EvaluationSettings._nonnegative_interval(cls, value: float) -> float` [VALIDATOR]：执行 `nonnegative interval` 对应逻辑。
+- `C L399-L414` `VisualizationSettings(BaseModel)` [CLASS]：封装 `VisualizationSettings` 相关数据或行为。
+- `M L411-L414` `VisualizationSettings._positive_interval(cls, value: int) -> int` [VALIDATOR]：执行 `positive interval` 对应逻辑。
+- `C L417-L504` `DataInputSettings(BaseModel)` [CLASS]：封装 `DataInputSettings` 相关数据或行为。
+- `M L441-L444` `DataInputSettings._positive_fps(cls, value: float) -> float` [VALIDATOR]：执行 `positive fps` 对应逻辑。
+- `M L448-L451` `DataInputSettings._positive_integer(cls, value: int) -> int` [VALIDATOR]：执行 `positive integer` 对应逻辑。
+- `M L455-L458` `DataInputSettings._optional_positive_integer(cls, value: int | None) -> int | None` [VALIDATOR]：执行 `optional positive integer` 对应逻辑。
+- `M L462-L465` `DataInputSettings._nonnegative_visibility(cls, value: float) -> float` [VALIDATOR]：执行 `nonnegative visibility` 对应逻辑。
+- `M L477-L483` `DataInputSettings._unique_nonempty_strings(cls, value: tuple[str, ...]) -> tuple[str, ...]` [VALIDATOR]：执行 `unique nonempty strings` 对应逻辑。
+- `M L486-L498` `DataInputSettings.validate_item_splits(self) -> DataInputSettings` [VALIDATOR]：校验 `item splits` 对应的数据或结果。
+- `M L500-L504` `DataInputSettings.validate_tiling(self) -> None`：校验 `tiling` 对应的数据或结果。
+- `C L507-L551` `Settings(BaseSettings)` [CLASS]：封装 `Settings` 相关数据或行为。
+- `M L538-L551` `Settings.settings_customise_sources(cls, settings_cls: type[BaseSettings], init_settings: PydanticBaseSettingsSource, env_settings: PydanticBaseSettingsSource, dotenv_settings: PydanticBaseSettingsSource, file_secret_settings: PydanticBaseSettingsSource) -> tuple[PydanticBaseSettingsSource, ...]`：执行 `settings customise sources` 对应逻辑。
+- `F L554-L563` `_read_config(config_path: Path) -> dict[str, Any]` [IO-R]：读取 `config` 对应的数据或结果。 调用：`SettingsError`。
+- `F L566-L598` `_resolve_paths(raw: dict[str, Any], base_dir: Path) -> dict[str, Any]`：解析并定位 `paths` 对应的数据或结果。
+- `F L601-L610` `load_settings(config_path: Path | None=None) -> Settings`：加载 `settings` 对应的数据或结果。 调用：`Settings`, `SettingsError`, `_read_config`, `_resolve_paths`, `settings.data_input.validate_tiling`, `settings.tiling.validate_tiling`。
 
 ## `src/traning/core/dataset_import/data_input.py`
 
@@ -110,63 +123,85 @@ tests/full_checks/runner.py -> full pytest checks
 ## `src/traning/core/dataset_import/loader.py`
 
 职责：把配置映射为 SegmentFrameDataset 与 PyTorch DataLoader。
-工程依赖：`traning.conf`, `traning.core.dataset_import.preflight`, `traning.lib.data`
+工程依赖：`package.coordinates`, `traning.conf`, `traning.core.dataset_import.preflight`, `traning.lib.data`
 
-- `F L10-L32` `build_dataset(settings: Settings, *, split: DataSplit='train') -> SegmentFrameDataset`：构建并返回 `dataset` 对应的数据或结果。 调用：`SegmentFrameDataset`, `discover_data_input`。
-- `F L35-L56` `build_dataloader(settings: Settings, *, split: DataSplit='train', shuffle: bool | None=None) -> DataLoader`：构建并返回 `dataloader` 对应的数据或结果。 调用：`build_dataset`。
+- `F L11-L44` `build_dataset(settings: Settings, *, split: DataSplit='train') -> SegmentFrameDataset`：构建并返回 `dataset` 对应的数据或结果。 调用：`SegmentFrameDataset`, `discover_data_input`。
+- `F L47-L68` `build_dataloader(settings: Settings, *, split: DataSplit='train', shuffle: bool | None=None) -> DataLoader`：构建并返回 `dataloader` 对应的数据或结果。 调用：`build_dataset`。
 
 ## `src/traning/core/dataset_import/preflight.py`
 
 职责：读取 split manifest 或旧 item 配置，扫描训练片段并生成数量、类别、维度和问题报告。
 工程依赖：`package.dataset_split`, `traning.conf`, `traning.lib.data`, `traning.lib.data.models`
 
-- `C L14-L26` `DataInputReport` [CLASS]：封装 `DataInputReport` 相关数据或行为。
-- `M L25-L26` `DataInputReport.ok(self) -> bool` [PROPERTY]：执行 `ok` 对应逻辑。
-- `F L29-L35` `_combine_item_filters(base_items: tuple[str, ...], split_items: tuple[str, ...]) -> tuple[str, ...]`：执行 `combine item filters` 对应逻辑。
-- `F L38-L53` `_split_items(config, split: DataSplit) -> tuple[str, ...]`：执行 `split items` 对应逻辑。
-- `F L56-L80` `discover_data_input(settings: Settings, *, split: DataSplit='all') -> DiscoveryResult`：执行 `discover data input` 对应逻辑。 调用：`DatasetIssue`, `DiscoveryResult`, `_combine_item_filters`, `_split_items`, `discover_segments`。
-- `F L83-L112` `inspect_data_input(settings: Settings, *, split: DataSplit='all') -> DataInputReport`：执行 `inspect data input` 对应逻辑。 调用：`DataInputReport`, `discover_data_input`。
+- `C L15-L28` `DataInputReport` [CLASS]：封装 `DataInputReport` 相关数据或行为。
+- `M L27-L28` `DataInputReport.ok(self) -> bool` [PROPERTY]：执行 `ok` 对应逻辑。
+- `F L31-L37` `_combine_item_filters(base_items: tuple[str, ...], split_items: tuple[str, ...]) -> tuple[str, ...]`：执行 `combine item filters` 对应逻辑。
+- `F L40-L55` `_split_items(config, split: DataSplit) -> tuple[str, ...]`：执行 `split items` 对应逻辑。
+- `F L58-L82` `discover_data_input(settings: Settings, *, split: DataSplit='all') -> DiscoveryResult`：执行 `discover data input` 对应逻辑。 调用：`DatasetIssue`, `DiscoveryResult`, `_combine_item_filters`, `_split_items`, `discover_segments`。
+- `F L85-L117` `inspect_data_input(settings: Settings, *, split: DataSplit='all') -> DataInputReport`：执行 `inspect data input` 对应逻辑。 调用：`DataInputReport`, `_distribution_and_topology`, `discover_data_input`。
+- `F L120-L166` `_distribution_and_topology(records) -> tuple[dict[str, object], tuple[str, ...]]`：执行 `distribution and topology` 对应逻辑。 调用：`_high_density_windows`, `_kind`, `_slider_topology_issues`, `_summary`, `inter_object_intervals.append`, `slider_durations.append`。
+- `F L169-L172` `_summary(values: list[float]) -> dict[str, float | int | None]`：执行 `summary` 对应逻辑。
+- `F L175-L181` `_kind(value: str) -> str`：执行 `kind` 对应逻辑。
+- `F L184-L190` `_high_density_windows(objects) -> int`：执行 `high density windows` 对应逻辑。
+- `F L193-L210` `_slider_topology_issues(record, item) -> tuple[str, ...]`：执行 `slider topology issues` 对应逻辑。 调用：`_self_intersects`, `_touches_branch`, `issues.append`。
+- `F L213-L221` `_self_intersects(path: tuple[tuple[float, float], ...]) -> bool`：执行 `self intersects` 对应逻辑。 调用：`_segments_intersect`。
+- `F L224-L231` `_touches_branch(path: tuple[tuple[float, float], ...]) -> bool`：执行 `touches branch` 对应逻辑。
+- `F L234-L238` `_segments_intersect(a, b, c, d) -> bool`：执行 `segments intersect` 对应逻辑。 调用：`orient`。
+- `N L235-L236` `_segments_intersect.orient(p, q, r) -> float`：执行 `orient` 对应逻辑。
 
 ## `src/traning/core/decision/generator.py`
 
 职责：离线空间候选缓存生成器；逐帧调用空间推理并写 JSONL/manifest/temporal target。
-工程依赖：`package.coordinates`, `traning.conf`, `traning.core.dataset_import`, `traning.core.spatial`, `traning.lib.training`, `traning.lib.training.spatial_decode`
+工程依赖：`traning.conf`, `traning.core.dataset_import`, `traning.core.spatial`, `traning.lib.coordinates`, `traning.lib.training`, `traning.lib.training.spatial_decode`, `traning.state.versioning`
 
-- `C L27-L51` `CandidateCacheBuildResult` [CLASS]：封装 `CandidateCacheBuildResult` 相关数据或行为。
-- `M L39-L51` `CandidateCacheBuildResult.as_dict(self) -> dict[str, Any]`：执行 `as dict` 对应逻辑。
-- `F L54-L170` `generate_candidate_cache(settings: Settings, *, output_dir: Path, device: torch.device, split: DataSplit='train', max_frames: int | None=None, patch_limit: int | None=None, max_candidates: int | None=None, score_threshold: float | None=None, nms_radius_px: float | None=None, slider_threshold: float | None=None, max_slider_paths: int | None=None, dataset: Sequence[Mapping[str, Any]] | None=None) -> CandidateCacheBuildResult` [IO-W]：执行 `generate candidate cache` 对应逻辑。 调用：`CandidateCacheBuildResult`, `build_candidate_cache_record`, `build_dataset`, `run_spatial_frame_inference`。
-- `F L173-L234` `build_candidate_cache_record(sample: Mapping[str, Any], candidates: Sequence[SpatialCandidate], slider_paths: Sequence[SliderPathCandidate], *, frame_width: int, frame_height: int, device: str, patches_processed: int, frame_channels: int, save_dtype: str, low_confidence_threshold: float, close_score_margin: float, slider_attach_distance_px: float, action_window_ms: float=25.0) -> dict[str, Any]`：构建并返回 `candidate cache record` 对应的数据或结果。 调用：`_build_temporal_target`, `_candidate_ambiguity_reasons`, `_cast_embedding`, `_nearest_slider_path`, `candidate_rows.append`, `slider_path_to_dict`。
-- `F L237-L276` `_build_temporal_target(sample: Mapping[str, Any], candidates: Sequence[Mapping[str, Any]], *, frame_width: int, frame_height: int, action_window_ms: float) -> dict[str, Any]`：构建 `temporal target` 对应的数据或结果。 调用：`_nearest_candidate`, `_optional_float`, `_select_temporal_object`。
-- `F L279-L308` `_select_temporal_object(objects: object, *, timestamp_ms: float, action_window_ms: float) -> dict[str, Any] | None`：选择 `temporal object` 对应的数据或结果。 调用：`_temporal_target_for_object`。
-- `F L311-L350` `_temporal_target_for_object(item: Mapping[str, Any], *, timestamp_ms: float, action_window_ms: float) -> dict[str, Any] | None`：执行 `temporal target for object` 对应逻辑。 调用：`_object_kind`, `_object_osu_point`, `_optional_float`。
-- `F L353-L364` `_object_osu_point(item: Mapping[str, Any]) -> tuple[float, float] | None`：执行 `object osu point` 对应逻辑。 调用：`_object_kind`。
-- `F L367-L373` `_object_kind(item: Mapping[str, Any]) -> str`：执行 `object kind` 对应逻辑。
-- `F L376-L391` `_nearest_candidate(candidates: Sequence[Mapping[str, Any]], point: tuple[float, float]) -> Mapping[str, Any] | None`：执行 `nearest candidate` 对应逻辑。 调用：`_optional_float`, `_point_distance`。
-- `F L394-L413` `_candidate_ambiguity_reasons(index: int, candidates: Sequence[SpatialCandidate], slider_path: SliderPathCandidate | None, *, low_confidence_threshold: float, close_score_margin: float) -> tuple[str, ...]`：执行 `candidate ambiguity reasons` 对应逻辑。 调用：`_has_close_neighbor`, `reasons.append`。
-- `F L416-L429` `_has_close_neighbor(index: int, candidates: Sequence[SpatialCandidate], *, margin: float) -> bool`：执行 `has close neighbor` 对应逻辑。
-- `F L432-L449` `_nearest_slider_path(candidate: SpatialCandidate, paths: Sequence[SliderPathCandidate], *, max_distance: float) -> SliderPathCandidate | None`：执行 `nearest slider path` 对应逻辑。 调用：`_distance_to_polyline`。
-- `F L452-L463` `_distance_to_polyline(point: tuple[float, float], polyline: Sequence[tuple[float, float]]) -> float`：执行 `distance to polyline` 对应逻辑。 调用：`_point_distance`, `_point_to_segment_distance`。
-- `F L466-L481` `_point_to_segment_distance(point: tuple[float, float], start: tuple[float, float], end: tuple[float, float]) -> float`：执行 `point to segment distance` 对应逻辑。 调用：`_point_distance`。
-- `F L484-L488` `_point_distance(first: tuple[float, float], second: tuple[float, float]) -> float`：执行 `point distance` 对应逻辑。
-- `F L491-L497` `_cast_embedding(values: Sequence[float], save_dtype: str) -> list[float]`：执行 `cast embedding` 对应逻辑。
-- `F L500-L503` `_optional_float(value: Any) -> float | None`：执行 `optional float` 对应逻辑。
+- `C L28-L52` `CandidateCacheBuildResult` [CLASS]：封装 `CandidateCacheBuildResult` 相关数据或行为。
+- `M L40-L52` `CandidateCacheBuildResult.as_dict(self) -> dict[str, Any]`：执行 `as dict` 对应逻辑。
+- `F L55-L174` `generate_candidate_cache(settings: Settings, *, output_dir: Path, device: torch.device, split: DataSplit='train', max_frames: int | None=None, patch_limit: int | None=None, max_candidates: int | None=None, score_threshold: float | None=None, nms_radius_px: float | None=None, slider_threshold: float | None=None, max_slider_paths: int | None=None, dataset: Sequence[Mapping[str, Any]] | None=None) -> CandidateCacheBuildResult` [IO-W]：执行 `generate candidate cache` 对应逻辑。 调用：`CandidateCacheBuildResult`, `build_candidate_cache_record`, `build_dataset`, `run_spatial_frame_inference`, `version_manifest`。
+- `F L177-L276` `build_candidate_cache_record(sample: Mapping[str, Any], candidates: Sequence[SpatialCandidate], slider_paths: Sequence[SliderPathCandidate], *, frame_width: int, frame_height: int, device: str, patches_processed: int, frame_channels: int, save_dtype: str, low_confidence_threshold: float, close_score_margin: float, slider_attach_distance_px: float, action_window_ms: float=25.0, settings: Settings | None=None) -> dict[str, Any]`：构建并返回 `candidate cache record` 对应的数据或结果。 调用：`_apply_candidate_reviews`, `_apply_local_refinement`, `_build_temporal_target`, `_candidate_ambiguity_reasons`, `_cast_embedding`, `_nearest_slider_path`。
+- `F L279-L327` `_build_temporal_target(sample: Mapping[str, Any], candidates: Sequence[Mapping[str, Any]], *, frame_width: int, frame_height: int, action_window_ms: float, settings: Settings | None=None) -> dict[str, Any]`：构建 `temporal target` 对应的数据或结果。 调用：`_nearest_candidate`, `_optional_float`, `_select_temporal_object`, `transform_from_settings_or_sample`。
+- `F L330-L359` `_select_temporal_object(objects: object, *, timestamp_ms: float, action_window_ms: float) -> dict[str, Any] | None`：选择 `temporal object` 对应的数据或结果。 调用：`_temporal_target_for_object`。
+- `F L362-L421` `_temporal_target_for_object(item: Mapping[str, Any], *, timestamp_ms: float, action_window_ms: float) -> dict[str, Any] | None`：执行 `temporal target for object` 对应逻辑。 调用：`_click_duration_ms`, `_is_release_frame`, `_object_kind`, `_object_osu_point`, `_optional_float`, `_repeat_boundaries`。
+- `F L424-L425` `_click_duration_ms(action_window_ms: float) -> float`：执行 `click duration ms` 对应逻辑。
+- `F L428-L435` `_is_release_frame(timestamp_ms: float, *, start_ms: float, action_window_ms: float) -> bool`：判断是否 `release frame` 对应的数据或结果。 调用：`_click_duration_ms`。
+- `F L438-L459` `_repeat_boundaries(item: Mapping[str, Any], *, start_ms: float, end_ms: float) -> tuple[tuple[float, str, tuple[float, float]], ...]`：执行 `repeat boundaries` 对应逻辑。 调用：`_object_osu_point`, `_optional_float`, `_slider_tail_point`, `boundaries.append`。
+- `F L462-L468` `_slider_tail_point(item: Mapping[str, Any]) -> tuple[float, float] | None`：执行 `slider tail point` 对应逻辑。 调用：`_object_osu_point`。
+- `F L471-L482` `_object_osu_point(item: Mapping[str, Any]) -> tuple[float, float] | None`：执行 `object osu point` 对应逻辑。 调用：`_object_kind`。
+- `F L485-L491` `_object_kind(item: Mapping[str, Any]) -> str`：执行 `object kind` 对应逻辑。
+- `F L494-L509` `_nearest_candidate(candidates: Sequence[Mapping[str, Any]], point: tuple[float, float]) -> Mapping[str, Any] | None`：执行 `nearest candidate` 对应逻辑。 调用：`_optional_float`, `_point_distance`。
+- `F L512-L531` `_candidate_ambiguity_reasons(index: int, candidates: Sequence[SpatialCandidate], slider_path: SliderPathCandidate | None, *, low_confidence_threshold: float, close_score_margin: float) -> tuple[str, ...]`：执行 `candidate ambiguity reasons` 对应逻辑。 调用：`_has_close_neighbor`, `reasons.append`。
+- `F L534-L558` `_apply_candidate_reviews(rows: list[dict[str, Any]], *, frame_width: int, frame_height: int, enabled: bool, max_candidates: int) -> None`：应用 `candidate reviews` 对应的数据或结果。
+- `F L561-L597` `_apply_local_refinement(rows: list[dict[str, Any]], *, frame_width: int, frame_height: int, enabled: bool, top_k: int, radius_px: float) -> None`：应用 `local refinement` 对应的数据或结果。
+- `F L600-L613` `_has_close_neighbor(index: int, candidates: Sequence[SpatialCandidate], *, margin: float) -> bool`：执行 `has close neighbor` 对应逻辑。
+- `F L616-L633` `_nearest_slider_path(candidate: SpatialCandidate, paths: Sequence[SliderPathCandidate], *, max_distance: float) -> SliderPathCandidate | None`：执行 `nearest slider path` 对应逻辑。 调用：`_distance_to_polyline`。
+- `F L636-L647` `_distance_to_polyline(point: tuple[float, float], polyline: Sequence[tuple[float, float]]) -> float`：执行 `distance to polyline` 对应逻辑。 调用：`_point_distance`, `_point_to_segment_distance`。
+- `F L650-L665` `_point_to_segment_distance(point: tuple[float, float], start: tuple[float, float], end: tuple[float, float]) -> float`：执行 `point to segment distance` 对应逻辑。 调用：`_point_distance`。
+- `F L668-L672` `_point_distance(first: tuple[float, float], second: tuple[float, float]) -> float`：执行 `point distance` 对应逻辑。
+- `F L675-L681` `_cast_embedding(values: Sequence[float], save_dtype: str) -> list[float]`：执行 `cast embedding` 对应逻辑。
+- `F L684-L687` `_optional_float(value: Any) -> float | None`：执行 `optional float` 对应逻辑。
 
 ## `src/traning/core/decision/pipeline.py`
 
 职责：声明完整训练阶段表；先调用 start.checks 自检，再串接 data-check、空间训练、候选缓存、时序训练和决策导出。
-工程依赖：`start.checks`, `traning.conf`, `traning.core.dataset_import`, `traning.core.decision.generator`, `traning.core.decision.runner`, `traning.core.spatial`, `traning.core.temporal`
+工程依赖：`start.checks`, `traning.conf`, `traning.core.dataset_import`, `traning.core.decision.generator`, `traning.core.decision.runner`, `traning.core.optimization`, `traning.core.result_export`, `traning.core.spatial`, `traning.core.temporal`, `traning.lib.metrics`, `traning.state.versioning`
 
-- `C L26-L28` `TrainingStage` [CLASS]：封装 `TrainingStage` 相关数据或行为。
-- `C L32-L69` `FullTrainingRunConfig` [CLASS]：封装 `FullTrainingRunConfig` 相关数据或行为。
-- `M L50-L69` `FullTrainingRunConfig.__post_init__(self) -> None`：完成 dataclass 初始化后的派生字段设置。
-- `C L73-L112` `FullTrainingRunResult` [CLASS]：封装 `FullTrainingRunResult` 相关数据或行为。
-- `M L83-L93` `FullTrainingRunResult.as_dict(self) -> dict[str, Any]`：执行 `as dict` 对应逻辑。 调用：`_data_input_report_dict`, `self.candidate_cache.as_dict`, `self.decision.as_dict`, `self.spatial.as_dict`, `self.startup_checks.as_dict`, `self.temporal.as_dict`。
-- `M L95-L112` `FullTrainingRunResult.as_summary(self) -> dict[str, Any]`：执行 `as summary` 对应逻辑。
-- `F L124-L193` `run_full_training_pipeline(settings: Settings, *, config: FullTrainingRunConfig) -> FullTrainingRunResult` [IO-W]：执行 `run full training pipeline` 对应逻辑。 调用：`FullTrainingRunResult`, `_json_ready`, `generate_candidate_cache`, `result.as_dict`, `run_spatial_training`, `run_temporal_decision`。
-- `F L196-L206` `run_pipeline(settings: Settings | None=None, *, config: FullTrainingRunConfig | None=None) -> FullTrainingRunResult`：执行 `run pipeline` 对应逻辑。 调用：`FullTrainingRunConfig`, `_device_from_settings`, `load_settings`, `run_full_training_pipeline`。
-- `F L209-L220` `_data_input_report_dict(report: DataInputReport) -> dict[str, Any]`：执行 `data input report dict` 对应逻辑。
-- `F L223-L226` `_device_from_settings(settings: Settings) -> torch.device`：执行 `device from settings` 对应逻辑。
-- `F L229-L241` `_json_ready(value: Any) -> Any`：执行 `json ready` 对应逻辑。 调用：`_json_ready`。
+- `C L49-L51` `TrainingStage` [CLASS]：封装 `TrainingStage` 相关数据或行为。
+- `C L55-L102` `FullTrainingRunConfig` [CLASS]：封装 `FullTrainingRunConfig` 相关数据或行为。
+- `M L80-L102` `FullTrainingRunConfig.__post_init__(self) -> None`：完成 dataclass 初始化后的派生字段设置。
+- `C L106-L152` `FullTrainingEvaluationResult` [CLASS]：封装 `FullTrainingEvaluationResult` 相关数据或行为。
+- `M L129-L152` `FullTrainingEvaluationResult.as_dict(self) -> dict[str, Any]`：执行 `as dict` 对应逻辑。
+- `C L156-L210` `FullTrainingRunResult` [CLASS]：封装 `FullTrainingRunResult` 相关数据或行为。
+- `M L167-L178` `FullTrainingRunResult.as_dict(self) -> dict[str, Any]`：执行 `as dict` 对应逻辑。 调用：`_data_input_report_dict`, `self.candidate_cache.as_dict`, `self.decision.as_dict`, `self.evaluation.as_dict`, `self.spatial.as_dict`, `self.startup_checks.as_dict`。
+- `M L180-L210` `FullTrainingRunResult.as_summary(self) -> dict[str, Any]`：执行 `as summary` 对应逻辑。
+- `F L223-L459` `run_full_training_pipeline(settings: Settings, *, config: FullTrainingRunConfig) -> FullTrainingRunResult` [IO-W]：执行 `run full training pipeline` 对应逻辑。 调用：`FullTrainingRunResult`, `_category_scores_from_report`, `_evaluate_training_outputs`, `_json_ready`, `_report_resource`, `_report_stage`。
+- `F L462-L597` `_evaluate_training_outputs(settings: Settings, *, config: FullTrainingRunConfig, candidate_cache: CandidateCacheBuildResult, spatial: SpatialTrainingResult, temporal: TemporalTrainingResult, decision: TemporalDecisionRunResult) -> FullTrainingEvaluationResult` [IO-W]：执行 `evaluate training outputs` 对应逻辑。 调用：`JsonlTrialStore`, `OptimizationExecutorConfig`, `SequenceScoreSpec`, `TrialScoreSpec`, `_evaluation_result_from_score`, `_json_ready`。
+- `F L600-L636` `_evaluation_result_from_score(score_result: DecisionOutputScoreResult, *, report_path: Path, gallery_request_path: Path, gallery_status: str, gallery_output_dir: Path | None, gallery_saved_frame_count: int, attribution_path: Path | None, optimization_plan_path: Path | None, next_job_path: Path | None, gallery_warning: str | None) -> FullTrainingEvaluationResult`：执行 `evaluation result from score` 对应逻辑。 调用：`FullTrainingEvaluationResult`。
+- `F L639-L649` `run_pipeline(settings: Settings | None=None, *, config: FullTrainingRunConfig | None=None) -> FullTrainingRunResult`：执行 `run pipeline` 对应逻辑。 调用：`FullTrainingRunConfig`, `_device_from_settings`, `load_settings`, `run_full_training_pipeline`。
+- `F L652-L664` `_data_input_report_dict(report: DataInputReport) -> dict[str, Any]`：执行 `data input report dict` 对应逻辑。
+- `F L667-L670` `_device_from_settings(settings: Settings) -> torch.device`：执行 `device from settings` 对应逻辑。
+- `F L673-L685` `_json_ready(value: Any) -> Any`：执行 `json ready` 对应逻辑。 调用：`_json_ready`。
+- `F L688-L713` `_report_stage(reporter: TrainingReporter, stage_id: str, name: str, status: str, *, processed: int=0, total: int | None=None, output_path: Path | None=None, warnings: int=0, blocks_training: bool=False, error_reason: str | None=None) -> None`：执行 `report stage` 对应逻辑。
+- `F L716-L720` `_report_resource(reporter: TrainingReporter) -> None`：执行 `report resource` 对应逻辑。
+- `F L723-L740` `_category_scores_from_report(report_path: Path) -> dict[str, float]` [IO-R]：执行 `category scores from report` 对应逻辑。 调用：`groups.setdefault.append`。
 
 ## `src/traning/core/decision/runner.py`
 
@@ -179,23 +214,96 @@ tests/full_checks/runner.py -> full pytest checks
 - `F L140-L156` `_load_checkpoint(checkpoint_path: Path, *, device: torch.device) -> Mapping[str, Any]`：加载 `checkpoint` 对应的数据或结果。 调用：`torch.load`。
 - `F L159-L199` `_decision_row(window: TemporalWindow, frame_index: int, output) -> dict[str, Any]`：执行 `decision row` 对应逻辑。
 
+## `src/traning/core/full_flow/orchestrator.py`
+
+职责：Python 模块；具体职责见下方符号及调用。
+工程依赖：`start.flow`, `start.samples`, `traning.conf`, `traning.core.full_flow.result`, `traning.core.full_flow.stages`, `traning.core.model_export`, `traning.core.training_inheritance`, `traning.core.training_ramp`, `traning.state.versioning`
+
+- `C L42-L74` `FullFlowConfig` [CLASS]：封装 `FullFlowConfig` 相关数据或行为。
+- `C L78-L105` `_FlowRuntime` [CLASS]：封装 `FlowRuntime` 相关数据或行为。
+- `M L92-L93` `_FlowRuntime.state_path(self) -> Path` [PROPERTY]：执行 `state path` 对应逻辑。
+- `M L96-L97` `_FlowRuntime.manifest_path(self) -> Path` [PROPERTY]：执行 `manifest path` 对应逻辑。
+- `M L100-L101` `_FlowRuntime.report_json_path(self) -> Path` [PROPERTY]：执行 `report json path` 对应逻辑。
+- `M L104-L105` `_FlowRuntime.report_markdown_path(self) -> Path` [PROPERTY]：执行 `report markdown path` 对应逻辑。
+- `F L108-L165` `run_full_flow(config: FullFlowConfig) -> FullFlowResult`：执行 `run full flow` 对应逻辑。 调用：`_FlowRuntime`, `_base_manifest`, `_init_layout`, `_initial_stage_states`, `_mark_failed`, `_mark_interrupted`。
+- `F L168-L225` `load_full_flow_status(output_root: Path=DEFAULT_FULL_FLOW_ROOT, *, run_id: str | None=None) -> FullFlowResult`：加载 `full flow status` 对应的数据或结果。 调用：`FullFlowResult`, `FullFlowStageState`, `_read_json`。
+- `F L228-L305` `_run_startup_section(_runtime: _FlowRuntime, *, reporter) -> None`：执行 `run startup section` 对应逻辑。 调用：`_finish_stage`, `_persist`, `_select_device_name`, `_start_stage`, `_write_json`, `startup.as_dict`。
+- `F L308-L356` `_run_resume_section(_runtime: _FlowRuntime, *, reporter)`：执行 `run resume section` 对应逻辑。 调用：`_finish_stage`, `_persist`, `_start_stage`, `_write_json`, `inheritance.as_dict`, `load_inheritance_package`。
+- `F L359-L417` `_run_ramp_section(_runtime: _FlowRuntime, *, inheritance, reporter) -> None`：执行 `run ramp section` 对应逻辑。 调用：`_finish_stage`, `_last_training_record`, `_persist`, `_select_device_name`, `_stage_enabled`, `_stage_forced`。
+- `F L420-L424` `_run_finalize_section(_runtime: _FlowRuntime) -> None`：执行 `run finalize section` 对应逻辑。 调用：`_finish_export_stage`, `_finish_inheritance_stage`, `_last_training_record`, `load_settings`。
+- `F L427-L464` `_finish_export_stage(_runtime: _FlowRuntime, *, settings, record: Mapping[str, Any] | None) -> None`：执行 `finish export stage` 对应逻辑。 调用：`ModelArtifactSpec`, `_record_extra_files`, `_record_path`, `collect_code_version`, `export_model_artifact`, `stage.mark_finished`。
+- `F L467-L502` `_finish_inheritance_stage(_runtime: _FlowRuntime, *, settings, record: Mapping[str, Any] | None) -> None`：执行 `finish inheritance stage` 对应逻辑。 调用：`_record_extra_files`, `_record_path`, `create_inheritance_package`, `package.as_dict`, `stage.mark_finished`, `stage.mark_started`。
+- `F L505-L519` `_mark_plan(_runtime: _FlowRuntime) -> None`：更新状态为 `plan` 对应的数据或结果。 调用：`_selected_stage_ids`, `_stage_forced`, `state.mark_finished`。
+- `F L522-L534` `_mark_training_skipped_for_dry_run(_runtime: _FlowRuntime) -> None`：更新状态为 `training skipped for dry run` 对应的数据或结果。 调用：`mark_finished`。
+- `F L537-L543` `_mark_failed(_runtime: _FlowRuntime, error: Exception) -> None`：更新状态为 `failed` 对应的数据或结果。 调用：`state.mark_finished`。
+- `F L546-L549` `_mark_interrupted(_runtime: _FlowRuntime, reason: str) -> None`：更新状态为 `interrupted` 对应的数据或结果。 调用：`state.mark_finished`。
+- `F L552-L625` `_persist(_runtime: _FlowRuntime, *, status: str, stop_reason: str | None=None) -> None`：执行 `persist` 对应逻辑。 调用：`_write_json`, `_write_reports`, `report_stage.mark_finished`, `report_stage.mark_started`, `stage.as_dict`, `utc_now`。
+- `F L628-L648` `_result(_runtime: _FlowRuntime, *, status: str) -> FullFlowResult`：执行 `result` 对应逻辑。 调用：`FullFlowResult`, `utc_now`。
+- `F L651-L670` `_base_manifest(config: FullFlowConfig, _runtime: _FlowRuntime) -> dict[str, Any]`：执行 `base manifest` 对应逻辑。 调用：`_dataset_fingerprint`, `_file_sha256`, `_selected_stage_ids`, `collect_code_version`, `collect_code_version.as_dict`, `load_settings`。
+- `F L673-L677` `_initial_stage_states() -> dict[str, FullFlowStageState]`：执行 `initial stage states` 对应逻辑。 调用：`FullFlowStageState`。
+- `F L680-L695` `_start_stage(_runtime: _FlowRuntime, stage_id: str, reporter) -> None`：执行 `start stage` 对应逻辑。 调用：`_stage_enabled`, `mark_finished`, `stage.mark_started`。
+- `F L698-L717` `_finish_stage(_runtime: _FlowRuntime, stage_id: str, status, *, result: Mapping[str, Any] | None=None, warnings: tuple[str, ...]=(), artifacts: tuple[str, ...]=(), restored: bool=False) -> None`：执行 `finish stage` 对应逻辑。 调用：`_stage_forced`, `mark_finished`。
+- `F L720-L721` `_stage_enabled(_runtime: _FlowRuntime, stage_id: str) -> bool`：执行 `stage enabled` 对应逻辑。 调用：`_selected_stage_ids`。
+- `F L724-L725` `_stage_forced(config: FullFlowConfig, stage_id: str) -> bool`：执行 `stage forced` 对应逻辑。 调用：`validate_stage_id`。
+- `F L728-L737` `_selected_stage_ids(config: FullFlowConfig) -> tuple[str, ...]`：执行 `selected stage ids` 对应逻辑。 调用：`validate_stage_id`。
+- `F L740-L755` `_validate_config(config: FullFlowConfig) -> None`：校验 `config` 对应的数据或结果。 调用：`_selected_stage_ids`, `validate_stage_id`。
+- `F L758-L770` `_init_layout(output_dir: Path) -> None` [IO-W]：执行 `init layout` 对应逻辑。
+- `F L773-L775` `_write_resolved_config(config_path: Path, output_dir: Path) -> None`：写入 `resolved config` 对应的数据或结果。
+- `F L778-L804` `_write_reports(_runtime: _FlowRuntime, state: Mapping[str, Any]) -> None` [IO-W]：写入 `reports` 对应的数据或结果。 调用：`_write_json`, `lines.append`。
+- `F L807-L826` `_last_training_record(ramp_manifest_path: Path | None) -> Mapping[str, Any] | None`：执行 `last training record` 对应逻辑。 调用：`_read_json`。
+- `F L829-L838` `_record_path(record: Mapping[str, Any], keys: tuple[str, ...]) -> Path | None`：执行 `record path` 对应逻辑。
+- `F L841-L848` `_record_extra_files(record: Mapping[str, Any]) -> dict[str, Path]`：执行 `record extra files` 对应逻辑。 调用：`_record_path`。
+- `F L851-L858` `_select_device_name(device: str) -> str`：选择 `device name` 对应的数据或结果。
+- `F L861-L871` `_dataset_fingerprint(settings) -> dict[str, Any]`：执行 `dataset fingerprint` 对应逻辑。
+- `F L874-L879` `_file_sha256(path: Path) -> str` [IO-R IO-W]：执行 `file sha256` 对应逻辑。
+- `F L882-L883` `_new_run_id() -> str`：执行 `new run id` 对应逻辑。
+- `F L886-L887` `_read_json(path: Path) -> dict[str, Any]` [IO-R]：读取 `json` 对应的数据或结果。
+- `F L890-L895` `_write_json(path: Path, value: Mapping[str, Any]) -> None` [IO-W]：写入 `json` 对应的数据或结果。 调用：`_json_ready`。
+- `F L898-L909` `_json_ready(value: Any) -> Any`：执行 `json ready` 对应逻辑。 调用：`_json_ready`。
+
+## `src/traning/core/full_flow/result.py`
+
+职责：Python 模块；具体职责见下方符号及调用。
+工程依赖：`traning.core.full_flow.stages`
+
+- `F L11-L12` `utc_now() -> str` [IO-W]：执行 `utc now` 对应逻辑。
+- `C L16-L53` `FullFlowStageState` [CLASS]：封装 `FullFlowStageState` 相关数据或行为。
+- `M L28-L32` `FullFlowStageState.mark_started(self) -> None`：更新状态为 `started` 对应的数据或结果。 调用：`utc_now`。
+- `M L34-L50` `FullFlowStageState.mark_finished(self, status: FullFlowStageStatus, *, result: Mapping[str, Any] | None=None, warnings: tuple[str, ...]=(), error: str | None=None, artifacts: tuple[str, ...]=(), restored: bool=False) -> None`：更新状态为 `finished` 对应的数据或结果。 调用：`utc_now`。
+- `M L52-L53` `FullFlowStageState.as_dict(self) -> dict[str, Any]`：执行 `as dict` 对应逻辑。
+- `C L57-L91` `FullFlowResult` [CLASS]：封装 `FullFlowResult` 相关数据或行为。
+- `M L74-L91` `FullFlowResult.as_dict(self) -> dict[str, Any]`：执行 `as dict` 对应逻辑。 调用：`stage.as_dict`。
+
+## `src/traning/core/full_flow/stages.py`
+
+职责：Python 模块；具体职责见下方符号及调用。
+
+- `C L23-L34` `FullFlowStageSpec` [CLASS]：封装 `FullFlowStageSpec` 相关数据或行为。
+- `M L33-L34` `FullFlowStageSpec.as_dict(self) -> dict[str, object]`：执行 `as dict` 对应逻辑。
+- `F L167-L168` `stage_ids() -> tuple[str, ...]`：执行 `stage ids` 对应逻辑。
+- `F L171-L175` `validate_stage_id(stage_id: str) -> str` [IO-W]：校验 `stage id` 对应的数据或结果。
+
 ## `src/traning/core/model_export/artifact.py`
 
 职责：导出 inference/resume PyTorch artifact，写 manifest、文件 sha256 和版本信息。
+工程依赖：`traning.conf`, `traning.lib.data`, `traning.lib.models`, `traning.state.versioning`
 
-- `C L18-L30` `ArtifactFile` [CLASS]：封装 `ArtifactFile` 相关数据或行为。
-- `M L24-L30` `ArtifactFile.as_dict(self) -> dict[str, Any]`：执行 `as dict` 对应逻辑。 调用：`self.path.as_posix`。
-- `C L34-L52` `ModelArtifactSpec` [CLASS]：封装 `ModelArtifactSpec` 相关数据或行为。
-- `M L47-L52` `ModelArtifactSpec.__post_init__(self) -> None`：完成 dataclass 初始化后的派生字段设置。
-- `C L56-L70` `ModelArtifactResult` [CLASS]：封装 `ModelArtifactResult` 相关数据或行为。
-- `M L63-L70` `ModelArtifactResult.as_dict(self) -> dict[str, Any]`：执行 `as dict` 对应逻辑。 调用：`item.as_dict`。
-- `F L73-L78` `_sha256(path: Path) -> str` [IO-R IO-W]：执行 `sha256` 对应逻辑。
-- `F L81-L91` `_copy_file(source: Path, destination: Path, role: str) -> ArtifactFile` [IO-W]：执行 `copy file` 对应逻辑。 调用：`ArtifactFile`, `_sha256`。
-- `F L94-L101` `_copy_optional(files: list[ArtifactFile], source: Path | None, destination: Path, role: str) -> None`：执行 `copy optional` 对应逻辑。 调用：`_copy_file`, `files.append`。
-- `F L104-L124` `_write_readme(path: Path, spec: ModelArtifactSpec) -> ArtifactFile` [IO-W]：写入 `readme` 对应的数据或结果。 调用：`ArtifactFile`, `_sha256`。
-- `F L127-L133` `_manifest_file(item: ArtifactFile, artifact_dir: Path) -> dict[str, Any]`：执行 `manifest file` 对应逻辑。 调用：`item.as_dict`。
-- `F L136-L205` `export_model_artifact(spec: ModelArtifactSpec) -> ModelArtifactResult` [IO-W]：导出 `model artifact` 对应的数据或结果。 调用：`ArtifactFile`, `ModelArtifactResult`, `_copy_file`, `_copy_optional`, `_manifest_file`, `_sha256`。
-- `F L208-L224` `validate_model_artifact(manifest_path: Path) -> tuple[str, ...]` [IO-R]：校验 `model artifact` 对应的数据或结果。 调用：`_sha256`, `issues.append`。
+- `C L27-L39` `ArtifactFile` [CLASS]：封装 `ArtifactFile` 相关数据或行为。
+- `M L33-L39` `ArtifactFile.as_dict(self) -> dict[str, Any]`：执行 `as dict` 对应逻辑。 调用：`self.path.as_posix`。
+- `C L43-L61` `ModelArtifactSpec` [CLASS]：封装 `ModelArtifactSpec` 相关数据或行为。
+- `M L56-L61` `ModelArtifactSpec.__post_init__(self) -> None`：完成 dataclass 初始化后的派生字段设置。
+- `C L65-L79` `ModelArtifactResult` [CLASS]：封装 `ModelArtifactResult` 相关数据或行为。
+- `M L72-L79` `ModelArtifactResult.as_dict(self) -> dict[str, Any]`：执行 `as dict` 对应逻辑。 调用：`item.as_dict`。
+- `F L82-L87` `_sha256(path: Path) -> str` [IO-R IO-W]：执行 `sha256` 对应逻辑。
+- `F L90-L100` `_copy_file(source: Path, destination: Path, role: str) -> ArtifactFile` [IO-W]：执行 `copy file` 对应逻辑。 调用：`ArtifactFile`, `_sha256`。
+- `F L103-L110` `_copy_optional(files: list[ArtifactFile], source: Path | None, destination: Path, role: str) -> None`：执行 `copy optional` 对应逻辑。 调用：`_copy_file`, `files.append`。
+- `F L113-L133` `_write_readme(path: Path, spec: ModelArtifactSpec) -> ArtifactFile` [IO-W]：写入 `readme` 对应的数据或结果。 调用：`ArtifactFile`, `_sha256`。
+- `F L136-L142` `_manifest_file(item: ArtifactFile, artifact_dir: Path) -> dict[str, Any]`：执行 `manifest file` 对应逻辑。 调用：`item.as_dict`。
+- `F L145-L215` `export_model_artifact(spec: ModelArtifactSpec) -> ModelArtifactResult` [IO-W]：导出 `model artifact` 对应的数据或结果。 调用：`ArtifactFile`, `ModelArtifactResult`, `_copy_file`, `_copy_optional`, `_manifest_file`, `_sha256`。
+- `F L218-L235` `validate_model_artifact(manifest_path: Path | str) -> tuple[str, ...]` [IO-R]：校验 `model artifact` 对应的数据或结果。 调用：`_sha256`, `issues.append`。
+- `F L238-L256` `migrate_settings_file(settings_path: Path | str) -> tuple[Path, dict[str, Any]]` [IO-R IO-W]：执行 `migrate settings file` 对应逻辑。 调用：`log.append`。
+- `F L259-L272` `import_model_artifact(manifest_path: Path | str) -> dict[str, Any]` [IO-R]：导入 `model artifact` 对应的数据或结果。 调用：`load_settings`, `migrate_settings_file`, `validate_model_artifact`。
+- `F L275-L321` `smoke_test_model_artifact(manifest_path: Path | str, *, device: str='cpu') -> dict[str, Any]`：执行 `smoke test model artifact` 对应逻辑。 调用：`CausalTemporalModel`, `append_color_cues`, `build_model_stack`, `import_model_artifact`, `load_settings`, `temporal.initial_state`。
 
 ## `src/traning/core/optimization/attribution/analyzer.py`
 
@@ -307,9 +415,33 @@ tests/full_checks/runner.py -> full pytest checks
 职责：把 TrialScoreReport 转换为结果导出使用的 BatchGalleryRequest。
 工程依赖：`traning.core.optimization.scoring.evaluator`, `traning.state`
 
-- `F L14-L29` `_representative_click(sample: SampleScoreReport)`：执行 `representative click` 对应逻辑。
-- `F L32-L62` `_frame_evaluation(sample: SampleScoreReport) -> FrameEvaluation`：执行 `frame evaluation` 对应逻辑。 调用：`FrameEvaluation`, `_representative_click`。
-- `F L65-L88` `build_batch_gallery_request(report: TrialScoreReport, *, batch_id: str | None=None, random_seed: int=2026) -> BatchGalleryRequest`：Build the result-export request directly from optimization scoring。 调用：`BatchGalleryRequest`, `TrialGalleryEvaluation`, `_frame_evaluation`。
+- `F L16-L24` `_metadata_point(value: object) -> tuple[float, float] | None`：执行 `metadata point` 对应逻辑。
+- `F L27-L42` `_representative_click(sample: SampleScoreReport)`：执行 `representative click` 对应逻辑。
+- `F L45-L52` `_unresolved_source_index(sample: SampleScoreReport) -> int | None`：执行 `unresolved source index` 对应逻辑。
+- `F L55-L89` `_frame_evaluation(sample: SampleScoreReport) -> FrameEvaluation`：执行 `frame evaluation` 对应逻辑。 调用：`FrameEvaluation`, `_metadata_point`, `_representative_click`, `_unresolved_source_index`。
+- `F L92-L117` `build_batch_gallery_request(report: TrialScoreReport, *, batch_id: str | None=None, random_seed: int=2026, metadata: dict[str, object] | None=None) -> BatchGalleryRequest`：Build the result-export request directly from optimization scoring。 调用：`BatchGalleryRequest`, `TrialGalleryEvaluation`, `_frame_evaluation`。
+
+## `src/traning/core/optimization/scoring/run_outputs.py`
+
+职责：Python 模块；具体职责见下方符号及调用。
+工程依赖：`package.coordinates`, `traning.core.optimization.scoring.evaluator`, `traning.lib.coordinates`, `traning.lib.metrics`, `traning.state`
+
+- `C L28-L51` `DecisionOutputScoreResult` [CLASS]：封装 `DecisionOutputScoreResult` 相关数据或行为。
+- `M L36-L51` `DecisionOutputScoreResult.as_summary(self) -> dict[str, Any]`：执行 `as summary` 对应逻辑。
+- `F L54-L117` `score_decision_outputs(*, parameter_group_id: str, candidate_cache_path: Path, decisions_path: Path, metrics: Mapping[str, float] | None=None, circle_radius: float=DEFAULT_CIRCLE_RADIUS_OSU, spec: TrialScoreSpec=TrialScoreSpec(), settings: Any | None=None) -> DecisionOutputScoreResult`：执行 `score decision outputs` 对应逻辑。 调用：`DecisionOutputScoreResult`, `TrialParameters`, `_frame_key`, `_read_jsonl`, `_sample_from_rows`, `samples.append`。
+- `F L120-L157` `_sample_from_rows(cache_row: Mapping[str, Any], decision: Mapping[str, Any], *, parameter_group_id: str, circle_radius: float, settings: Any | None=None) -> SampleScoringInput`：执行 `sample from rows` 对应逻辑。 调用：`SampleScoringInput`, `_predicted_clicks`, `_prediction_video_xy`, `_safe_int`, `_subproject_from_sample_key`, `_target_objects`。
+- `F L160-L200` `_target_objects(row: Mapping[str, Any], *, settings: Any | None=None) -> tuple[TargetObject, ...]`：执行 `target objects` 对应逻辑。 调用：`TargetObject`, `_point_pair`, `_safe_float`, `_safe_int`, `_video_to_osu_pair`。
+- `F L203-L230` `_predicted_clicks(cache_row: Mapping[str, Any], decision: Mapping[str, Any], *, predicted_video_xy: tuple[float, float] | None=None, settings: Any | None=None) -> tuple[PredictedClick, ...]`：执行 `predicted clicks` 对应逻辑。 调用：`PredictedClick`, `_normalized_to_osu`, `_safe_float`, `_video_to_osu`。
+- `F L233-L255` `_prediction_video_xy(cache_row: Mapping[str, Any], decision: Mapping[str, Any]) -> tuple[float, float] | None`：执行 `prediction video xy` 对应逻辑。 调用：`_safe_float`, `_safe_int`。
+- `F L258-L267` `_video_to_osu_pair(value: object, row: Mapping[str, Any], *, settings: Any | None=None) -> tuple[float, float] | None`：执行 `video to osu pair` 对应逻辑。 调用：`_point_pair`, `_video_to_osu`。
+- `F L270-L287` `_video_to_osu(x: float, y: float, row: Mapping[str, Any], *, settings: Any | None=None) -> tuple[float, float] | None`：执行 `video to osu` 对应逻辑。 调用：`_safe_int`, `transform_from_settings_or_sample`。
+- `F L290-L294` `_normalized_to_osu(value: object) -> tuple[float, float] | None`：执行 `normalized to osu` 对应逻辑。 调用：`_point_pair`。
+- `F L297-L306` `_point_pair(value: object) -> tuple[float, float] | None`：执行 `point pair` 对应逻辑。 调用：`_safe_float`。
+- `F L309-L320` `_read_jsonl(path: Path) -> list[dict[str, Any]]` [IO-W]：读取 `jsonl` 对应的数据或结果。 调用：`rows.append`。
+- `F L323-L326` `_frame_key(row: Mapping[str, Any]) -> tuple[str, int]`：执行 `frame key` 对应逻辑。 调用：`_safe_int`。
+- `F L329-L334` `_subproject_from_sample_key(sample_key: str) -> str`：执行 `subproject from sample key` 对应逻辑。
+- `F L337-L343` `_safe_float(value: object) -> float | None`：执行 `safe float` 对应逻辑。
+- `F L346-L352` `_safe_int(value: object) -> int | None`：执行 `safe int` 对应逻辑。
 
 ## `src/traning/core/result_export/preview.py`
 
@@ -329,7 +461,7 @@ tests/full_checks/runner.py -> full pytest checks
 - `M L32-L36` `OptionalTrainingVisualizer._warning_once(self, message: str) -> str | None`：执行 `warning once` 对应逻辑。
 - `M L38-L107` `OptionalTrainingVisualizer.visualize(self, sample: dict[str, Any], *, target_source_index: int | None=None, output_path: Path | None=None, force: bool=False, show_window: bool | None=None) -> VisualizationResult`：执行 `visualize` 对应逻辑。 调用：`VisualizationResult`, `allocate_output_identity`, `launch_image_window`, `render_annotated_frame`, `save_annotated_frame`, `self._default_output_path`。
 - `M L109-L128` `OptionalTrainingVisualizer.maybe_visualize_step(self, sample: dict[str, Any], *, global_step: int, target_source_index: int | None=None) -> VisualizationResult`：执行 `maybe visualize step` 对应逻辑。 调用：`VisualizationResult`, `self._warning_once`, `self.visualize`。
-- `M L130-L175` `OptionalTrainingVisualizer.save_gallery(self, dataset: SegmentFrameDataset, request: BatchGalleryRequest, *, output_root: Path | None=None, samples_per_group: int | None=None) -> GalleryResult`：执行 `save gallery` 对应逻辑。 调用：`GalleryResult`, `save_best_trial_gallery`, `self._warning_once`。
+- `M L130-L175` `OptionalTrainingVisualizer.save_gallery(self, dataset: SegmentFrameDataset, request: BatchGalleryRequest, *, output_root: Path | None=None, samples_per_group: int | None=None) -> GalleryResult`：执行 `save gallery` 对应逻辑。 调用：`GalleryResult`, `self._warning_once`。
 - `M L177-L187` `OptionalTrainingVisualizer._default_output_path(self, sample: dict[str, Any], output_identity: OutputIdentity) -> Path` [IO-W]：执行 `default output path` 对应逻辑。
 
 ## `src/traning/core/spatial/spatial_inference.py`
@@ -347,13 +479,19 @@ tests/full_checks/runner.py -> full pytest checks
 ## `src/traning/core/spatial/spatial_trainer.py`
 
 职责：首版单帧空间训练循环；冻结 global、串行 patch 前向和逐 patch backward。
-工程依赖：`traning.conf`, `traning.core.dataset_import`, `traning.lib.data`, `traning.lib.models`, `traning.lib.runtime`, `traning.lib.training.losses`, `traning.lib.training.spatial_targets`
+工程依赖：`traning.conf`, `traning.core.dataset_import`, `traning.core.training_inheritance`, `traning.lib.data`, `traning.lib.models`, `traning.lib.runtime`, `traning.lib.training.losses`, `traning.lib.training.spatial_targets`
 
-- `C L30-L62` `SpatialTrainingResult` [CLASS]：封装 `SpatialTrainingResult` 相关数据或行为。
-- `M L46-L62` `SpatialTrainingResult.as_dict(self) -> dict[str, Any]`：执行 `as dict` 对应逻辑。
-- `F L65-L232` `run_spatial_training(settings: Settings, *, device: torch.device, run_dir: Path, split: DataSplit='train', max_steps: int=1, learning_rate: float=0.0001, patch_limit: int | None=None, dataset: Sequence[dict[str, Any]] | None=None) -> SpatialTrainingResult` [IO-W]：Run the first-version single-frame spatial training loop。 调用：`CudaRuntimeConfig`, `PatchStream`, `SpatialTrainingResult`, `_normalize_frame`, `_write_summary`, `append_color_cues`。
-- `F L235-L240` `_normalize_frame(frame: torch.Tensor) -> torch.Tensor`：规范化 `frame` 对应的数据或结果。
-- `F L243-L249` `_write_summary(result: SpatialTrainingResult) -> None` [IO-W]：写入 `summary` 对应的数据或结果。 调用：`result.as_dict`。
+- `C L47-L85` `SpatialTrainingResult` [CLASS]：封装 `SpatialTrainingResult` 相关数据或行为。
+- `M L64-L66` `SpatialTrainingResult.__post_init__(self) -> None`：完成 dataclass 初始化后的派生字段设置。
+- `M L68-L85` `SpatialTrainingResult.as_dict(self) -> dict[str, Any]`：执行 `as dict` 对应逻辑。
+- `F L88-L339` `run_spatial_training(settings: Settings, *, device: torch.device, run_dir: Path, split: DataSplit='train', max_steps: int=1, learning_rate: float=0.0001, patch_limit: int | None=None, dataset: Sequence[dict[str, Any]] | None=None, reporter: TrainingReporter=NullReporter(), resume_checkpoint_path: Path | None=None, resume_policy: str='none') -> SpatialTrainingResult` [IO-W]：Run the first-version single-frame spatial training loop。 调用：`CudaRuntimeConfig`, `PatchStream`, `SpatialTrainingResult`, `TrainingPosition`, `_add_spatial_consistency_losses`, `_normalize_frame`。
+- `F L342-L373` `_add_spatial_consistency_losses(loss_dict: dict[str, torch.Tensor], *, prediction, target, weights) -> None`：执行 `add spatial consistency losses` 对应逻辑。 调用：`temporal_consistency_loss`。
+- `F L376-L381` `_normalize_frame(frame: torch.Tensor) -> torch.Tensor`：规范化 `frame` 对应的数据或结果。
+- `F L384-L390` `_write_summary(result: SpatialTrainingResult) -> None` [IO-W]：写入 `summary` 对应的数据或结果。 调用：`result.as_dict`。
+- `F L393-L453` `_write_checkpoint(result: SpatialTrainingResult, *, modules: dict[str, torch.nn.Module], settings: Settings, optimizer: torch.optim.Optimizer, scaler, position: TrainingPosition, checkpoint_kind: str) -> None` [IO-W]：写入 `checkpoint` 对应的数据或结果。 调用：`atomic_torch_save_checkpoint`, `build_training_checkpoint`。
+- `F L456-L523` `_restore_spatial_training_state(*, modules: dict[str, torch.nn.Module], optimizer: torch.optim.Optimizer, scaler, checkpoint_path: Path | None, policy: str, reporter: TrainingReporter) -> TrainingPosition`：执行 `restore spatial training state` 对应逻辑。 调用：`TrainingPosition`, `TrainingPosition.from_mapping`, `_optimizer_state_to_device`, `load_training_checkpoint`, `restore_module_state`, `restore_rng_state`。
+- `F L526-L533` `_optimizer_state_to_device(optimizer: torch.optim.Optimizer, device: torch.device) -> None`：执行 `optimizer state to device` 对应逻辑。
+- `F L536-L572` `_report_spatial_step(reporter: TrainingReporter, *, step: int, target: int, loss: float, sample: dict[str, Any], total_samples: int, generated_patches: int, device: torch.device) -> None`：执行 `report spatial step` 对应逻辑。
 
 ## `src/traning/core/temporal/dataset.py`
 
@@ -389,15 +527,101 @@ tests/full_checks/runner.py -> full pytest checks
 ## `src/traning/core/temporal/trainer.py`
 
 职责：因果 GRU 时序训练入口；消费候选窗口并写 summary/checkpoint。
-工程依赖：`traning.conf`, `traning.core.temporal.dataset`, `traning.lib.models`, `traning.lib.runtime`
+工程依赖：`traning.conf`, `traning.core.temporal.dataset`, `traning.core.training_inheritance`, `traning.lib.models`, `traning.lib.runtime`
 
-- `C L34-L70` `TemporalTrainingResult` [CLASS]：封装 `TemporalTrainingResult` 相关数据或行为。
-- `M L52-L70` `TemporalTrainingResult.as_dict(self) -> dict[str, Any]`：执行 `as dict` 对应逻辑。
-- `F L73-L193` `run_temporal_training(settings: Settings, *, cache_dir: Path, device: torch.device, run_dir: Path, max_steps: int=1, learning_rate: float=0.0001, sequence_length: int | None=None, candidate_slots: int | None=None, dataset: Sequence[TemporalWindow] | None=None) -> TemporalTrainingResult`：执行 `run temporal training` 对应逻辑。 调用：`CausalTemporalModel`, `CudaRuntimeConfig`, `TemporalCandidateWindowDataset.from_cache_dir`, `TemporalTrainingResult`, `_compute_temporal_loss`, `_window_to_device`。
-- `F L196-L215` `_window_to_device(window: TemporalWindow, *, device: torch.device) -> dict[str, torch.Tensor]`：执行 `window to device` 对应逻辑。 调用：`tensor_to_device`。
-- `F L218-L264` `_compute_temporal_loss(outputs, *, action_target: torch.Tensor, selected_candidate_target: torch.Tensor, xy_target: torch.Tensor, time_offset_target: torch.Tensor, frame_mask: torch.Tensor) -> tuple[torch.Tensor, dict[str, torch.Tensor]]`：执行 `compute temporal loss` 对应逻辑。
-- `F L267-L272` `_write_summary(result: TemporalTrainingResult) -> None` [IO-W]：写入 `summary` 对应的数据或结果。 调用：`result.as_dict`。
-- `F L275-L299` `_write_checkpoint(result: TemporalTrainingResult, *, model: torch.nn.Module, hidden_size: int, layers: int) -> None` [IO-W]：写入 `checkpoint` 对应的数据或结果。
+- `C L51-L96` `TemporalTrainingResult` [CLASS]：封装 `TemporalTrainingResult` 相关数据或行为。
+- `M L77-L96` `TemporalTrainingResult.as_dict(self) -> dict[str, Any]`：执行 `as dict` 对应逻辑。
+- `F L99-L299` `run_temporal_training(settings: Settings, *, cache_dir: Path, device: torch.device, run_dir: Path, max_steps: int=1, learning_rate: float=0.0001, sequence_length: int | None=None, candidate_slots: int | None=None, dataset: Sequence[TemporalWindow] | None=None, reporter: TrainingReporter=NullReporter(), resume_checkpoint_path: Path | None=None, resume_policy: str='none') -> TemporalTrainingResult`：执行 `run temporal training` 对应逻辑。 调用：`CausalTemporalModel`, `CudaRuntimeConfig`, `TemporalCandidateWindowDataset.from_cache_dir`, `TemporalTrainingResult`, `TrainingPosition`, `_compute_temporal_loss`。
+- `F L302-L321` `_window_to_device(window: TemporalWindow, *, device: torch.device) -> dict[str, torch.Tensor]`：执行 `window to device` 对应逻辑。 调用：`tensor_to_device`。
+- `F L324-L376` `_compute_temporal_loss(outputs, *, action_target: torch.Tensor, selected_candidate_target: torch.Tensor, xy_target: torch.Tensor, time_offset_target: torch.Tensor, frame_mask: torch.Tensor, weights) -> tuple[torch.Tensor, dict[str, torch.Tensor]]`：执行 `compute temporal loss` 对应逻辑。
+- `F L379-L384` `_write_summary(result: TemporalTrainingResult) -> None` [IO-W]：写入 `summary` 对应的数据或结果。 调用：`result.as_dict`。
+- `F L387-L442` `_write_checkpoint(result: TemporalTrainingResult, *, model: torch.nn.Module, optimizer: torch.optim.Optimizer, scaler, hidden_size: int, layers: int, position: TrainingPosition, checkpoint_kind: str) -> None` [IO-W]：写入 `checkpoint` 对应的数据或结果。 调用：`atomic_torch_save_checkpoint`, `build_training_checkpoint`。
+- `F L445-L500` `_restore_temporal_training_state(*, model: torch.nn.Module, optimizer: torch.optim.Optimizer, scaler, checkpoint_path: Path | None, policy: str, reporter: TrainingReporter) -> TrainingPosition`：执行 `restore temporal training state` 对应逻辑。 调用：`TrainingPosition`, `TrainingPosition.from_mapping`, `_optimizer_state_to_device`, `load_training_checkpoint`, `restore_module_state`, `restore_rng_state`。
+- `F L503-L510` `_optimizer_state_to_device(optimizer: torch.optim.Optimizer, device: torch.device) -> None`：执行 `optimizer state to device` 对应逻辑。
+- `F L513-L548` `_report_temporal_step(reporter: TrainingReporter, *, step: int, target: int, loss: float, window: TemporalWindow, total_windows: int, device: torch.device) -> None`：执行 `report temporal step` 对应逻辑。
+
+## `src/traning/core/training_inheritance/checkpoint.py`
+
+职责：Python 模块；具体职责见下方符号及调用。
+
+- `C L18-L47` `TrainingPosition` [CLASS]：封装 `TrainingPosition` 相关数据或行为。
+- `M L28-L29` `TrainingPosition.as_dict(self) -> dict[str, Any]`：执行 `as dict` 对应逻辑。
+- `M L32-L47` `TrainingPosition.from_mapping(cls, raw: Mapping[str, Any] | None) -> TrainingPosition`：执行 `from mapping` 对应逻辑。
+- `C L51-L76` `CheckpointRestorePlan` [CLASS]：封装 `CheckpointRestorePlan` 相关数据或行为。
+- `M L63-L64` `CheckpointRestorePlan.enabled(self) -> bool` [PROPERTY]：执行 `enabled` 对应逻辑。
+- `M L66-L76` `CheckpointRestorePlan.as_dict(self) -> dict[str, Any]`：执行 `as dict` 对应逻辑。 调用：`self.position.as_dict`。
+- `F L79-L88` `capture_rng_state() -> dict[str, Any]`：执行 `capture rng state` 对应逻辑。
+- `F L91-L108` `restore_rng_state(raw: Mapping[str, Any] | None) -> bool`：执行 `restore rng state` 对应逻辑。
+- `F L111-L154` `build_training_checkpoint(*, checkpoint_kind: str, run_id: str, trial_id: str, models: Mapping[str, Any], optimizer: torch.optim.Optimizer | None, scheduler: Any | None, scaler: Any | None, position: TrainingPosition, score_state: Mapping[str, Any] | None=None, grade_state: Mapping[str, Any] | None=None, promotion_state: Mapping[str, Any] | None=None, dataset_state: Mapping[str, Any] | None=None, sampler_state: Mapping[str, Any] | None=None, resolved_config: Mapping[str, Any] | None=None, dataset_fingerprint: Mapping[str, Any] | None=None, extra: Mapping[str, Any] | None=None) -> dict[str, Any]`：构建并返回 `training checkpoint` 对应的数据或结果。 调用：`capture_rng_state`, `position.as_dict`。
+- `F L157-L171` `atomic_torch_save_checkpoint(payload: Mapping[str, Any], path: Path, *, expected_kind: str) -> None` [IO-W]：执行 `atomic torch save checkpoint` 对应逻辑。 调用：`torch.load`, `validate_training_checkpoint`。
+- `F L174-L178` `load_training_checkpoint(path: Path) -> dict[str, Any]`：加载 `training checkpoint` 对应的数据或结果。 调用：`torch.load`。
+- `F L181-L203` `validate_training_checkpoint(payload: Mapping[str, Any], *, expected_kind: str | None=None) -> None`：校验 `training checkpoint` 对应的数据或结果。 调用：`TrainingPosition.from_mapping`。
+- `F L206-L224` `restore_module_state(module: torch.nn.Module, state_dict: Mapping[str, Any], *, strict: bool) -> tuple[tuple[str, ...], tuple[str, ...]]`：执行 `restore module state` 对应逻辑。
+
+## `src/traning/core/training_inheritance/manager.py`
+
+职责：Python 模块；具体职责见下方符号及调用。
+工程依赖：`traning.conf`, `traning.core.training_inheritance.checkpoint`, `traning.state.versioning`
+
+- `C L26-L40` `InheritancePackage` [CLASS]：封装 `InheritancePackage` 相关数据或行为。
+- `M L33-L40` `InheritancePackage.as_dict(self) -> dict[str, Any]`：执行 `as dict` 对应逻辑。
+- `C L44-L70` `InheritanceLoadResult` [CLASS]：封装 `InheritanceLoadResult` 相关数据或行为。
+- `M L57-L70` `InheritanceLoadResult.as_dict(self) -> dict[str, Any]`：执行 `as dict` 对应逻辑。
+- `F L73-L131` `create_inheritance_package(*, output_dir: Path, settings: Settings, resolved_config_path: Path | None=None, latest_checkpoint_path: Path | None=None, best_checkpoint_path: Path | None=None, training_state: dict[str, Any] | None=None, score_state: dict[str, Any] | None=None, promotion_state: dict[str, Any] | None=None, artifacts: dict[str, Any] | None=None, stage_checkpoints: Mapping[str, Path | None] | None=None) -> InheritancePackage` [IO-W]：执行 `create inheritance package` 对应逻辑。 调用：`InheritancePackage`, `_copy_checkpoint`, `_dataset_fingerprint`, `_rng_state`, `_write_json`, `collect_code_version`。
+- `F L134-L232` `load_inheritance_package(*, inherit_from: Path | str | None, current_settings: Settings, policy: ResumePolicy) -> InheritanceLoadResult` [IO-R]：加载 `inheritance package` 对应的数据或结果。 调用：`InheritanceLoadResult`, `_compatibility_reasons`, `_stage_checkpoint_paths`, `load_training_checkpoint`, `missing_fields.append`, `reasons.append`。
+- `F L235-L248` `resolve_inheritance_path(value: Path | str | None) -> Path | None` [IO-R]：解析并定位 `inheritance path` 对应的数据或结果。
+- `F L251-L263` `_compatibility_reasons(manifest: dict[str, Any], settings: Settings) -> list[str]`：执行 `compatibility reasons` 对应逻辑。 调用：`_comparable`, `_dataset_fingerprint`, `reasons.append`, `version_manifest`。
+- `F L266-L277` `_stage_checkpoint_paths(root: Path, manifest: Mapping[str, Any]) -> dict[str, Path]`：执行 `stage checkpoint paths` 对应逻辑。
+- `F L280-L290` `_dataset_fingerprint(settings: Settings) -> dict[str, Any]`：执行 `dataset fingerprint` 对应逻辑。
+- `F L293-L299` `_rng_state() -> dict[str, Any]`：执行 `rng state` 对应逻辑。
+- `F L302-L307` `_comparable(value: Any) -> Any`：执行 `comparable` 对应逻辑。 调用：`_comparable`。
+- `F L310-L315` `_copy_checkpoint(source: Path | None, destination: Path) -> Path | None` [IO-W]：执行 `copy checkpoint` 对应逻辑。
+- `F L318-L323` `_write_json(path: Path, value: Any) -> None` [IO-W]：写入 `json` 对应的数据或结果。 调用：`_json_ready`。
+- `F L326-L339` `_json_ready(value: Any) -> Any`：执行 `json ready` 对应逻辑。 调用：`_json_ready`, `value.as_dict`。
+
+## `src/traning/core/training_ramp.py`
+
+职责：Python 模块；具体职责见下方符号及调用。
+工程依赖：`traning.conf`, `traning.core.dataset_import`, `traning.core.decision`, `traning.core.model_export`, `traning.state.versioning`
+
+- `C L43-L65` `RampLevelSpec` [CLASS]：封装 `RampLevelSpec` 相关数据或行为。
+- `M L54-L65` `RampLevelSpec.as_dict(self) -> dict[str, Any]`：执行 `as dict` 对应逻辑。
+- `C L69-L89` `RampTarget` [CLASS]：封装 `RampTarget` 相关数据或行为。
+- `M L78-L89` `RampTarget.as_level(self) -> RampLevelSpec`：执行 `as level` 对应逻辑。 调用：`RampLevelSpec`。
+- `C L93-L111` `RampRunResult` [CLASS]：封装 `RampRunResult` 相关数据或行为。
+- `M L102-L111` `RampRunResult.as_dict(self) -> dict[str, Any]`：执行 `as dict` 对应逻辑。
+- `C L114-L115` `RampGateError(RuntimeError)` [CLASS]：封装 `RampGateError` 相关数据或行为。
+- `F L118-L157` `run_training_ramp(*, config_path: Path, device: str, output_root: Path=DEFAULT_OUTPUT_ROOT, target_config_path: Path | None=None, run_id: str | None=None, auto_launch_full: bool=False, force_level: bool=False, max_levels: int | None=None, run_full_checks: bool=True, progress_ui: str='auto', progress_language: str='zh-CN', resume_policy: str='none', resume_stage_checkpoints: Mapping[str, Path] | None=None) -> RampRunResult`：执行 `run training ramp` 对应逻辑。 调用：`_init_layout`, `_run_training_ramp_with_reporter`。
+- `F L160-L292` `_run_training_ramp_with_reporter(*, config_path: Path, device: str, target_config_path: Path | None, run_id: str, output_dir: Path, auto_launch_full: bool, force_level: bool, max_levels: int | None, run_full_checks: bool, reporter: TrainingReporter, resume_policy: str, resume_stage_checkpoints: Mapping[str, Path]) -> RampRunResult`：执行 `run training ramp with reporter` 对应逻辑。 调用：`RampRunResult`, `_launch_full_training`, `_read_json`, `_run_level`, `_run_preflight`, `_write_final_readiness`。
+- `F L295-L311` `ensure_full_target_config(*, source_config: Path, target_config: Path, output_dir: Path) -> tuple[Path, RampTarget]` [IO-W]：确保 `full target config` 对应的数据或结果。 调用：`_absolutize_config`, `_build_default_full_config`, `_read_yaml`, `_target_from_raw`, `_write_yaml`。
+- `F L314-L343` `build_ramp_levels(target: RampTarget) -> list[RampLevelSpec]`：构建并返回 `ramp levels` 对应的数据或结果。 调用：`RampLevelSpec`, `_clip_level`, `_level_reaches_target`, `as_dict`, `clipped.as_dict`, `levels.append`。
+- `F L346-L449` `_run_preflight(*, config_path: Path, device: str, output_dir: Path, run_full_checks: bool, reporter: TrainingReporter) -> dict[str, Any]` [IO-W PROCESS]：执行 `run preflight` 对应逻辑。 调用：`RampGateError`, `_write_json`, `inspect_data_input`, `load_settings`, `subprocess.run`。
+- `F L452-L550` `_run_level(*, level: RampLevelSpec, base_config: Path, level_dir: Path, device: str, reporter: TrainingReporter, resume_policy: str, resume_stage_checkpoints: Mapping[str, Path]) -> dict[str, Any]` [IO-W]：执行 `run level` 对应逻辑。 调用：`FullTrainingRunConfig`, `ModelArtifactSpec`, `_gate_level`, `_run_job_dry_run`, `_write_json`, `_write_level_config`。
+- `F L553-L635` `_gate_level(*, level: RampLevelSpec, result, elapsed: float, artifact_path: Path, artifact_issues: tuple[str, ...], artifact_smoke: dict[str, Any], dry_run: dict[str, Any]) -> dict[str, Any]`：执行 `gate level` 对应逻辑。 调用：`RampGateError`, `_read_json`, `failures.append`, `level.as_dict`, `result.candidate_cache.as_dict`, `result.decision.as_dict`。
+- `F L638-L677` `_launch_full_training(*, level: RampLevelSpec, config_path: Path, run_dir: Path, device: str, output_dir: Path, reporter: TrainingReporter, resume_policy: str, resume_stage_checkpoints: Mapping[str, Path]) -> dict[str, Any]`：执行 `launch full training` 对应逻辑。 调用：`FullTrainingRunConfig`, `load_settings`, `result.as_summary`, `run_full_training_pipeline`。
+- `F L680-L740` `_write_final_readiness(*, output_dir: Path, manifest: dict[str, Any], target: RampTarget, levels: list[RampLevelSpec], auto_launch_full: bool, failure: str | None=None) -> Path` [IO-W]：写入 `final readiness` 对应的数据或结果。 调用：`_full_command_text`, `_write_json`, `lines.append`。
+- `F L743-L775` `_run_job_dry_run(*, job_path: Path | None, config_path: Path, level_dir: Path, device: str) -> dict[str, Any]` [IO-W PROCESS]：执行 `run job dry run` 对应逻辑。 调用：`subprocess.run`。
+- `F L778-L792` `_write_level_config(base_config: Path, level_dir: Path, level: RampLevelSpec) -> Path`：写入 `level config` 对应的数据或结果。 调用：`_absolutize_config`, `_read_yaml`, `_write_yaml`, `level.as_dict`。
+- `F L795-L807` `_build_default_full_config(source: dict[str, Any]) -> dict[str, Any]`：构建 `default full config` 对应的数据或结果。 调用：`RampTarget`。
+- `F L810-L825` `_target_from_raw(raw: dict[str, Any]) -> RampTarget`：执行 `target from raw` 对应逻辑。 调用：`RampTarget`。
+- `F L828-L842` `_clip_level(level: RampLevelSpec, target: RampTarget) -> RampLevelSpec`：执行 `clip level` 对应逻辑。 调用：`RampLevelSpec`。
+- `F L845-L853` `_level_reaches_target(level: RampLevelSpec, target: RampTarget) -> bool`：执行 `level reaches target` 对应逻辑。
+- `F L856-L858` `_init_layout(output_dir: Path) -> None` [IO-W]：执行 `init layout` 对应逻辑。
+- `F L861-L873` `_full_command_text(config_path: Path, target: RampTarget) -> str`：执行 `full command text` 对应逻辑。
+- `F L876-L877` `_read_json(path: Path) -> dict[str, Any]` [IO-R]：读取 `json` 对应的数据或结果。
+- `F L880-L885` `_write_json(path: Path, value: dict[str, Any]) -> None` [IO-W]：写入 `json` 对应的数据或结果。 调用：`_json_ready`。
+- `F L888-L892` `_read_yaml(path: Path) -> dict[str, Any]` [IO-R]：读取 `yaml` 对应的数据或结果。
+- `F L895-L900` `_write_yaml(path: Path, value: dict[str, Any]) -> None` [IO-W]：写入 `yaml` 对应的数据或结果。 调用：`_json_ready`。
+- `F L903-L918` `_absolutize_config(raw: dict[str, Any], base_dir: Path) -> dict[str, Any]`：执行 `absolutize config` 对应逻辑。
+- `F L921-L930` `_json_ready(value: Any) -> Any`：执行 `json ready` 对应逻辑。 调用：`_json_ready`。
+
+## `src/traning/lib/coordinates.py`
+
+职责：Python 模块；具体职责见下方符号及调用。
+工程依赖：`package.coordinates`
+
+- `F L14-L58` `transform_from_settings_or_sample(settings: Any | None, sample: Mapping[str, Any] | None=None, *, frame_width: int | None=None, frame_height: int | None=None) -> tuple[OsuVideoTransform, CoordinateTransformSpec]`：Resolve the explicit playfield transform for original video pixels。 调用：`_sample_transform_spec`。
+- `F L61-L84` `_sample_transform_spec(sample: Mapping[str, Any] | None) -> CoordinateTransformSpec | None`：执行 `sample transform spec` 对应逻辑。 调用：`PlayfieldRect.from_mapping`。
 
 ## `src/traning/lib/data/annotation.py`
 
@@ -446,12 +670,12 @@ tests/full_checks/runner.py -> full pytest checks
 职责：按片段帧索引解码原分辨率 RGB Tensor、可变长度标签和 difficulty 派生参数。
 工程依赖：`traning.lib.data.annotation`, `traning.lib.data.models`, `traning.lib.data.sampling`, `traning.lib.data.video_reader`
 
-- `C L14-L87` `SegmentFrameDataset(Dataset[dict[str, Any]])` [CLASS]：封装 `SegmentFrameDataset` 相关数据或行为。
-- `M L15-L36` `SegmentFrameDataset.__init__(self, records: tuple[SegmentRecord, ...], *, sample_fps: float, frame_step: int=1, max_frames_per_segment: int | None=None, visibility_post_ms: float=100.0, normalize_images: bool=True)`：初始化实例依赖、配置和运行状态。 调用：`build_frame_references`。
-- `M L38-L39` `SegmentFrameDataset.__len__(self) -> int`：执行 `len` 对应逻辑。
-- `M L41-L44` `SegmentFrameDataset._video_reader(self) -> VideoReader`：执行 `video reader` 对应逻辑。 调用：`VideoReader`。
-- `M L46-L82` `SegmentFrameDataset.__getitem__(self, index: int) -> dict[str, Any]`：执行 `getitem` 对应逻辑。 调用：`self._video_reader`, `self._video_reader.read_frame_at`, `visible_hit_objects`。
-- `M L84-L87` `SegmentFrameDataset.__getstate__(self) -> dict[str, Any]`：执行 `getstate` 对应逻辑。
+- `C L14-L90` `SegmentFrameDataset(Dataset[dict[str, Any]])` [CLASS]：封装 `SegmentFrameDataset` 相关数据或行为。
+- `M L15-L38` `SegmentFrameDataset.__init__(self, records: tuple[SegmentRecord, ...], *, sample_fps: float, frame_step: int=1, max_frames_per_segment: int | None=None, visibility_post_ms: float=100.0, normalize_images: bool=True, coordinate_transform: dict[str, Any] | None=None)`：初始化实例依赖、配置和运行状态。 调用：`build_frame_references`。
+- `M L40-L41` `SegmentFrameDataset.__len__(self) -> int`：执行 `len` 对应逻辑。
+- `M L43-L46` `SegmentFrameDataset._video_reader(self) -> VideoReader`：执行 `video reader` 对应逻辑。 调用：`VideoReader`。
+- `M L48-L85` `SegmentFrameDataset.__getitem__(self, index: int) -> dict[str, Any]`：执行 `getitem` 对应逻辑。 调用：`self._video_reader`, `self._video_reader.read_frame_at`, `visible_hit_objects`。
+- `M L87-L90` `SegmentFrameDataset.__getstate__(self) -> dict[str, Any]`：执行 `getstate` 对应逻辑。
 
 ## `src/traning/lib/data/discovery.py`
 
@@ -678,23 +902,23 @@ tests/full_checks/runner.py -> full pytest checks
 
 职责：统一 CUDA/runtime memory policy；管理 AMP、GradScaler、channels-last、TF32、显存/RAM预算、显存快照和 OOM 建议。
 
-- `C L13-L18` `MemorySnapshot` [CLASS]：封装 `MemorySnapshot` 相关数据或行为。
-- `C L22-L50` `RuntimeMemoryBudget` [CLASS]：封装 `RuntimeMemoryBudget` 相关数据或行为。
-- `M L36-L50` `RuntimeMemoryBudget.as_dict(self) -> dict[str, float | str | None]`：执行 `as dict` 对应逻辑。
-- `C L54-L58` `CudaRuntimeConfig` [CLASS]：封装 `CudaRuntimeConfig` 相关数据或行为。
-- `C L62-L69` `CudaRuntimeState` [CLASS]：封装 `CudaRuntimeState` 相关数据或行为。
-- `F L72-L174` `enforce_runtime_memory_budget(*, device: torch.device, max_vram_gib: float, reserve_vram_gib: float, max_ram_gib: float | None, reserve_ram_gib: float, set_cuda_fraction: bool=True) -> RuntimeMemoryBudget`：Validate CPU/CUDA budgets and reserve headroom for the host system。 调用：`RuntimeMemoryBudget`, `_finite`。
-- `F L177-L186` `resolve_amp_dtype(device: torch.device, amp_dtype: str) -> torch.dtype | None`：解析并定位 `amp dtype` 对应的数据或结果。
-- `F L190-L197` `autocast_context(device: torch.device, amp_dtype: str) -> Iterator[None]`：执行 `autocast context` 对应逻辑。 调用：`resolve_amp_dtype`。
-- `F L200-L233` `configure_torch_runtime(*, device: torch.device, amp_dtype: str, runtime: CudaRuntimeConfig=CudaRuntimeConfig()) -> CudaRuntimeState`：Apply CUDA runtime defaults used by training and smoke tests。 调用：`CudaRuntimeState`, `amp_uses_grad_scaler`, `resolve_amp_dtype`。
-- `F L236-L239` `amp_uses_grad_scaler(device: torch.device, amp_dtype: str) -> bool`：执行 `amp uses grad scaler` 对应逻辑。 调用：`resolve_amp_dtype`。
-- `F L242-L255` `create_grad_scaler(*, device: torch.device, amp_dtype: str, mode: str='auto') -> torch.amp.GradScaler`：执行 `create grad scaler` 对应逻辑。 调用：`amp_uses_grad_scaler`。
-- `F L258-L267` `module_to_device(module: nn.Module, device: torch.device, *, channels_last: bool) -> nn.Module`：执行 `module to device` 对应逻辑。
-- `F L270-L280` `maybe_compile_module(module: nn.Module, *, enabled: bool, mode: str='default') -> nn.Module`：执行 `maybe compile module` 对应逻辑。
-- `F L283-L296` `tensor_to_device(tensor: torch.Tensor, device: torch.device, *, channels_last: bool, non_blocking: bool=True) -> torch.Tensor`：执行 `tensor to device` 对应逻辑。
-- `F L299-L314` `collect_memory_snapshot() -> MemorySnapshot`：执行 `collect memory snapshot` 对应逻辑。 调用：`MemorySnapshot`。
-- `F L317-L350` `format_oom_guidance(*, patch_size: tuple[int, int], global_size: tuple[int, int], batch_size: int, amp_dtype: str, config_path: str | None) -> str`：执行 `format oom guidance` 对应逻辑。 调用：`collect_memory_snapshot`。
-- `F L353-L354` `_finite(value: float) -> bool`：执行 `finite` 对应逻辑。
+- `C L15-L20` `MemorySnapshot` [CLASS]：封装 `MemorySnapshot` 相关数据或行为。
+- `C L24-L52` `RuntimeMemoryBudget` [CLASS]：封装 `RuntimeMemoryBudget` 相关数据或行为。
+- `M L38-L52` `RuntimeMemoryBudget.as_dict(self) -> dict[str, float | str | None]`：执行 `as dict` 对应逻辑。
+- `C L56-L60` `CudaRuntimeConfig` [CLASS]：封装 `CudaRuntimeConfig` 相关数据或行为。
+- `C L64-L71` `CudaRuntimeState` [CLASS]：封装 `CudaRuntimeState` 相关数据或行为。
+- `F L74-L176` `enforce_runtime_memory_budget(*, device: torch.device, max_vram_gib: float, reserve_vram_gib: float, max_ram_gib: float | None, reserve_ram_gib: float, set_cuda_fraction: bool=True) -> RuntimeMemoryBudget`：Validate CPU/CUDA budgets and reserve headroom for the host system。 调用：`RuntimeMemoryBudget`, `_finite`。
+- `F L179-L197` `resolve_amp_dtype(device: torch.device, amp_dtype: AmpDType) -> torch.dtype | None`：解析并定位 `amp dtype` 对应的数据或结果。
+- `F L201-L208` `autocast_context(device: torch.device, amp_dtype: AmpDType) -> Iterator[None]`：执行 `autocast context` 对应逻辑。 调用：`resolve_amp_dtype`。
+- `F L211-L244` `configure_torch_runtime(*, device: torch.device, amp_dtype: AmpDType, runtime: CudaRuntimeConfig=CudaRuntimeConfig()) -> CudaRuntimeState`：Apply CUDA runtime defaults used by training and smoke tests。 调用：`CudaRuntimeState`, `amp_uses_grad_scaler`, `resolve_amp_dtype`。
+- `F L247-L250` `amp_uses_grad_scaler(device: torch.device, amp_dtype: AmpDType) -> bool`：执行 `amp uses grad scaler` 对应逻辑。 调用：`resolve_amp_dtype`。
+- `F L253-L266` `create_grad_scaler(*, device: torch.device, amp_dtype: AmpDType, mode: str='auto') -> torch.amp.GradScaler`：执行 `create grad scaler` 对应逻辑。 调用：`amp_uses_grad_scaler`。
+- `F L269-L278` `module_to_device(module: nn.Module, device: torch.device, *, channels_last: bool) -> nn.Module`：执行 `module to device` 对应逻辑。
+- `F L281-L291` `maybe_compile_module(module: nn.Module, *, enabled: bool, mode: str='default') -> nn.Module`：执行 `maybe compile module` 对应逻辑。
+- `F L294-L307` `tensor_to_device(tensor: torch.Tensor, device: torch.device, *, channels_last: bool, non_blocking: bool=True) -> torch.Tensor`：执行 `tensor to device` 对应逻辑。
+- `F L310-L325` `collect_memory_snapshot() -> MemorySnapshot`：执行 `collect memory snapshot` 对应逻辑。 调用：`MemorySnapshot`。
+- `F L328-L361` `format_oom_guidance(*, patch_size: tuple[int, int], global_size: tuple[int, int], batch_size: int, amp_dtype: str, config_path: str | None) -> str`：执行 `format oom guidance` 对应逻辑。 调用：`collect_memory_snapshot`。
+- `F L364-L365` `_finite(value: float) -> bool`：执行 `finite` 对应逻辑。
 
 ## `src/traning/lib/training/feature_canvas.py`
 
@@ -757,45 +981,34 @@ tests/full_checks/runner.py -> full pytest checks
 ## `src/traning/lib/training/spatial_targets.py`
 
 职责：把单帧 osu 标注按 PatchMeta 光栅化为空间多任务 dense loss target。
-工程依赖：`package.coordinates`, `traning.lib.data`, `traning.lib.models`, `traning.lib.training.losses`
+工程依赖：`package.coordinates`, `traning.lib.coordinates`, `traning.lib.data`, `traning.lib.models`, `traning.lib.training.losses`
 
-- `F L22-L99` `build_spatial_loss_targets(sample: Mapping[str, Any], patch_meta: PatchMeta, feature_size: Sequence[int], *, device: torch.device | str | None=None, dtype: torch.dtype=torch.float32) -> SpatialLossTargets`：Rasterize one frame sample into dense targets for one patch feature grid。 调用：`SpatialLossTargets`, `_empty_targets`, `_finite_float`, `_normalize_feature_size`, `_object_kind`, `_paint_circle`。
-- `F L102-L108` `_normalize_feature_size(feature_size: Sequence[int]) -> tuple[int, int]`：规范化 `feature size` 对应的数据或结果。
-- `F L111-L164` `_empty_targets(*, feature_height: int, feature_width: int, device: torch.device, dtype: torch.dtype) -> dict[str, torch.Tensor]`：执行 `empty targets` 对应逻辑。
-- `F L167-L195` `_patch_grid(patch_meta: PatchMeta, *, feature_height: int, feature_width: int, device: torch.device, dtype: torch.dtype) -> dict[str, torch.Tensor | float]`：执行 `patch grid` 对应逻辑。
-- `F L198-L205` `_finite_float(value: Any, default: float) -> float`：执行 `finite float` 对应逻辑。
-- `F L208-L216` `_object_kind(item: Mapping[str, Any]) -> str` [IO-W]：执行 `object kind` 对应逻辑。
-- `F L219-L226` `_set_type(target: dict[str, torch.Tensor], mask: torch.Tensor, object_type: str) -> None`：执行 `set type` 对应逻辑。
-- `F L229-L235` `_set_heatmap_max(tensor: torch.Tensor, values: torch.Tensor, mask: torch.Tensor) -> None`：执行 `set heatmap max` 对应逻辑。
-- `F L238-L244` `_point_to_local(point: tuple[float, float], transform: OsuVideoTransform, grid: Mapping[str, torch.Tensor | float]) -> tuple[float, float]`：执行 `point to local` 对应逻辑。
-- `F L247-L264` `_object_points(item: Mapping[str, Any]) -> tuple[tuple[float, float], ...]`：执行 `object points` 对应逻辑。 调用：`_distance`, `_finite_float`, `points.append`。
-- `F L267-L268` `_distance(first: tuple[float, float], second: tuple[float, float]) -> float`：执行 `distance` 对应逻辑。
-- `F L271-L281` `_distance_to_point(grid: Mapping[str, torch.Tensor | float], *, local_x: float, local_y: float) -> torch.Tensor`：执行 `distance to point` 对应逻辑。
-- `F L284-L307` `_paint_center(target: dict[str, torch.Tensor], grid: Mapping[str, torch.Tensor | float], *, local_x: float, local_y: float, radius: float, object_type: str) -> None`：执行 `paint center` 对应逻辑。 调用：`_distance_to_point`, `_set_heatmap_max`, `_set_type`, `_write_offset`。
-- `F L310-L337` `_write_offset(target: dict[str, torch.Tensor], grid: Mapping[str, torch.Tensor | float], *, local_x: float, local_y: float) -> None`：写入 `offset` 对应的数据或结果。
-- `F L340-L379` `_paint_circle(target: dict[str, torch.Tensor], grid: Mapping[str, torch.Tensor | float], item: Mapping[str, Any], *, transform: OsuVideoTransform, hit_radius: float, timestamp_ms: float, preempt_ms: float) -> None`：执行 `paint circle` 对应逻辑。 调用：`_distance_to_point`, `_finite_float`, `_object_points`, `_paint_center`, `_point_to_local`, `_set_heatmap_max`。
-- `F L382-L430` `_paint_slider(target: dict[str, torch.Tensor], grid: Mapping[str, torch.Tensor | float], item: Mapping[str, Any], *, transform: OsuVideoTransform, hit_radius: float) -> None`：执行 `paint slider` 对应逻辑。 调用：`_finite_float`, `_object_points`, `_paint_center`, `_paint_repeat_points`, `_paint_slider_body`, `_point_to_local`。
-- `F L433-L476` `_paint_slider_body(target: dict[str, torch.Tensor], grid: Mapping[str, torch.Tensor | float], points: tuple[tuple[float, float], ...], *, tube_radius: float) -> None`：执行 `paint slider body` 对应逻辑。 调用：`_set_heatmap_max`, `_set_type`, `_unoriented_direction`。
-- `F L479-L481` `_unoriented_direction(vx: float, vy: float) -> tuple[float, float]`：执行 `unoriented direction` 对应逻辑。
-- `F L484-L501` `_paint_repeat_points(target: dict[str, torch.Tensor], grid: Mapping[str, torch.Tensor | float], points: tuple[tuple[float, float], ...], *, repeats: int, radius: float) -> None`：执行 `paint repeat points` 对应逻辑。 调用：`_distance_to_point`, `_set_type`, `repeat_points.append`。
-- `F L504-L530` `_paint_spinner(target: dict[str, torch.Tensor], grid: Mapping[str, torch.Tensor | float], *, transform: OsuVideoTransform) -> None`：执行 `paint spinner` 对应逻辑。 调用：`_paint_center`, `_set_heatmap_max`, `_set_type`。
+- `F L23-L103` `build_spatial_loss_targets(sample: Mapping[str, Any], patch_meta: PatchMeta, feature_size: Sequence[int], *, settings: Any | None=None, device: torch.device | str | None=None, dtype: torch.dtype=torch.float32) -> SpatialLossTargets`：Rasterize one frame sample into dense targets for one patch feature grid。 调用：`SpatialLossTargets`, `_empty_targets`, `_finite_float`, `_normalize_feature_size`, `_object_kind`, `_paint_circle`。
+- `F L106-L112` `_normalize_feature_size(feature_size: Sequence[int]) -> tuple[int, int]`：规范化 `feature size` 对应的数据或结果。
+- `F L115-L168` `_empty_targets(*, feature_height: int, feature_width: int, device: torch.device, dtype: torch.dtype) -> dict[str, torch.Tensor]`：执行 `empty targets` 对应逻辑。
+- `F L171-L199` `_patch_grid(patch_meta: PatchMeta, *, feature_height: int, feature_width: int, device: torch.device, dtype: torch.dtype) -> dict[str, torch.Tensor | float]`：执行 `patch grid` 对应逻辑。
+- `F L202-L209` `_finite_float(value: Any, default: float) -> float`：执行 `finite float` 对应逻辑。
+- `F L212-L220` `_object_kind(item: Mapping[str, Any]) -> str` [IO-W]：执行 `object kind` 对应逻辑。
+- `F L223-L230` `_set_type(target: dict[str, torch.Tensor], mask: torch.Tensor, object_type: str) -> None`：执行 `set type` 对应逻辑。
+- `F L233-L239` `_set_heatmap_max(tensor: torch.Tensor, values: torch.Tensor, mask: torch.Tensor) -> None`：执行 `set heatmap max` 对应逻辑。
+- `F L242-L248` `_point_to_local(point: tuple[float, float], transform: OsuVideoTransform, grid: Mapping[str, torch.Tensor | float]) -> tuple[float, float]`：执行 `point to local` 对应逻辑。
+- `F L251-L268` `_object_points(item: Mapping[str, Any]) -> tuple[tuple[float, float], ...]`：执行 `object points` 对应逻辑。 调用：`_distance`, `_finite_float`, `points.append`。
+- `F L271-L272` `_distance(first: tuple[float, float], second: tuple[float, float]) -> float`：执行 `distance` 对应逻辑。
+- `F L275-L285` `_distance_to_point(grid: Mapping[str, torch.Tensor | float], *, local_x: float, local_y: float) -> torch.Tensor`：执行 `distance to point` 对应逻辑。
+- `F L288-L311` `_paint_center(target: dict[str, torch.Tensor], grid: Mapping[str, torch.Tensor | float], *, local_x: float, local_y: float, radius: float, object_type: str) -> None`：执行 `paint center` 对应逻辑。 调用：`_distance_to_point`, `_set_heatmap_max`, `_set_type`, `_write_offset`。
+- `F L314-L341` `_write_offset(target: dict[str, torch.Tensor], grid: Mapping[str, torch.Tensor | float], *, local_x: float, local_y: float) -> None`：写入 `offset` 对应的数据或结果。
+- `F L344-L383` `_paint_circle(target: dict[str, torch.Tensor], grid: Mapping[str, torch.Tensor | float], item: Mapping[str, Any], *, transform: OsuVideoTransform, hit_radius: float, timestamp_ms: float, preempt_ms: float) -> None`：执行 `paint circle` 对应逻辑。 调用：`_distance_to_point`, `_finite_float`, `_object_points`, `_paint_center`, `_point_to_local`, `_set_heatmap_max`。
+- `F L386-L434` `_paint_slider(target: dict[str, torch.Tensor], grid: Mapping[str, torch.Tensor | float], item: Mapping[str, Any], *, transform: OsuVideoTransform, hit_radius: float) -> None`：执行 `paint slider` 对应逻辑。 调用：`_finite_float`, `_object_points`, `_paint_center`, `_paint_repeat_points`, `_paint_slider_body`, `_point_to_local`。
+- `F L437-L480` `_paint_slider_body(target: dict[str, torch.Tensor], grid: Mapping[str, torch.Tensor | float], points: tuple[tuple[float, float], ...], *, tube_radius: float) -> None`：执行 `paint slider body` 对应逻辑。 调用：`_set_heatmap_max`, `_set_type`, `_unoriented_direction`。
+- `F L483-L485` `_unoriented_direction(vx: float, vy: float) -> tuple[float, float]`：执行 `unoriented direction` 对应逻辑。
+- `F L488-L505` `_paint_repeat_points(target: dict[str, torch.Tensor], grid: Mapping[str, torch.Tensor | float], points: tuple[tuple[float, float], ...], *, repeats: int, radius: float) -> None`：执行 `paint repeat points` 对应逻辑。 调用：`_distance_to_point`, `_set_type`, `repeat_points.append`。
+- `F L508-L534` `_paint_spinner(target: dict[str, torch.Tensor], grid: Mapping[str, torch.Tensor | float], *, transform: OsuVideoTransform) -> None`：执行 `paint spinner` 对应逻辑。 调用：`_paint_center`, `_set_heatmap_max`, `_set_type`。
 
 ## `src/traning/lib/visualization/display.py`
 
 职责：通过独立 ffplay 子进程把标注图片显示到主机 X11。
 
 - `F L9-L50` `launch_image_window(image_path: Path, *, title: str, ffplay_binary: str='ffplay', display: str | None=None, previous_process: subprocess.Popen[bytes] | None=None) -> subprocess.Popen[bytes]`：执行 `launch image window` 对应逻辑。
-
-## `src/traning/lib/visualization/gallery.py`
-
-职责：选择批次最高分 trial，并按通过状态和六个子项目随机保存标注帧图集。
-工程依赖：`traning.lib.data`, `traning.lib.visualization.output_identity`, `traning.lib.visualization.render`, `traning.state.gallery_schema`
-
-- `F L34-L36` `_safe_name(value: str) -> str`：执行 `safe name` 对应逻辑。
-- `F L39-L43` `_subproject_for_record(record: SegmentRecord) -> str`：执行 `subproject for record` 对应逻辑。
-- `F L46-L58` `_frame_lookup(dataset: SegmentFrameDataset) -> dict[tuple[str, int], tuple[int, str]]`：执行 `frame lookup` 对应逻辑。 调用：`_subproject_for_record`。
-- `F L61-L65` `_metric_lines(metrics: Mapping[str, float]) -> tuple[str, ...]`：执行 `metric lines` 对应逻辑。
-- `F L68-L223` `save_best_trial_gallery(dataset: SegmentFrameDataset, request: BatchGalleryRequest, *, output_root: Path, samples_per_group: int=10) -> tuple[Path, int, tuple[str, ...]]` [IO-W]：执行 `save best trial gallery` 对应逻辑。 调用：`_frame_lookup`, `_metric_lines`, `_safe_name`, `allocate_output_identity`, `append`, `issues.append`。
 
 ## `src/traning/lib/visualization/models.py`
 
@@ -820,16 +1033,16 @@ tests/full_checks/runner.py -> full pytest checks
 ## `src/traning/lib/visualization/render.py`
 
 职责：把帧 Tensor、osu 标签和共享坐标变换渲染为标注图片。
-工程依赖：`package`
+工程依赖：`package`, `traning.lib.coordinates`
 
-- `F L21-L30` `_image_from_tensor(image: torch.Tensor) -> Image.Image`：执行 `image from tensor` 对应逻辑。
-- `F L33-L39` `_point(transform: OsuVideoTransform, x: float, y: float) -> tuple[int, int]`：执行 `point` 对应逻辑。
-- `F L42-L51` `_draw_cross(draw: ImageDraw.ImageDraw, point: tuple[int, int], color: tuple[int, int, int], size: int=12, width: int=3) -> None`：执行 `draw cross` 对应逻辑。
-- `F L54-L61` `_is_target(hit_object: Mapping[str, Any], target_source_index: int | None) -> bool`：判断是否 `target` 对应的数据或结果。
-- `F L64-L92` `_draw_circle(draw: ImageDraw.ImageDraw, hit_object: Mapping[str, Any], transform: OsuVideoTransform, radius: int, target_source_index: int | None) -> tuple[int, int] | None`：执行 `draw circle` 对应逻辑。 调用：`_draw_cross`, `_is_target`, `_point`。
-- `F L95-L147` `_draw_slider(draw: ImageDraw.ImageDraw, hit_object: Mapping[str, Any], transform: OsuVideoTransform, radius: int, target_source_index: int | None) -> tuple[int, int] | None`：执行 `draw slider` 对应逻辑。 调用：`_draw_cross`, `_is_target`, `_point`。
-- `F L150-L248` `render_annotated_frame(sample: Mapping[str, Any], *, target_source_index: int | None=None, include_all_objects: bool=False, predicted_osu_xy: tuple[float, float] | None=None, metadata_lines: Sequence[str]=()) -> Image.Image`：执行 `render annotated frame` 对应逻辑。 调用：`_draw_circle`, `_draw_cross`, `_draw_slider`, `_image_from_tensor`, `_is_target`, `_point`。
-- `F L251-L254` `save_annotated_frame(image: Image.Image, output_path: Path) -> Path` [IO-W]：执行 `save annotated frame` 对应逻辑。
+- `F L22-L31` `_image_from_tensor(image: torch.Tensor) -> Image.Image`：执行 `image from tensor` 对应逻辑。
+- `F L34-L40` `_point(transform: OsuVideoTransform, x: float, y: float) -> tuple[int, int]`：执行 `point` 对应逻辑。
+- `F L43-L52` `_draw_cross(draw: ImageDraw.ImageDraw, point: tuple[int, int], color: tuple[int, int, int], size: int=12, width: int=3) -> None`：执行 `draw cross` 对应逻辑。
+- `F L55-L62` `_is_target(hit_object: Mapping[str, Any], target_source_index: int | None) -> bool`：判断是否 `target` 对应的数据或结果。
+- `F L65-L93` `_draw_circle(draw: ImageDraw.ImageDraw, hit_object: Mapping[str, Any], transform: OsuVideoTransform, radius: int, target_source_index: int | None) -> tuple[int, int] | None`：执行 `draw circle` 对应逻辑。 调用：`_draw_cross`, `_is_target`, `_point`。
+- `F L96-L148` `_draw_slider(draw: ImageDraw.ImageDraw, hit_object: Mapping[str, Any], transform: OsuVideoTransform, radius: int, target_source_index: int | None) -> tuple[int, int] | None`：执行 `draw slider` 对应逻辑。 调用：`_draw_cross`, `_is_target`, `_point`。
+- `F L151-L265` `render_annotated_frame(sample: Mapping[str, Any], *, target_source_index: int | None=None, include_all_objects: bool=False, predicted_osu_xy: tuple[float, float] | None=None, predicted_video_xy: tuple[float, float] | None=None, metadata_lines: Sequence[str]=()) -> Image.Image`：执行 `render annotated frame` 对应逻辑。 调用：`_draw_circle`, `_draw_cross`, `_draw_slider`, `_image_from_tensor`, `_is_target`, `_point`。
+- `F L268-L271` `save_annotated_frame(image: Image.Image, output_path: Path) -> Path` [IO-W]：执行 `save annotated frame` 对应逻辑。
 
 ## `src/traning/lib/visualization/selection.py`
 
@@ -841,34 +1054,63 @@ tests/full_checks/runner.py -> full pytest checks
 ## `src/traning/main.py`
 
 职责：Typer CLI；执行环境/数据检查、端到端 run、模型 smoke、空间训练、候选缓存、时序训练、决策和结果导出。
-工程依赖：`traning.conf`, `traning.core.dataset_import`, `traning.core.decision`, `traning.core.result_export`, `traning.core.spatial`, `traning.core.temporal`, `traning.lib.data`, `traning.lib.models`, `traning.lib.runtime`, `traning.state`
+工程依赖：`traning.conf`, `traning.core.dataset_import`, `traning.core.decision`, `traning.core.full_flow`, `traning.core.result_export`, `traning.core.spatial`, `traning.core.temporal`, `traning.core.training_inheritance`, `traning.core.training_ramp`, `traning.lib.data`, `traning.lib.models`, `traning.lib.runtime`, `traning.state`
 
-- `F L62-L74` `_render_report(report) -> None`：执行 `render report` 对应逻辑。
-- `F L77-L80` `_format_bool(value: bool | None) -> str`：执行 `format bool` 对应逻辑。
-- `F L83-L86` `_format_gib(value: float | None) -> str`：执行 `format gib` 对应逻辑。
-- `F L89-L126` `_render_env_report(report) -> None`：执行 `render env report` 对应逻辑。 调用：`_format_bool`, `_format_gib`。
-- `F L129-L133` `_run_dir(kind: str, *, root: Path | None=None) -> Path` [IO-W]：执行 `run dir` 对应逻辑。
-- `F L136-L145` `_select_device(device: str) -> torch.device`：选择 `device` 对应的数据或结果。
-- `F L148-L151` `_load_image_tensor(path: Path) -> torch.Tensor` [IO-W]：加载 `image tensor` 对应的数据或结果。
-- `F L154-L155` `_build_model_stack(settings) -> dict[str, torch.nn.Module]`：构建 `model stack` 对应的数据或结果。 调用：`build_model_stack`。
-- `F L158-L302` `_execute_model_smoke(*, config: Path | None, device: torch.device, backward: bool) -> dict[str, Any]`：执行 `execute model smoke` 对应逻辑。 调用：`CudaRuntimeConfig`, `PatchStream`, `_build_model_stack`, `append_color_cues`, `autocast_context`, `collect_memory_snapshot`。
-- `F L305-L312` `_render_dict_table(title: str, values: dict[str, Any]) -> None`：执行 `render dict table` 对应逻辑。
-- `F L315-L328` `_compact_slider_path(path: dict[str, Any]) -> dict[str, Any]`：执行 `compact slider path` 对应逻辑。
-- `F L332-L340` `data_check(config: Path | None=typer.Option(None, '--config'), split: DataSplit=typer.Option('all', '--split')) -> None` [CLI]：执行 `data check` 对应逻辑。 调用：`_render_report`, `inspect_data_input`, `load_settings`。
-- `F L344-L363` `env_check(strict: bool=typer.Option(False, '--strict/--no-strict', help='Exit non-zero when required runtime dependencies are missing.'), require_cuda: bool=typer.Option(False, '--require-cuda/--no-require-cuda', help='Treat CUDA unavailability as a failure in strict mode.')) -> None` [CLI]：执行 `env check` 对应逻辑。 调用：`_render_env_report`。
-- `F L367-L399` `data_preview(index: int=typer.Option(0, '--index', min=0), split: DataSplit=typer.Option('train', '--split'), config: Path | None=typer.Option(None, '--config')) -> None` [CLI]：执行 `data preview` 对应逻辑。 调用：`build_dataset`, `build_patch_windows`, `load_settings`。
-- `F L403-L458` `run(config: Path=typer.Option(Path('configs/model_small_vram.yaml'), '--config'), split: DataSplit=typer.Option('train', '--split'), device: str=typer.Option('auto', '--device', help='cpu, cuda, or auto. Use cuda through host-exec for real GPU runs.'), spatial_max_steps: int=typer.Option(1, '--spatial-max-steps', min=1), temporal_max_steps: int=typer.Option(1, '--temporal-max-steps', min=1), spatial_learning_rate: float=typer.Option(0.0001, '--spatial-lr', min=1e-08), temporal_learning_rate: float=typer.Option(0.0001, '--temporal-lr', min=1e-08), patch_limit: int=typer.Option(1, '--patch-limit', min=0, help='0 means process all patches in each frame.'), cache_max_frames: int=typer.Option(1, '--cache-max-frames', min=0, help='0 means no frame limit for candidate cache generation.'), sequence_length: int | None=typer.Option(None, '--sequence-length', min=1), candidate_slots: int | None=typer.Option(None, '--candidate-slots', min=1)) -> None` [CLI]：执行该处理器的完整工作流。 调用：`FullTrainingRunConfig`, `_render_dict_table`, `_run_dir`, `_select_device`, `load_settings`, `result.as_summary`。
-- `F L462-L487` `model_smoke(config: Path=typer.Option(Path('configs/model_small_vram.yaml'), '--config'), device: str=typer.Option('cpu', '--device', help='cpu, cuda, or auto. CPU is the default smoke path.'), backward: bool=typer.Option(True, '--backward/--no-backward', help='Run backward and optimizer step in addition to forward.')) -> None` [CLI IO-W]：执行 `model smoke` 对应逻辑。 调用：`_execute_model_smoke`, `_render_dict_table`, `_run_dir`, `_select_device`。
-- `F L491-L549` `spatial_decode_smoke(config: Path=typer.Option(Path('configs/model_small_vram.yaml'), '--config'), split: DataSplit=typer.Option('train', '--split'), index: int=typer.Option(0, '--index', min=0), device: str=typer.Option('cpu', '--device'), max_candidates: int=typer.Option(16, '--max-candidates', min=1), score_threshold: float=typer.Option(0.0, '--score-threshold', min=0.0), nms_radius_px: float=typer.Option(32.0, '--nms-radius-px', min=0.0), slider_threshold: float=typer.Option(0.5, '--slider-threshold', min=0.0, max=1.0), max_slider_paths: int=typer.Option(16, '--max-slider-paths', min=1), patch_limit: int | None=typer.Option(None, '--patch-limit', min=1)) -> None` [CLI IO-W]：执行 `spatial decode smoke` 对应逻辑。 调用：`_compact_slider_path`, `_render_dict_table`, `_run_dir`, `_select_device`, `build_dataset`, `load_settings`。
-- `F L553-L594` `build_candidate_cache(config: Path=typer.Option(Path('configs/model_small_vram.yaml'), '--config'), split: DataSplit=typer.Option('train', '--split'), device: str=typer.Option('cpu', '--device'), max_frames: int | None=typer.Option(None, '--max-frames', min=1), patch_limit: int | None=typer.Option(None, '--patch-limit', min=1), max_candidates: int | None=typer.Option(None, '--max-candidates', min=1), score_threshold: float | None=typer.Option(None, '--score-threshold', min=0.0, max=1.0), nms_radius_px: float | None=typer.Option(None, '--nms-radius-px', min=0.0), slider_threshold: float | None=typer.Option(None, '--slider-threshold', min=0.0, max=1.0), max_slider_paths: int | None=typer.Option(None, '--max-slider-paths', min=1), output: Path | None=typer.Option(None, '--output')) -> None` [CLI]：构建并返回 `candidate cache` 对应的数据或结果。 调用：`_render_dict_table`, `_run_dir`, `_select_device`, `generate_candidate_cache`, `load_settings`, `result.as_dict`。
-- `F L598-L622` `memory_profile(config: Path=typer.Option(Path('configs/model_small_vram.yaml'), '--config'), device: str=typer.Option('cuda', '--device', help='cuda, cpu, or auto. CUDA is the default for memory profiling.')) -> None` [CLI IO-W]：执行 `memory profile` 对应逻辑。 调用：`_execute_model_smoke`, `_render_dict_table`, `_run_dir`, `_select_device`。
-- `F L626-L654` `visualize_patches(input_image: Path=typer.Option(..., '--input', exists=True, file_okay=True, dir_okay=False, readable=True), output: Path | None=typer.Option(None, '--output'), config: Path=typer.Option(Path('configs/model_small_vram.yaml'), '--config')) -> None` [CLI IO-W]：执行 `visualize patches` 对应逻辑。 调用：`PatchStream`, `_run_dir`, `load_settings`, `stream.metas`。
-- `F L658-L745` `visualize_fusion(input_image: Path=typer.Option(..., '--input', exists=True, file_okay=True, dir_okay=False, readable=True), output: Path | None=typer.Option(None, '--output'), config: Path=typer.Option(Path('configs/model_small_vram.yaml'), '--config'), device: str=typer.Option('cpu', '--device')) -> None` [CLI IO-W]：执行 `visualize fusion` 对应逻辑。 调用：`CudaRuntimeConfig`, `PatchStream`, `_build_model_stack`, `_load_image_tensor`, `_run_dir`, `_select_device`。
-- `F L749-L794` `train_spatial(config: Path=typer.Option(Path('configs/model_small_vram.yaml'), '--config'), split: DataSplit=typer.Option('train', '--split'), device: str=typer.Option('auto', '--device', help='cpu, cuda, or auto. Use cuda through host-exec for real GPU runs.'), max_steps: int=typer.Option(1, '--max-steps', min=1), learning_rate: float=typer.Option(0.0001, '--lr', min=1e-08), patch_limit: int | None=typer.Option(None, '--patch-limit', min=1)) -> None` [CLI]：执行 `train spatial` 对应逻辑。 调用：`_render_dict_table`, `_run_dir`, `_select_device`, `format_oom_guidance`, `load_settings`, `result.as_dict`。
-- `F L798-L832` `train_temporal(config: Path=typer.Option(Path('configs/model_small_vram.yaml'), '--config'), cache: Path=typer.Option(..., '--cache', exists=True, file_okay=False, dir_okay=True, readable=True, help='Candidate cache directory containing manifest.json and frames.jsonl.'), device: str=typer.Option('auto', '--device', help='cpu, cuda, or auto. Use cuda through host-exec for real GPU runs.'), max_steps: int=typer.Option(1, '--max-steps', min=1), learning_rate: float=typer.Option(0.0001, '--lr', min=1e-08), sequence_length: int | None=typer.Option(None, '--sequence-length', min=1), candidate_slots: int | None=typer.Option(None, '--candidate-slots', min=1)) -> None` [CLI]：执行 `train temporal` 对应逻辑。 调用：`_render_dict_table`, `_run_dir`, `_select_device`, `load_settings`, `result.as_dict`, `run_temporal_training`。
-- `F L836-L873` `run_decision(config: Path=typer.Option(Path('configs/model_small_vram.yaml'), '--config'), cache: Path=typer.Option(..., '--cache', exists=True, file_okay=False, dir_okay=True, readable=True, help='Candidate cache directory containing manifest.json and frames.jsonl.'), checkpoint: Path=typer.Option(..., '--checkpoint', exists=True, file_okay=True, dir_okay=False, readable=True, help='Temporal checkpoint produced by train-temporal.'), output: Path | None=typer.Option(None, '--output'), device: str=typer.Option('auto', '--device', help='cpu, cuda, or auto. Use cuda through host-exec for real GPU runs.')) -> None` [CLI]：执行 `run decision` 对应逻辑。 调用：`_render_dict_table`, `_run_dir`, `_select_device`, `load_settings`, `result.as_dict`, `run_temporal_decision`。
-- `F L877-L896` `visualize_label(segment_index: int=typer.Option(0, '--segment-index', min=0), object_index: int=typer.Option(0, '--object-index', min=0), output: Path | None=typer.Option(None, '--output'), show: bool=typer.Option(False, '--show/--no-show'), config: Path | None=typer.Option(None, '--config')) -> None` [CLI]：执行 `visualize label` 对应逻辑。 调用：`load_settings`, `visualize_click_label`。
-- `F L900-L934` `save_gallery(results: Path=typer.Option(..., '--results', exists=True, file_okay=True, dir_okay=False, readable=True), output_root: Path | None=typer.Option(None, '--output-root'), samples_per_group: int | None=typer.Option(None, '--samples-per-group', min=1), config: Path | None=typer.Option(None, '--config')) -> None` [CLI]：执行 `save gallery` 对应逻辑。 调用：`load_batch_gallery_request`, `load_settings`, `save_annotation_gallery`。
+- `C L78-L79` `CliParameterError(ValueError)` [CLASS]：Raised when a plain business entry receives an invalid CLI-like value。
+- `F L82-L94` `_render_report(report) -> None`：执行 `render report` 对应逻辑。
+- `F L97-L100` `_format_bool(value: bool | None) -> str`：执行 `format bool` 对应逻辑。
+- `F L103-L106` `_format_gib(value: float | None) -> str`：执行 `format gib` 对应逻辑。
+- `F L109-L146` `_render_env_report(report) -> None`：执行 `render env report` 对应逻辑。 调用：`_format_bool`, `_format_gib`。
+- `F L149-L153` `_run_dir(kind: str, *, root: Path | None=None) -> Path` [IO-W]：执行 `run dir` 对应逻辑。
+- `F L156-L165` `_select_device(device: str) -> torch.device`：选择 `device` 对应的数据或结果。 调用：`CliParameterError`。
+- `F L168-L171` `_load_image_tensor(path: Path) -> torch.Tensor` [IO-W]：加载 `image tensor` 对应的数据或结果。
+- `F L174-L175` `_build_model_stack(settings) -> dict[str, torch.nn.Module]`：构建 `model stack` 对应的数据或结果。 调用：`build_model_stack`。
+- `F L178-L322` `_execute_model_smoke(*, config: Path | None, device: torch.device, backward: bool) -> dict[str, Any]`：执行 `execute model smoke` 对应逻辑。 调用：`CudaRuntimeConfig`, `PatchStream`, `_build_model_stack`, `append_color_cues`, `autocast_context`, `collect_memory_snapshot`。
+- `F L325-L332` `_render_dict_table(title: str, values: dict[str, Any]) -> None`：执行 `render dict table` 对应逻辑。
+- `F L335-L367` `_render_parameter_group_score(evaluation) -> None`：执行 `render parameter group score` 对应逻辑。
+- `F L370-L383` `_compact_slider_path(path: dict[str, Any]) -> dict[str, Any]`：执行 `compact slider path` 对应逻辑。
+- `F L386-L390` `_write_summary_txt(output_dir: Path, summary: dict[str, Any]) -> None` [IO-W]：写入 `summary txt` 对应的数据或结果。
+- `F L393-L398` `_write_json_report(path: Path, payload: dict[str, Any]) -> None` [IO-W]：写入 `json report` 对应的数据或结果。
+- `F L401-L408` `inspect_training_data(*, config: Path | None=None, split: DataSplit='all')`：执行 `inspect training data` 对应逻辑。 调用：`inspect_data_input`, `load_settings`。
+- `F L411-L412` `collect_training_environment()`：执行 `collect training environment` 对应逻辑。
+- `F L415-L446` `preview_training_sample(*, index: int=0, split: DataSplit='train', config: Path | None=None) -> dict[str, Any]`：执行 `preview training sample` 对应逻辑。 调用：`CliParameterError`, `build_dataset`, `build_patch_windows`, `load_settings`。
+- `F L449-L548` `run_training(*, config: Path=DEFAULT_TRAINING_CONFIG, split: DataSplit='train', device: str='auto', spatial_max_steps: int=1, temporal_max_steps: int=1, spatial_learning_rate: float=0.0001, temporal_learning_rate: float=0.0001, patch_limit: int=1, cache_max_frames: int=1, sequence_length: int | None=None, candidate_slots: int | None=None, parameter_group_id: str='pg-0001', render_gallery: bool=True, gallery_output_root: Path | None=None, gallery_samples_per_group: int | None=None, progress_ui: str='auto', progress_language: str='zh-CN', inherit_from: Path | str | None=None, resume_policy: str='none')`：执行 `run training` 对应逻辑。 调用：`CliParameterError`, `FullTrainingRunConfig`, `_run_dir`, `_safe_create_inheritance_package`, `_select_device`, `_write_json_report`。
+- `F L551-L587` `_safe_create_inheritance_package(*, run_dir: Path, settings, config: Path, result, reporter)`：执行 `safe create inheritance package` 对应逻辑。 调用：`create_inheritance_package`, `result.as_summary`, `result.evaluation.as_dict`。
+- `F L590-L624` `run_training_job_spec(*, job: Path, config: Path=DEFAULT_TRAINING_CONFIG, device: str='auto', execute: bool=True)` [IO-R]：执行 `run training job spec` 对应逻辑。 调用：`CliParameterError`, `result.as_summary`, `run_training`。
+- `F L627-L668` `run_training_ramp_job(*, config: Path=DEFAULT_TRAINING_CONFIG, device: str='auto', output_root: Path=Path('artifacts') / 'training_ramp', target_config: Path | None=None, run_id: str | None=None, auto_launch_full: bool=False, force_level: bool=False, max_levels: int | None=None, run_full_checks: bool=True, progress_ui: str='auto', progress_language: str='zh-CN', inherit_from: Path | str | None=None, resume_policy: str='none')`：执行 `run training ramp job` 对应逻辑。 调用：`CliParameterError`, `_select_device`, `load_inheritance_package`, `load_settings`, `run_training_ramp`。
+- `F L671-L727` `run_full_flow_job(*, config: Path=DEFAULT_TRAINING_CONFIG, device: str='auto', mode: str='execute', output_root: Path=DEFAULT_FULL_FLOW_ROOT, target_config: Path | None=None, run_id: str | None=None, auto_launch_full: bool=False, force_level: bool=False, max_levels: int | None=None, run_full_checks: bool=True, progress_ui: str='auto', progress_language: str='zh-CN', inherit_from: Path | str | None=None, resume_policy: str='none', resume: bool=False, from_stage: str | None=None, until_stage: str | None=None, force_stages: tuple[str, ...]=(), skip_stages: tuple[str, ...]=())`：执行 `run full flow job` 对应逻辑。 调用：`CliParameterError`, `FullFlowConfig`, `load_full_flow_status`, `run_full_flow`。
+- `F L730-L745` `run_model_smoke(*, config: Path=DEFAULT_TRAINING_CONFIG, device: str='cpu', backward: bool=True) -> dict[str, Any]`：执行 `run model smoke` 对应逻辑。 调用：`_execute_model_smoke`, `_run_dir`, `_select_device`, `_write_summary_txt`。
+- `F L748-L804` `run_spatial_decode_smoke(*, config: Path=DEFAULT_TRAINING_CONFIG, split: DataSplit='train', index: int=0, device: str='cpu', max_candidates: int=16, score_threshold: float=0.0, nms_radius_px: float=32.0, slider_threshold: float=0.5, max_slider_paths: int=16, patch_limit: int | None=None) -> dict[str, Any]` [IO-W]：执行 `run spatial decode smoke` 对应逻辑。 调用：`CliParameterError`, `_compact_slider_path`, `_run_dir`, `_select_device`, `_write_summary_txt`, `build_dataset`。
+- `F L807-L838` `run_candidate_cache_build(*, config: Path=DEFAULT_TRAINING_CONFIG, split: DataSplit='train', device: str='cpu', max_frames: int | None=None, patch_limit: int | None=None, max_candidates: int | None=None, score_threshold: float | None=None, nms_radius_px: float | None=None, slider_threshold: float | None=None, max_slider_paths: int | None=None, output: Path | None=None)`：执行 `run candidate cache build` 对应逻辑。 调用：`_run_dir`, `_select_device`, `generate_candidate_cache`, `load_settings`。
+- `F L841-L855` `run_memory_profile(*, config: Path=DEFAULT_TRAINING_CONFIG, device: str='cuda') -> dict[str, Any]`：执行 `run memory profile` 对应逻辑。 调用：`_execute_model_smoke`, `_run_dir`, `_select_device`, `_write_summary_txt`。
+- `F L858-L880` `visualize_patch_windows(*, input_image: Path, output: Path | None=None, config: Path=DEFAULT_TRAINING_CONFIG) -> Path` [IO-W]：执行 `visualize patch windows` 对应逻辑。 调用：`PatchStream`, `_run_dir`, `load_settings`, `stream.metas`。
+- `F L883-L964` `visualize_fusion_context(*, input_image: Path, output: Path | None=None, config: Path=DEFAULT_TRAINING_CONFIG, device: str='cpu') -> Path` [IO-W]：执行 `visualize fusion context` 对应逻辑。 调用：`CudaRuntimeConfig`, `PatchStream`, `_build_model_stack`, `_load_image_tensor`, `_run_dir`, `_select_device`。
+- `F L967-L987` `run_spatial_training_job(*, config: Path=DEFAULT_TRAINING_CONFIG, split: DataSplit='train', device: str='auto', max_steps: int=1, learning_rate: float=0.0001, patch_limit: int | None=None)`：执行 `run spatial training job` 对应逻辑。 调用：`_run_dir`, `_select_device`, `load_settings`, `run_spatial_training`。
+- `F L990-L1004` `spatial_training_oom_guidance(config: Path) -> str`：执行 `spatial training oom guidance` 对应逻辑。 调用：`format_oom_guidance`, `load_settings`。
+- `F L1007-L1029` `run_temporal_training_job(*, config: Path=DEFAULT_TRAINING_CONFIG, cache: Path, device: str='auto', max_steps: int=1, learning_rate: float=0.0001, sequence_length: int | None=None, candidate_slots: int | None=None)`：执行 `run temporal training job` 对应逻辑。 调用：`_run_dir`, `_select_device`, `load_settings`, `run_temporal_training`。
+- `F L1032-L1049` `run_decision_job(*, config: Path=DEFAULT_TRAINING_CONFIG, cache: Path, checkpoint: Path, output: Path | None=None, device: str='auto')`：执行 `run decision job` 对应逻辑。 调用：`_run_dir`, `_select_device`, `load_settings`, `run_temporal_decision`。
+- `F L1052-L1066` `run_label_visualization(*, segment_index: int=0, object_index: int=0, output: Path | None=None, show: bool=False, config: Path | None=None)`：执行 `run label visualization` 对应逻辑。 调用：`load_settings`, `visualize_click_label`。
+- `F L1069-L1081` `run_gallery_export(*, results: Path, output_root: Path | None=None, samples_per_group: int | None=None, config: Path | None=None)`：执行 `run gallery export` 对应逻辑。 调用：`load_batch_gallery_request`, `load_settings`, `save_annotation_gallery`。
+- `F L1084-L1085` `_raise_cli_parameter(error: CliParameterError) -> NoReturn`：执行 `raise cli parameter` 对应逻辑。
+- `F L1089-L1096` `data_check(config: Path | None=typer.Option(None, '--config'), split: DataSplit=typer.Option('all', '--split')) -> None` [CLI]：执行 `data check` 对应逻辑。 调用：`_render_report`, `inspect_training_data`。
+- `F L1100-L1119` `env_check(strict: bool=typer.Option(False, '--strict/--no-strict', help='Exit non-zero when required runtime dependencies are missing.'), require_cuda: bool=typer.Option(False, '--require-cuda/--no-require-cuda', help='Treat CUDA unavailability as a failure in strict mode.')) -> None` [CLI]：执行 `env check` 对应逻辑。 调用：`_render_env_report`, `collect_training_environment`。
+- `F L1123-L1136` `data_preview(index: int=typer.Option(0, '--index', min=0), split: DataSplit=typer.Option('train', '--split'), config: Path | None=typer.Option(None, '--config')) -> None` [CLI]：执行 `data preview` 对应逻辑。 调用：`_raise_cli_parameter`, `preview_training_sample`。
+- `F L1140-L1221` `run(config: Path=typer.Option(DEFAULT_TRAINING_CONFIG, '--config'), split: DataSplit=typer.Option('train', '--split'), device: str=typer.Option('auto', '--device', help='cpu, cuda, or auto. Use cuda through host-exec for real GPU runs.'), spatial_max_steps: int=typer.Option(1, '--spatial-max-steps', min=1), temporal_max_steps: int=typer.Option(1, '--temporal-max-steps', min=1), spatial_learning_rate: float=typer.Option(0.0001, '--spatial-lr', min=1e-08), temporal_learning_rate: float=typer.Option(0.0001, '--temporal-lr', min=1e-08), patch_limit: int=typer.Option(1, '--patch-limit', min=0, help='0 means process all patches in each frame.'), cache_max_frames: int=typer.Option(1, '--cache-max-frames', min=0, help='0 means no frame limit for candidate cache generation.'), sequence_length: int | None=typer.Option(None, '--sequence-length', min=1), candidate_slots: int | None=typer.Option(None, '--candidate-slots', min=1), parameter_group_id: str=typer.Option('pg-0001', '--parameter-group-id'), render_gallery: bool=typer.Option(True, '--render-gallery/--no-render-gallery', help='Render the best parameter group gallery after the training round.'), gallery_output_root: Path | None=typer.Option(None, '--gallery-output-root'), gallery_samples_per_group: int | None=typer.Option(None, '--gallery-samples-per-group', min=1), progress_ui: str=typer.Option('auto', '--progress-ui'), progress_language: str=typer.Option('zh-CN', '--progress-language'), inherit_from: str | None=typer.Option(None, '--inherit-from'), resume_policy: str=typer.Option('none', '--resume-policy'), resume: bool=typer.Option(False, '--resume')) -> None` [CLI]：执行该处理器的完整工作流。 调用：`_raise_cli_parameter`, `_render_dict_table`, `_render_parameter_group_score`, `result.as_summary`, `run_training`。
+- `F L1225-L1247` `run_job(job: Path=typer.Option(..., '--job', exists=True, file_okay=True, dir_okay=False, readable=True), config: Path=typer.Option(DEFAULT_TRAINING_CONFIG, '--config'), device: str=typer.Option('auto', '--device'), execute: bool=typer.Option(True, '--execute/--dry-run')) -> None` [CLI]：执行 `run job` 对应逻辑。 调用：`_raise_cli_parameter`, `_render_dict_table`, `run_training_job_spec`。
+- `F L1251-L1314` `full_flow(config: Path=typer.Option(DEFAULT_TRAINING_CONFIG, '--config'), device: str=typer.Option('auto', '--device', help='cpu, cuda, or auto. Use cuda through host-exec for real GPU runs.'), mode: str=typer.Option('execute', '--mode', help='execute, plan, dry-run, or status.'), output_root: Path=typer.Option(DEFAULT_FULL_FLOW_ROOT, '--output-root'), target_config: Path | None=typer.Option(None, '--target-config'), run_id: str | None=typer.Option(None, '--run-id'), auto_launch_full: bool=typer.Option(False, '--auto-launch-full/--no-auto-launch-full', help='Launch finite full training after ramp gates pass.'), force_level: bool=typer.Option(False, '--force-level/--resume-passed-levels'), max_levels: int | None=typer.Option(None, '--max-levels', min=1), run_full_checks: bool=typer.Option(True, '--run-full-checks/--skip-full-checks'), progress_ui: str=typer.Option('auto', '--progress-ui'), progress_language: str=typer.Option('zh-CN', '--progress-language'), inherit_from: str | None=typer.Option(None, '--inherit-from'), resume_policy: str=typer.Option('none', '--resume-policy'), resume: bool=typer.Option(False, '--resume'), from_stage: str | None=typer.Option(None, '--from-stage'), until_stage: str | None=typer.Option(None, '--until-stage'), force_stage: list[str] | None=typer.Option(None, '--force-stage'), skip_stage: list[str] | None=typer.Option(None, '--skip-stage')) -> None` [CLI]：执行 `full flow` 对应逻辑。 调用：`CliParameterError`, `_raise_cli_parameter`, `_render_dict_table`, `result.as_dict`, `run_full_flow_job`。
+- `F L1318-L1326` `full_flow_status(output_root: Path=typer.Option(DEFAULT_FULL_FLOW_ROOT, '--output-root'), run_id: str | None=typer.Option(None, '--run-id')) -> None` [CLI]：执行 `full flow status` 对应逻辑。 调用：`CliParameterError`, `_raise_cli_parameter`, `_render_dict_table`, `load_full_flow_status`, `result.as_dict`。
+- `F L1330-L1396` `ramp_to_full(config: Path=typer.Option(DEFAULT_TRAINING_CONFIG, '--config'), device: str=typer.Option('auto', '--device', help='cpu, cuda, or auto. Use cuda through host-exec for real GPU runs.'), output_root: Path=typer.Option(Path('artifacts') / 'training_ramp', '--output-root'), target_config: Path | None=typer.Option(None, '--target-config'), run_id: str | None=typer.Option(None, '--run-id', help='Resume or extend an existing ramp output run id.'), auto_launch_full: bool=typer.Option(False, '--auto-launch-full/--no-auto-launch-full', help='Launch the finite full training run after all ramp gates pass.'), force_level: bool=typer.Option(False, '--force-level/--resume-passed-levels', help='Re-run levels even when their level_state.json is already passed.'), max_levels: int | None=typer.Option(None, '--max-levels', min=1, help='Limit levels for controlled validation; omit for target ramp.'), run_full_checks: bool=typer.Option(True, '--run-full-checks/--skip-full-checks', help='Run full pytest checks during preflight.'), progress_ui: str=typer.Option('auto', '--progress-ui'), progress_language: str=typer.Option('zh-CN', '--progress-language'), inherit_from: str | None=typer.Option(None, '--inherit-from'), resume_policy: str=typer.Option('none', '--resume-policy'), resume: bool=typer.Option(False, '--resume')) -> None` [CLI]：执行 `ramp to full` 对应逻辑。 调用：`_raise_cli_parameter`, `_render_dict_table`, `result.as_dict`, `run_training_ramp_job`。
+- `F L1400-L1421` `model_smoke(config: Path=typer.Option(DEFAULT_TRAINING_CONFIG, '--config'), device: str=typer.Option('cpu', '--device', help='cpu, cuda, or auto. CPU is the default smoke path.'), backward: bool=typer.Option(True, '--backward/--no-backward', help='Run backward and optimizer step in addition to forward.')) -> None` [CLI]：执行 `model smoke` 对应逻辑。 调用：`_raise_cli_parameter`, `_render_dict_table`, `run_model_smoke`。
+- `F L1425-L1452` `spatial_decode_smoke(config: Path=typer.Option(DEFAULT_TRAINING_CONFIG, '--config'), split: DataSplit=typer.Option('train', '--split'), index: int=typer.Option(0, '--index', min=0), device: str=typer.Option('cpu', '--device'), max_candidates: int=typer.Option(16, '--max-candidates', min=1), score_threshold: float=typer.Option(0.0, '--score-threshold', min=0.0), nms_radius_px: float=typer.Option(32.0, '--nms-radius-px', min=0.0), slider_threshold: float=typer.Option(0.5, '--slider-threshold', min=0.0, max=1.0), max_slider_paths: int=typer.Option(16, '--max-slider-paths', min=1), patch_limit: int | None=typer.Option(None, '--patch-limit', min=1)) -> None` [CLI]：执行 `spatial decode smoke` 对应逻辑。 调用：`_raise_cli_parameter`, `_render_dict_table`, `run_spatial_decode_smoke`。
+- `F L1456-L1495` `build_candidate_cache(config: Path=typer.Option(DEFAULT_TRAINING_CONFIG, '--config'), split: DataSplit=typer.Option('train', '--split'), device: str=typer.Option('cpu', '--device'), max_frames: int | None=typer.Option(None, '--max-frames', min=1), patch_limit: int | None=typer.Option(None, '--patch-limit', min=1), max_candidates: int | None=typer.Option(None, '--max-candidates', min=1), score_threshold: float | None=typer.Option(None, '--score-threshold', min=0.0, max=1.0), nms_radius_px: float | None=typer.Option(None, '--nms-radius-px', min=0.0), slider_threshold: float | None=typer.Option(None, '--slider-threshold', min=0.0, max=1.0), max_slider_paths: int | None=typer.Option(None, '--max-slider-paths', min=1), output: Path | None=typer.Option(None, '--output')) -> None` [CLI]：构建并返回 `candidate cache` 对应的数据或结果。 调用：`_raise_cli_parameter`, `_render_dict_table`, `result.as_dict`, `run_candidate_cache_build`。
+- `F L1499-L1516` `memory_profile(config: Path=typer.Option(DEFAULT_TRAINING_CONFIG, '--config'), device: str=typer.Option('cuda', '--device', help='cuda, cpu, or auto. CUDA is the default for memory profiling.')) -> None` [CLI]：执行 `memory profile` 对应逻辑。 调用：`_raise_cli_parameter`, `_render_dict_table`, `_select_device`, `run_memory_profile`。
+- `F L1520-L1537` `visualize_patches(input_image: Path=typer.Option(..., '--input', exists=True, file_okay=True, dir_okay=False, readable=True), output: Path | None=typer.Option(None, '--output'), config: Path=typer.Option(DEFAULT_TRAINING_CONFIG, '--config')) -> None` [CLI]：执行 `visualize patches` 对应逻辑。 调用：`visualize_patch_windows`。
+- `F L1541-L1563` `visualize_fusion(input_image: Path=typer.Option(..., '--input', exists=True, file_okay=True, dir_okay=False, readable=True), output: Path | None=typer.Option(None, '--output'), config: Path=typer.Option(DEFAULT_TRAINING_CONFIG, '--config'), device: str=typer.Option('cpu', '--device')) -> None` [CLI]：执行 `visualize fusion` 对应逻辑。 调用：`_raise_cli_parameter`, `visualize_fusion_context`。
+- `F L1567-L1594` `train_spatial(config: Path=typer.Option(DEFAULT_TRAINING_CONFIG, '--config'), split: DataSplit=typer.Option('train', '--split'), device: str=typer.Option('auto', '--device', help='cpu, cuda, or auto. Use cuda through host-exec for real GPU runs.'), max_steps: int=typer.Option(1, '--max-steps', min=1), learning_rate: float=typer.Option(0.0001, '--lr', min=1e-08), patch_limit: int | None=typer.Option(None, '--patch-limit', min=1)) -> None` [CLI]：执行 `train spatial` 对应逻辑。 调用：`_raise_cli_parameter`, `_render_dict_table`, `result.as_dict`, `run_spatial_training_job`, `spatial_training_oom_guidance`。
+- `F L1598-L1631` `train_temporal(config: Path=typer.Option(DEFAULT_TRAINING_CONFIG, '--config'), cache: Path=typer.Option(..., '--cache', exists=True, file_okay=False, dir_okay=True, readable=True, help='Candidate cache directory containing manifest.json and frames.jsonl.'), device: str=typer.Option('auto', '--device', help='cpu, cuda, or auto. Use cuda through host-exec for real GPU runs.'), max_steps: int=typer.Option(1, '--max-steps', min=1), learning_rate: float=typer.Option(0.0001, '--lr', min=1e-08), sequence_length: int | None=typer.Option(None, '--sequence-length', min=1), candidate_slots: int | None=typer.Option(None, '--candidate-slots', min=1)) -> None` [CLI]：执行 `train temporal` 对应逻辑。 调用：`_raise_cli_parameter`, `_render_dict_table`, `result.as_dict`, `run_temporal_training_job`。
+- `F L1635-L1672` `run_decision(config: Path=typer.Option(DEFAULT_TRAINING_CONFIG, '--config'), cache: Path=typer.Option(..., '--cache', exists=True, file_okay=False, dir_okay=True, readable=True, help='Candidate cache directory containing manifest.json and frames.jsonl.'), checkpoint: Path=typer.Option(..., '--checkpoint', exists=True, file_okay=True, dir_okay=False, readable=True, help='Temporal checkpoint produced by train-temporal.'), output: Path | None=typer.Option(None, '--output'), device: str=typer.Option('auto', '--device', help='cpu, cuda, or auto. Use cuda through host-exec for real GPU runs.')) -> None` [CLI]：执行 `run decision` 对应逻辑。 调用：`_raise_cli_parameter`, `_render_dict_table`, `result.as_dict`, `run_decision_job`。
+- `F L1676-L1695` `visualize_label(segment_index: int=typer.Option(0, '--segment-index', min=0), object_index: int=typer.Option(0, '--object-index', min=0), output: Path | None=typer.Option(None, '--output'), show: bool=typer.Option(False, '--show/--no-show'), config: Path | None=typer.Option(None, '--config')) -> None` [CLI]：执行 `visualize label` 对应逻辑。 调用：`run_label_visualization`。
+- `F L1699-L1733` `save_gallery(results: Path=typer.Option(..., '--results', exists=True, file_okay=True, dir_okay=False, readable=True), output_root: Path | None=typer.Option(None, '--output-root'), samples_per_group: int | None=typer.Option(None, '--samples-per-group', min=1), config: Path | None=typer.Option(None, '--config')) -> None` [CLI]：执行 `save gallery` 对应逻辑。 调用：`run_gallery_export`。
 
 ## `src/traning/state/checkpoint_schema.py`
 
@@ -896,16 +1138,17 @@ tests/full_checks/runner.py -> full pytest checks
 职责：批次 trial 分数、稳定帧引用、错误归因和最佳参数图集输入契约。
 工程依赖：`traning.state.experiment_schema`
 
-- `C L24-L49` `FrameEvaluation(BaseModel)` [CLASS]：封装 `FrameEvaluation` 相关数据或行为。
-- `M L39-L42` `FrameEvaluation._nonnegative_frame_index(cls, value: int) -> int` [VALIDATOR]：执行 `nonnegative frame index` 对应逻辑。
-- `M L46-L49` `FrameEvaluation._finite_optional_metric(cls, value: float | None) -> float | None` [VALIDATOR]：执行 `finite optional metric` 对应逻辑。
-- `C L52-L65` `TrialGalleryEvaluation(BaseModel)` [CLASS]：封装 `TrialGalleryEvaluation` 相关数据或行为。
-- `M L62-L65` `TrialGalleryEvaluation._finite_score(cls, value: float) -> float` [VALIDATOR]：执行 `finite score` 对应逻辑。
-- `C L68-L94` `BatchGalleryRequest(BaseModel)` [CLASS]：封装 `BatchGalleryRequest` 相关数据或行为。
-- `M L75-L81` `BatchGalleryRequest._require_trials(cls, value: tuple[TrialGalleryEvaluation, ...]) -> tuple[TrialGalleryEvaluation, ...]` [VALIDATOR]：执行 `require trials` 对应逻辑。
-- `M L84-L90` `BatchGalleryRequest._require_one_score_version(self) -> BatchGalleryRequest` [VALIDATOR]：执行 `require one score version` 对应逻辑。
-- `M L93-L94` `BatchGalleryRequest.best_trial(self) -> TrialGalleryEvaluation` [PROPERTY]：执行 `best trial` 对应逻辑。
-- `F L97-L102` `load_batch_gallery_request(path: Path) -> BatchGalleryRequest` [IO-R]：加载 `batch gallery request` 对应的数据或结果。
+- `C L24-L60` `FrameEvaluation(BaseModel)` [CLASS]：封装 `FrameEvaluation` 相关数据或行为。
+- `M L40-L43` `FrameEvaluation._nonnegative_frame_index(cls, value: int) -> int` [VALIDATOR]：执行 `nonnegative frame index` 对应逻辑。
+- `M L47-L53` `FrameEvaluation._finite_optional_point(cls, value: tuple[float, float] | None) -> tuple[float, float] | None` [VALIDATOR]：执行 `finite optional point` 对应逻辑。
+- `M L57-L60` `FrameEvaluation._finite_optional_metric(cls, value: float | None) -> float | None` [VALIDATOR]：执行 `finite optional metric` 对应逻辑。
+- `C L63-L76` `TrialGalleryEvaluation(BaseModel)` [CLASS]：封装 `TrialGalleryEvaluation` 相关数据或行为。
+- `M L73-L76` `TrialGalleryEvaluation._finite_score(cls, value: float) -> float` [VALIDATOR]：执行 `finite score` 对应逻辑。
+- `C L79-L106` `BatchGalleryRequest(BaseModel)` [CLASS]：封装 `BatchGalleryRequest` 相关数据或行为。
+- `M L87-L93` `BatchGalleryRequest._require_trials(cls, value: tuple[TrialGalleryEvaluation, ...]) -> tuple[TrialGalleryEvaluation, ...]` [VALIDATOR]：执行 `require trials` 对应逻辑。
+- `M L96-L102` `BatchGalleryRequest._require_one_score_version(self) -> BatchGalleryRequest` [VALIDATOR]：执行 `require one score version` 对应逻辑。
+- `M L105-L106` `BatchGalleryRequest.best_trial(self) -> TrialGalleryEvaluation` [PROPERTY]：执行 `best trial` 对应逻辑。
+- `F L109-L114` `load_batch_gallery_request(path: Path) -> BatchGalleryRequest` [IO-R]：加载 `batch gallery request` 对应的数据或结果。
 
 ## `src/traning/state/run_state.py`
 
@@ -913,6 +1156,18 @@ tests/full_checks/runner.py -> full pytest checks
 工程依赖：`traning.state.experiment_schema`
 
 - `C L9-L16` `RunState` [CLASS]：封装 `RunState` 相关数据或行为。
+
+## `src/traning/state/versioning.py`
+
+职责：Python 模块；具体职责见下方符号及调用。
+工程依赖：`package.coordinates`
+
+- `C L18-L24` `CodeVersion` [CLASS]：封装 `CodeVersion` 相关数据或行为。
+- `M L23-L24` `CodeVersion.as_dict(self) -> dict[str, Any]`：执行 `as dict` 对应逻辑。
+- `F L27-L44` `collect_code_version(repo_root: Path | None=None) -> CodeVersion`：执行 `collect code version` 对应逻辑。 调用：`CodeVersion`。
+- `F L47-L60` `dataset_version(settings: Any) -> str`：执行 `dataset version` 对应逻辑。
+- `F L63-L71` `version_manifest(settings: Any) -> dict[str, Any]`：执行 `version manifest` 对应逻辑。 调用：`collect_code_version`, `collect_code_version.as_dict`, `dataset_version`。
+- `F L74-L93` `ensure_compatible_versions(left: Mapping[str, Any], right: Mapping[str, Any], *, override: bool=False) -> tuple[bool, tuple[str, ...]]`：确保 `compatible versions` 对应的数据或结果。
 
 ## `src/traning/tests/full_checks/runner.py`
 
@@ -939,10 +1194,22 @@ tests/full_checks/runner.py -> full pytest checks
 职责：Python 模块；具体职责见下方符号及调用。
 工程依赖：`traning.lib.models`
 
-- `C L10-L37` `CausalTemporalTests(unittest.TestCase)` [CLASS]：封装 `CausalTemporalTests` 相关数据或行为。
+- `C L10-L75` `CausalTemporalTests(unittest.TestCase)` [CLASS]：封装 `CausalTemporalTests` 相关数据或行为。
 - `M L11-L21` `CausalTemporalTests.test_future_frames_do_not_change_past_outputs(self) -> None`：执行 `test future frames do not change past outputs` 对应逻辑。 调用：`CausalTemporalModel`, `self.assertTrue`。
 - `M L23-L31` `CausalTemporalTests.test_reset_state_repeats_output(self) -> None`：执行 `test reset state repeats output` 对应逻辑。 调用：`CausalTemporalModel`, `model.initial_state`, `model.step`, `self.assertTrue`。
 - `M L33-L37` `CausalTemporalTests.test_batch_size_one_runs(self) -> None`：执行 `test batch size one runs` 对应逻辑。 调用：`CausalTemporalModel`, `model.initial_state`, `model.step`, `self.assertEqual`。
+- `M L39-L51` `CausalTemporalTests.test_mutating_future_window_does_not_change_prefix(self) -> None`：执行 `test mutating future window does not change prefix` 对应逻辑。 调用：`CausalTemporalModel`, `self.assertTrue`。
+- `M L53-L75` `CausalTemporalTests.test_segmented_execution_matches_continuous_and_batch_isolated(self) -> None`：执行 `test segmented execution matches continuous and batch isolated` 对应逻辑。 调用：`CausalTemporalModel`, `model.initial_state`, `model.step`, `segmented.append`, `self.assertTrue`。
+
+## `src/traning/tests/full_checks/test_cli_adapters.py`
+
+职责：Python 模块；具体职责见下方符号及调用。
+工程依赖：`traning`, `traning.core.decision`
+
+- `C L15-L96` `TrainingCliAdapterTests(unittest.TestCase)` [CLASS]：封装 `TrainingCliAdapterTests` 相关数据或行为。
+- `M L16-L43` `TrainingCliAdapterTests.test_business_run_training_calls_pipeline_without_typer(self) -> None`：执行 `test business run training calls pipeline without typer` 对应逻辑。 调用：`self.assertEqual`, `self.assertIs`, `self.assertIsInstance`, `self.assertIsNone`, `training_main.run_training`。
+- `M L45-L85` `TrainingCliAdapterTests.test_run_cli_passes_arguments_to_business_function(self) -> None`：执行 `test run cli passes arguments to business function` 对应逻辑。 调用：`self.assertEqual`。
+- `M L87-L96` `TrainingCliAdapterTests.test_cli_parameter_error_maps_to_typer_exit(self) -> None`：执行 `test cli parameter error maps to typer exit` 对应逻辑。 调用：`self.assertEqual`, `self.assertIn`, `training_main.CliParameterError`。
 
 ## `src/traning/tests/full_checks/test_color_cues.py`
 
@@ -994,13 +1261,14 @@ tests/full_checks/runner.py -> full pytest checks
 职责：Python 模块；具体职责见下方符号及调用。
 工程依赖：`traning.lib.runtime`
 
-- `C L20-L90` `CudaOptimizationTests(unittest.TestCase)` [CLASS]：封装 `CudaOptimizationTests` 相关数据或行为。
-- `M L21-L30` `CudaOptimizationTests.test_cpu_runtime_keeps_cuda_only_options_inactive(self) -> None`：执行 `test cpu runtime keeps cuda only options inactive` 对应逻辑。 调用：`CudaRuntimeConfig`, `configure_torch_runtime`, `self.assertEqual`, `self.assertFalse`。
-- `M L32-L39` `CudaOptimizationTests.test_grad_scaler_auto_is_disabled_without_fp16_cuda(self) -> None`：执行 `test grad scaler auto is disabled without fp16 cuda` 对应逻辑。 调用：`amp_uses_grad_scaler`, `create_grad_scaler`, `self.assertFalse`。
-- `M L41-L48` `CudaOptimizationTests.test_tensor_to_device_preserves_cpu_contiguous_layout(self) -> None`：执行 `test tensor to device preserves cpu contiguous layout` 对应逻辑。 调用：`self.assertTrue`, `tensor_to_device`。
-- `M L50-L61` `CudaOptimizationTests.test_cpu_memory_budget_reports_system_reserve(self) -> None`：执行 `test cpu memory budget reports system reserve` 对应逻辑。 调用：`enforce_runtime_memory_budget`, `self.assertEqual`, `self.assertGreater`, `self.assertIsNone`。
-- `M L63-L72` `CudaOptimizationTests.test_cpu_memory_budget_rejects_unavailable_reserve(self) -> None`：执行 `test cpu memory budget rejects unavailable reserve` 对应逻辑。 调用：`enforce_runtime_memory_budget`, `self.assertRaises`。
-- `M L74-L90` `CudaOptimizationTests.test_cuda_channels_last_when_available(self) -> None`：执行 `test cuda channels last when available` 对应逻辑。 调用：`module_to_device`, `self.assertTrue`, `self.skipTest`, `tensor_to_device`。
+- `C L21-L100` `CudaOptimizationTests(unittest.TestCase)` [CLASS]：封装 `CudaOptimizationTests` 相关数据或行为。
+- `M L22-L31` `CudaOptimizationTests.test_cpu_runtime_keeps_cuda_only_options_inactive(self) -> None`：执行 `test cpu runtime keeps cuda only options inactive` 对应逻辑。 调用：`CudaRuntimeConfig`, `configure_torch_runtime`, `self.assertEqual`, `self.assertFalse`。
+- `M L33-L40` `CudaOptimizationTests.test_grad_scaler_auto_is_disabled_without_fp16_cuda(self) -> None`：执行 `test grad scaler auto is disabled without fp16 cuda` 对应逻辑。 调用：`amp_uses_grad_scaler`, `create_grad_scaler`, `self.assertFalse`。
+- `M L42-L49` `CudaOptimizationTests.test_resolved_amp_dtype_values_can_be_reused(self) -> None`：执行 `test resolved amp dtype values can be reused` 对应逻辑。 调用：`amp_uses_grad_scaler`, `resolve_amp_dtype`, `self.assertEqual`, `self.assertIsNone`, `self.assertTrue`。
+- `M L51-L58` `CudaOptimizationTests.test_tensor_to_device_preserves_cpu_contiguous_layout(self) -> None`：执行 `test tensor to device preserves cpu contiguous layout` 对应逻辑。 调用：`self.assertTrue`, `tensor_to_device`。
+- `M L60-L71` `CudaOptimizationTests.test_cpu_memory_budget_reports_system_reserve(self) -> None`：执行 `test cpu memory budget reports system reserve` 对应逻辑。 调用：`enforce_runtime_memory_budget`, `self.assertEqual`, `self.assertGreater`, `self.assertIsNone`。
+- `M L73-L82` `CudaOptimizationTests.test_cpu_memory_budget_rejects_unavailable_reserve(self) -> None`：执行 `test cpu memory budget rejects unavailable reserve` 对应逻辑。 调用：`enforce_runtime_memory_budget`, `self.assertRaises`。
+- `M L84-L100` `CudaOptimizationTests.test_cuda_channels_last_when_available(self) -> None`：执行 `test cuda channels last when available` 对应逻辑。 调用：`module_to_device`, `self.assertTrue`, `self.skipTest`, `tensor_to_device`。
 
 ## `src/traning/tests/full_checks/test_dataset_split_manifest.py`
 
@@ -1010,6 +1278,14 @@ tests/full_checks/runner.py -> full pytest checks
 - `F L14-L17` `_segment(root: Path, item_name: str, segment_id: str) -> None` [IO-W]：执行 `segment` 对应逻辑。
 - `C L20-L55` `DatasetSplitManifestTests(unittest.TestCase)` [CLASS]：封装 `DatasetSplitManifestTests` 相关数据或行为。
 - `M L21-L55` `DatasetSplitManifestTests.test_discovery_uses_split_manifest_when_present(self) -> None`：执行 `test discovery uses split manifest when present` 对应逻辑。 调用：`DiscoveryResult`, `Settings`, `_segment`, `discover_data_input`, `self.assertEqual`。
+
+## `src/traning/tests/full_checks/test_decision_output_scoring.py`
+
+职责：Python 模块；具体职责见下方符号及调用。
+工程依赖：`traning.core.optimization`
+
+- `C L11-L86` `DecisionOutputScoringTests(unittest.TestCase)` [CLASS]：封装 `DecisionOutputScoringTests` 相关数据或行为。
+- `M L12-L86` `DecisionOutputScoringTests.test_scores_parameter_group_from_cache_and_decisions(self) -> None` [IO-W]：执行 `test scores parameter group from cache and decisions` 对应逻辑。 调用：`build_batch_gallery_request`, `result.as_summary`, `score_decision_outputs`, `self.assertEqual`, `self.assertGreater`。
 
 ## `src/traning/tests/full_checks/test_discovery.py`
 
@@ -1029,13 +1305,26 @@ tests/full_checks/runner.py -> full pytest checks
 - `M L12-L17` `EnvironmentCheckTests.test_collect_environment_report_is_non_destructive(self) -> None`：执行 `test collect environment report is non destructive` 对应逻辑。 调用：`self.assertIsNotNone`, `self.assertTrue`。
 - `M L19-L24` `EnvironmentCheckTests.test_required_package_specs_are_reported(self) -> None`：执行 `test required package specs are reported` 对应逻辑。 调用：`self.assertTrue`。
 
+## `src/traning/tests/full_checks/test_full_flow.py`
+
+职责：Python 模块；具体职责见下方符号及调用。
+工程依赖：`traning.core.full_flow`
+
+- `C L16-L116` `FullFlowTests(unittest.TestCase)` [CLASS]：封装 `FullFlowTests` 相关数据或行为。
+- `M L17-L22` `FullFlowTests.test_stage_ids_are_unique_and_ordered(self) -> None`：执行 `test stage ids are unique and ordered` 对应逻辑。 调用：`self.assertEqual`, `self.assertTrue`, `stage_ids`。
+- `M L24-L48` `FullFlowTests.test_plan_mode_writes_manifest_state_and_reports(self) -> None`：执行 `test plan mode writes manifest state and reports` 对应逻辑。 调用：`FullFlowConfig`, `load_full_flow_status`, `run_full_flow`, `self.assertEqual`, `self.assertTrue`。
+- `M L50-L62` `FullFlowTests.test_critical_stages_cannot_be_skipped(self) -> None`：执行 `test critical stages cannot be skipped` 对应逻辑。 调用：`FullFlowConfig`, `run_full_flow`, `self.assertRaises`。
+- `M L64-L86` `FullFlowTests.test_force_stage_is_reported_in_plan_manifest(self) -> None` [IO-R]：执行 `test force stage is reported in plan manifest` 对应逻辑。 调用：`FullFlowConfig`, `run_full_flow`, `self.assertEqual`, `self.assertIn`, `self.assertTrue`。
+- `M L88-L101` `FullFlowTests.test_force_stage_cannot_conflict_with_skip(self) -> None`：执行 `test force stage cannot conflict with skip` 对应逻辑。 调用：`FullFlowConfig`, `run_full_flow`, `self.assertRaises`。
+- `M L103-L116` `FullFlowTests.test_force_stage_must_be_inside_selected_range(self) -> None`：执行 `test force stage must be inside selected range` 对应逻辑。 调用：`FullFlowConfig`, `run_full_flow`, `self.assertRaises`。
+
 ## `src/traning/tests/full_checks/test_full_training_pipeline.py`
 
 职责：Python 模块；具体职责见下方符号及调用。
 工程依赖：`start.checks`, `traning.conf`, `traning.core.dataset_import`, `traning.core.decision`, `traning.core.spatial`, `traning.core.temporal`
 
-- `C L24-L156` `FullTrainingPipelineTests(unittest.TestCase)` [CLASS]：封装 `FullTrainingPipelineTests` 相关数据或行为。
-- `M L25-L156` `FullTrainingPipelineTests.test_pipeline_runs_all_training_steps_and_writes_summary(self) -> None` [IO-R]：执行 `test pipeline runs all training steps and writes summary` 对应逻辑。 调用：`CandidateCacheBuildResult`, `DataInputReport`, `FullTrainingRunConfig`, `Settings`, `SpatialTrainingResult`, `TemporalDecisionRunResult`。
+- `C L24-L214` `FullTrainingPipelineTests(unittest.TestCase)` [CLASS]：封装 `FullTrainingPipelineTests` 相关数据或行为。
+- `M L25-L214` `FullTrainingPipelineTests.test_pipeline_runs_all_training_steps_and_writes_summary(self) -> None` [IO-R IO-W]：执行 `test pipeline runs all training steps and writes summary` 对应逻辑。 调用：`CandidateCacheBuildResult`, `DataInputReport`, `FullTrainingRunConfig`, `Settings`, `SpatialTrainingResult`, `TemporalDecisionRunResult`。
 
 ## `src/traning/tests/full_checks/test_gallery_schema.py`
 
@@ -1122,6 +1411,33 @@ tests/full_checks/runner.py -> full pytest checks
 - `M L29-L30` `PatchStreamTests.test_odd_dimensions_are_fully_covered(self) -> None`：执行 `test odd dimensions are fully covered` 对应逻辑。 调用：`self.assert_full_coverage`。
 - `M L32-L42` `PatchStreamTests.test_small_image_is_padded(self) -> None`：执行 `test small image is padded` 对应逻辑。 调用：`PatchStream`, `self.assertEqual`, `self.assertTrue`, `stream.iter_patches`。
 - `M L44-L46` `PatchStreamTests.test_invalid_overlap_raises(self) -> None`：执行 `test invalid overlap raises` 对应逻辑。 调用：`PatchStream`, `self.assertRaises`。
+
+## `src/traning/tests/full_checks/test_plan_gap_closure.py`
+
+职责：Python 模块；具体职责见下方符号及调用。
+工程依赖：`package.coordinates`, `traning.conf`, `traning.core.decision.generator`, `traning.core.model_export`, `traning.core.temporal.trainer`, `traning.state.versioning`
+
+- `C L18-L170` `PlanGapClosureTests(unittest.TestCase)` [CLASS]：封装 `PlanGapClosureTests` 相关数据或行为。
+- `M L19-L27` `PlanGapClosureTests.test_explicit_non_centered_playfield_round_trip(self) -> None`：执行 `test explicit non centered playfield round trip` 对应逻辑。 调用：`self.assertAlmostEqual`。
+- `M L29-L111` `PlanGapClosureTests.test_action_targets_include_circle_release_slider_repeat_and_spinner(self) -> None`：执行 `test action targets include circle release slider repeat and spinner` 对应逻辑。 调用：`Settings`, `build_candidate_cache_record`, `self.assertEqual`。
+- `M L113-L146` `PlanGapClosureTests.test_temporal_loss_weights_change_combined_loss(self) -> None`：执行 `test temporal loss weights change combined loss` 对应逻辑。 调用：`_compute_temporal_loss`, `self.assertGreater`。
+- `C L114-L118` `PlanGapClosureTests.test_temporal_loss_weights_change_combined_loss.Weights` [CLASS]：封装 `Weights` 相关数据或行为。
+- `C L120-L124` `PlanGapClosureTests.test_temporal_loss_weights_change_combined_loss.TimeHeavy` [CLASS]：封装 `TimeHeavy` 相关数据或行为。
+- `M L148-L161` `PlanGapClosureTests.test_version_mismatch_blocks_without_override(self) -> None`：执行 `test version mismatch blocks without override` 对应逻辑。 调用：`ensure_compatible_versions`, `self.assertEqual`, `self.assertFalse`, `self.assertTrue`。
+- `M L163-L170` `PlanGapClosureTests.test_settings_migration_adds_schema_and_transform(self) -> None` [IO-W]：执行 `test settings migration adds schema and transform` 对应逻辑。 调用：`migrate_settings_file`, `self.assertIn`, `self.assertTrue`。
+
+## `src/traning/tests/full_checks/test_result_export_gallery.py`
+
+职责：Python 模块；具体职责见下方符号及调用。
+工程依赖：`traning.lib.visualization.gallery`, `traning.state`
+
+- `C L20-L70` `_FakeSegmentFrameDataset` [CLASS]：封装 `FakeSegmentFrameDataset` 相关数据或行为。
+- `M L21-L39` `_FakeSegmentFrameDataset.__init__(self) -> None`：初始化实例依赖、配置和运行状态。
+- `M L41-L70` `_FakeSegmentFrameDataset.__getitem__(self, index: int) -> dict[str, object]`：执行 `getitem` 对应逻辑。
+- `F L73-L85` `_request(frames: tuple[FrameEvaluation, ...]) -> BatchGalleryRequest`：执行 `request` 对应逻辑。 调用：`BatchGalleryRequest`, `TrialGalleryEvaluation`, `TrialParameters`。
+- `C L88-L190` `ResultExportGalleryTests(unittest.TestCase)` [CLASS]：封装 `ResultExportGalleryTests` 相关数据或行为。
+- `M L89-L138` `ResultExportGalleryTests.test_outputs_one_folder_per_selected_sample_group(self) -> None` [IO-R]：执行 `test outputs one folder per selected sample group` 对应逻辑。 调用：`FrameEvaluation`, `_FakeSegmentFrameDataset`, `_request`, `self.assertEqual`。
+- `M L140-L190` `ResultExportGalleryTests.test_samples_per_group_limits_sample_folders_not_frames(self) -> None` [IO-R]：执行 `test samples per group limits sample folders not frames` 对应逻辑。 调用：`FrameEvaluation`, `_FakeSegmentFrameDataset`, `_request`, `self.assertEqual`。
 
 ## `src/traning/tests/full_checks/test_scoring.py`
 
@@ -1224,12 +1540,32 @@ tests/full_checks/runner.py -> full pytest checks
 ## `src/traning/tests/full_checks/test_temporal_trainer.py`
 
 职责：Python 模块；具体职责见下方符号及调用。
-工程依赖：`traning.conf`, `traning.core.decision`, `traning.core.temporal`
+工程依赖：`traning.conf`, `traning.core.decision`, `traning.core.temporal`, `traning.core.training_inheritance`
 
-- `F L15-L45` `_record(frame_index: int) -> dict`：执行 `record` 对应逻辑。
-- `F L48-L62` `_write_cache(path: Path) -> None` [IO-W]：写入 `cache` 对应的数据或结果。 调用：`_record`。
-- `C L65-L90` `TemporalTrainerTests(unittest.TestCase)` [CLASS]：封装 `TemporalTrainerTests` 相关数据或行为。
-- `M L66-L90` `TemporalTrainerTests.test_cpu_temporal_training_smoke(self) -> None`：执行 `test cpu temporal training smoke` 对应逻辑。 调用：`Settings`, `_write_cache`, `run_temporal_training`, `self.assertEqual`, `self.assertGreater`, `self.assertTrue`。
+- `F L16-L46` `_record(frame_index: int) -> dict`：执行 `record` 对应逻辑。
+- `F L49-L63` `_write_cache(path: Path) -> None` [IO-W]：写入 `cache` 对应的数据或结果。 调用：`_record`。
+- `F L66-L89` `_assert_nested_close(case: unittest.TestCase, left, right, *, path: str='root') -> None`：执行 `assert nested close` 对应逻辑。 调用：`_assert_nested_close`。
+- `C L92-L183` `TemporalTrainerTests(unittest.TestCase)` [CLASS]：封装 `TemporalTrainerTests` 相关数据或行为。
+- `M L93-L117` `TemporalTrainerTests.test_cpu_temporal_training_smoke(self) -> None`：执行 `test cpu temporal training smoke` 对应逻辑。 调用：`Settings`, `_write_cache`, `run_temporal_training`, `self.assertEqual`, `self.assertGreater`, `self.assertTrue`。
+- `M L119-L183` `TemporalTrainerTests.test_resume_matches_continuous_temporal_training(self) -> None`：执行 `test resume matches continuous temporal training` 对应逻辑。 调用：`Settings`, `_assert_nested_close`, `_write_cache`, `load_training_checkpoint`, `run_temporal_training`, `self.assertEqual`。
+
+## `src/traning/tests/full_checks/test_training_inheritance.py`
+
+职责：Python 模块；具体职责见下方符号及调用。
+工程依赖：`traning.conf`, `traning.core.training_inheritance`
+
+- `C L16-L74` `TrainingInheritanceTests(unittest.TestCase)` [CLASS]：封装 `TrainingInheritanceTests` 相关数据或行为。
+- `M L17-L53` `TrainingInheritanceTests.test_create_and_load_inheritance_package(self) -> None`：执行 `test create and load inheritance package` 对应逻辑。 调用：`create_inheritance_package`, `load_inheritance_package`, `load_settings`, `self.assertEqual`, `self.assertIn`, `self.assertTrue`。
+- `M L55-L74` `TrainingInheritanceTests.test_strict_rejects_incompatible_dataset(self) -> None` [IO-R IO-W]：执行 `test strict rejects incompatible dataset` 对应逻辑。 调用：`create_inheritance_package`, `load_inheritance_package`, `load_settings`, `self.assertRaises`。
+
+## `src/traning/tests/full_checks/test_training_ramp.py`
+
+职责：Python 模块；具体职责见下方符号及调用。
+工程依赖：`traning.core.training_ramp`
+
+- `C L16-L81` `TrainingRampTests(unittest.TestCase)` [CLASS]：封装 `TrainingRampTests` 相关数据或行为。
+- `M L17-L41` `TrainingRampTests.test_build_ramp_levels_clips_and_reaches_target(self) -> None`：执行 `test build ramp levels clips and reaches target` 对应逻辑。 调用：`RampTarget`, `build_ramp_levels`, `self.assertEqual`, `self.assertGreaterEqual`, `self.assertLessEqual`。
+- `M L43-L81` `TrainingRampTests.test_ensure_full_target_config_writes_target_and_absolutizes_paths(self) -> None` [IO-R IO-W]：执行 `test ensure full target config writes target and absolutizes paths` 对应逻辑。 调用：`RampTarget`, `ensure_full_target_config`, `self.assertEqual`, `self.assertTrue`。
 
 ## `src/traning/tests/startup_checks/items.py`
 

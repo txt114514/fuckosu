@@ -91,6 +91,45 @@ class FullTrainingPipelineTests(unittest.TestCase):
                 sequence_length=2,
                 candidate_slots=2,
             )
+            cache_result.output_dir.mkdir(parents=True)
+            cache_result.records_path.write_text(
+                json.dumps(
+                    {
+                        "sample_key": "item_0001/single_point_0001",
+                        "frame_index": 0,
+                        "timestamp_ms": 0.0,
+                        "frame_width": 640,
+                        "frame_height": 480,
+                        "temporal_target": {
+                            "target_strategy": "beatmap_action_v1",
+                            "action": "no_op",
+                            "action_id": 0,
+                            "selected_candidate_id": None,
+                            "time_offset_ms": 0.0,
+                        },
+                        "candidates": [],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            decision_result.output_dir.mkdir(parents=True)
+            decision_result.decisions_path.write_text(
+                json.dumps(
+                    {
+                        "sample_key": "item_0001/single_point_0001",
+                        "frame_index": 0,
+                        "timestamp_ms": 0.0,
+                        "action": "no_op",
+                        "action_id": 0,
+                        "action_probability": 1.0,
+                        "selected_candidate_id": None,
+                        "time_offset_ms": 0.0,
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
             startup_report = TrainingStartupCheckReport(
                 report=StartupCheckReport(scope="test", results=()),
                 data_input=data_report,
@@ -125,14 +164,23 @@ class FullTrainingPipelineTests(unittest.TestCase):
                         device=torch.device("cpu"),
                         sequence_length=2,
                         candidate_slots=2,
+                        render_gallery=False,
+                        resume_policy="strict",
+                        resume_stage_checkpoints={
+                            "spatial": run_dir / "resume_spatial.pt",
+                            "temporal": run_dir / "resume_temporal.pt",
+                        },
                     ),
                 )
 
             self.assertEqual(result.as_summary()["decision_frames"], 1)
+            self.assertEqual(result.as_summary()["parameter_group_id"], "pg-0001")
+            self.assertEqual(result.as_summary()["gallery_status"], "skipped")
             self.assertTrue(result.summary_path.is_file())
             summary = json.loads(result.summary_path.read_text(encoding="utf-8"))
             self.assertTrue(summary["startup_checks"]["report"]["ok"])
             self.assertEqual(summary["candidate_cache"]["frames"], 1)
+            self.assertEqual(summary["evaluation"]["quality_score"], 1.0)
             self.assertEqual(
                 summary["temporal"]["checkpoint_path"],
                 str(temporal_result.checkpoint_path),
@@ -153,6 +201,16 @@ class FullTrainingPipelineTests(unittest.TestCase):
                 max_slider_paths=None,
             )
             temporal_mock.assert_called_once()
+            self.assertEqual(
+                spatial_mock.call_args.kwargs["resume_checkpoint_path"],
+                run_dir / "resume_spatial.pt",
+            )
+            self.assertEqual(spatial_mock.call_args.kwargs["resume_policy"], "strict")
+            self.assertEqual(
+                temporal_mock.call_args.kwargs["resume_checkpoint_path"],
+                run_dir / "resume_temporal.pt",
+            )
+            self.assertEqual(temporal_mock.call_args.kwargs["resume_policy"], "strict")
             decision_mock.assert_called_once()
 
 

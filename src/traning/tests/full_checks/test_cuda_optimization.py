@@ -13,6 +13,7 @@ from traning.lib.runtime import (
     create_grad_scaler,
     enforce_runtime_memory_budget,
     module_to_device,
+    resolve_amp_dtype,
     tensor_to_device,
 )
 
@@ -37,6 +38,15 @@ class CudaOptimizationTests(unittest.TestCase):
         )
         self.assertFalse(scaler.is_enabled())
         self.assertFalse(amp_uses_grad_scaler(torch.device("cpu"), "auto"))
+
+    def test_resolved_amp_dtype_values_can_be_reused(self) -> None:
+        device = torch.device("cuda")
+
+        self.assertEqual(resolve_amp_dtype(device, "torch.float16"), torch.float16)
+        self.assertEqual(resolve_amp_dtype(device, "torch.bfloat16"), torch.bfloat16)
+        self.assertEqual(resolve_amp_dtype(device, torch.float16), torch.float16)
+        self.assertIsNone(resolve_amp_dtype(device, "torch.float32"))
+        self.assertTrue(amp_uses_grad_scaler(device, "torch.float16"))
 
     def test_tensor_to_device_preserves_cpu_contiguous_layout(self) -> None:
         tensor = torch.randn(1, 3, 16, 16)

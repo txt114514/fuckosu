@@ -27,6 +27,7 @@ class FrameEvaluation(BaseModel):
     passed: bool
     target_source_index: int | None = None
     predicted_osu_xy: tuple[float, float] | None = None
+    predicted_video_xy: tuple[float, float] | None = None
     primary_error: ErrorDomain = "none"
     error_tags: tuple[str, ...] = ()
     spatial_error: float | None = None
@@ -39,6 +40,16 @@ class FrameEvaluation(BaseModel):
     def _nonnegative_frame_index(cls, value: int) -> int:
         if value < 0:
             raise ValueError("frame_index must be nonnegative")
+        return value
+
+    @field_validator("predicted_osu_xy", "predicted_video_xy")
+    @classmethod
+    def _finite_optional_point(
+        cls,
+        value: tuple[float, float] | None,
+    ) -> tuple[float, float] | None:
+        if value is not None and any(not isfinite(item) for item in value):
+            raise ValueError("predicted points must be finite")
         return value
 
     @field_validator("spatial_error", "temporal_error_ms")
@@ -69,6 +80,7 @@ class BatchGalleryRequest(BaseModel):
     batch_id: str
     trials: tuple[TrialGalleryEvaluation, ...]
     random_seed: int = 2026
+    metadata: dict[str, object] = Field(default_factory=dict)
 
     @field_validator("trials")
     @classmethod

@@ -7,6 +7,7 @@ from traning.core.decision.generator import (
     generate_candidate_cache,
 )
 from traning.core.decision.pipeline import (
+    FullTrainingEvaluationResult,
     FullTrainingRunConfig,
     FullTrainingRunResult,
     TRAINING_STAGES,
@@ -24,6 +25,7 @@ __all__ = [
     "CANDIDATE_CACHE_VERSION",
     "CandidateCacheBuildResult",
     "DECISION_OUTPUT_VERSION",
+    "FullTrainingEvaluationResult",
     "FullTrainingRunConfig",
     "FullTrainingRunResult",
     "TRAINING_STAGES",

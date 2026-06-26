@@ -13,8 +13,22 @@ fi
 # 2. 可选：如果你的 DISPLAY 不是 :0，自动设置（很少需要）
 export DISPLAY=${DISPLAY:-:0}
 
-# 3. 启动 compose（加 -d 后台运行，根据需要去掉）
-docker compose up -d --build "$@"
+# 3. 启动 compose。默认复用本地镜像，避免每次启动都触发基础镜像 pull。
+IMAGE_NAME=${DEVCONTAINER_IMAGE:-osu-ai-dev:latest}
+COMPOSE_UP_ARGS=(-d)
+
+if [[ "${FORCE_BUILD:-0}" == "1" ]]; then
+    echo "FORCE_BUILD=1，重新构建镜像（仅缺失时拉取基础镜像）..."
+    COMPOSE_UP_ARGS+=(--build --pull missing)
+elif docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
+    echo "发现本地镜像 $IMAGE_NAME，跳过构建和拉取。"
+    COMPOSE_UP_ARGS+=(--no-build --pull never)
+else
+    echo "未发现本地镜像 $IMAGE_NAME，开始构建（仅缺失时拉取基础镜像）..."
+    COMPOSE_UP_ARGS+=(--build --pull missing)
+fi
+
+docker compose up "${COMPOSE_UP_ARGS[@]}" "$@"
 
 echo ""
 echo "容器已启动。"

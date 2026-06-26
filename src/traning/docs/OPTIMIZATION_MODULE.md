@@ -11,6 +11,7 @@
 core/optimization/
   scoring/
     evaluator.py          # trial/sample 级评分聚合
+    run_outputs.py        # 从候选缓存和 decisions JSONL 构建固定评估集评分输入
     gallery.py            # 从评分结果生成 BatchGalleryRequest
   attribution/
     analyzer.py           # 空间/时间/决策三类错误归因
@@ -126,3 +127,28 @@ from traning.core.optimization import build_batch_gallery_request
 
 该函数把 `TrialScoreReport` 转换为 `BatchGalleryRequest`，因此结果导出不再只能依赖手写
 外部 JSON。`core/result_export` 仍然只消费 request，不反向调用优化模块。
+
+## 完整训练自动闭环
+
+完整训练入口 `core/decision/pipeline.py::run_full_training_pipeline` 在
+`settings.optimization.enabled=true` 时会执行单轮闭环：
+
+```text
+trial_score_report.json
+  -> analyze_trial_attribution
+  -> plan_next_trial
+  -> execute_optimization_plan
+  -> attribution.json / optimization_plan.json / next_training_job.json
+```
+
+默认配置不启用自动优化，避免无限递归训练。启用后默认只生成一个 next job，runner/CLI 通过
+`python -m traning.main run-job --job <next_training_job.json>` 消费，实际训练仍调用普通
+`run_training_job_spec` / `run_training` 业务函数。停止策略由
+`settings.optimization.max_generated_jobs`、`max_trials`、`max_stage`、`dry_run` 和
+`job_only` 控制；当前 pipeline 不会默认递归执行子 trial。
+
+统一生命周期入口 `core/full_flow/orchestrator.py::run_full_flow` 通过
+`core/training_ramp.py::run_training_ramp` 间接调用上述完整训练 pipeline，因此 full-flow 生成的
+level 目录同样包含 `trial_score_report.json`、`attribution.json`、`optimization_plan.json` 和
+`next_training_job.json`。full-flow 本身只负责运行阶段、报告和 inheritance 收口，不复制
+optimization 的评分或计划逻辑。

@@ -1,0 +1,164 @@
+input:
+  width: 1484
+  height: 846
+  resize: false
+  color_cues: osu_basic
+
+coordinate_transform:
+  version: osu-playfield-rect-v1
+  mode: legacy_centered
+
+data_input:
+  dataset_root: ../training_package/video_segments
+  split_manifest_path: ../training_package/splits/dataset_split_manifest.json
+  dimensions:
+    - atomic
+    - long_sequence
+  categories: []
+  include_items: []
+  exclude_items: []
+  train_items:
+    - item_000001
+  validation_items:
+    - item_000002
+  test_items: []
+  sample_fps: 60.0
+  frame_step: 1
+  max_segments:
+  max_frames_per_segment:
+  visibility_post_ms: 100.0
+  normalize_images: true
+  strict: true
+  patch_width: 512
+  patch_height: 512
+  overlap_x: 128
+  overlap_y: 128
+
+tiling:
+  patch_height: 512
+  patch_width: 512
+  overlap_y: 128
+  overlap_x: 128
+  patch_batch_size: 1
+  serial: true
+
+local_encoder:
+  stem_channels: 8
+  feature_channels: 48
+  output_stride: 8
+  embedding_dim: 96
+
+global_encoder:
+  input_height: 360
+  input_width: 640
+  feature_channels: 64
+  backbone: lightweight_cnn
+  pretrained: false
+  frozen: false
+
+fusion:
+  mode: gated_sparse_sampling
+  heads: 4
+  sampling_points: 4
+  layers: 2
+  hidden_dim: 96
+
+temporal:
+  enabled: true
+  model_type: causal_gru
+  hidden_size: 256
+  layers: 2
+  history_frames: 8
+
+training:
+  temporal_loss_weights:
+    action: 1.0
+    candidate: 1.0
+    xy: 1.0
+    time_offset: 0.01
+  spatial_consistency_loss_weights:
+    embedding: 0.01
+    ring_radius: 0.01
+    slider_continuity: 0.01
+
+loader:
+  batch_size: 1
+  num_workers: 0
+  shuffle: true
+  pin_memory: true
+  persistent_workers: false
+  prefetch_factor:
+  drop_last: false
+
+memory:
+  amp_dtype: auto
+  gradient_checkpointing: true
+  backward_per_patch: true
+  cache_global_features: true
+  offload_candidates_to_cpu: true
+  channels_last: true
+  allow_tf32: true
+  cudnn_benchmark: true
+  matmul_float32_precision: high
+  grad_scaler: auto
+  compile_model: false
+  max_vram_gib: 6.5
+  reserve_vram_gib: 1.0
+  max_ram_gib: 24.0
+  reserve_ram_gib: 4.0
+
+smet:
+  enabled: false
+
+candidate_cache:
+  output_root: ../runs/candidate_cache
+  max_candidates_per_frame: 32
+  save_dtype: float16
+  storage: jsonl
+  score_threshold: 0.05
+  nms_radius_px: 32.0
+  slider_threshold: 0.5
+  slider_min_cells: 4
+  slider_path_points: 32
+  max_slider_paths: 16
+  low_confidence_threshold: 0.60
+  close_score_margin: 0.05
+  slider_attach_distance_px: 48.0
+  local_refiner_enabled: true
+  local_refiner_top_k: 4
+  local_refiner_radius_px: 12.0
+  ambiguity_review_enabled: true
+  ambiguity_review_max_candidates: 8
+
+evaluation:
+  min_click_interval_ms: 50.0
+
+visualization:
+  enabled: false
+  every_n_steps: 500
+  output_dir: ../traning_example
+  save_images: true
+  gallery_samples_per_group: 4
+  show_window: false
+  window_title: osu! training annotation
+  ffplay_binary: ffplay
+
+optimization:
+  enabled: false
+  max_generated_jobs: 1
+  execute_generated_jobs: false
+  dry_run: false
+  job_only: true
+  max_trials: 1
+  max_stage: basic
+  trial_store_path: ../runs/optimization/trials.jsonl
+
+training_ramp:
+  target:
+    spatial_steps: 600
+    temporal_steps: 600
+    patch_limit: 4
+    cache_frames: 3000
+    sequence_length: 96
+    candidate_slots: 24
+    gallery_samples_per_group: 4

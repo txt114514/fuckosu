@@ -7,6 +7,7 @@ import math
 import torch
 
 from package.coordinates import OsuVideoTransform
+from traning.lib.coordinates import transform_from_settings_or_sample
 from traning.lib.data import PatchMeta
 from traning.lib.models import OBJECT_TYPE_NAMES
 from traning.lib.training.losses import SpatialLossTargets
@@ -24,6 +25,7 @@ def build_spatial_loss_targets(
     patch_meta: PatchMeta,
     feature_size: Sequence[int],
     *,
+    settings: Any | None = None,
     device: torch.device | str | None = None,
     dtype: torch.dtype = torch.float32,
 ) -> SpatialLossTargets:
@@ -44,9 +46,11 @@ def build_spatial_loss_targets(
         device=selected_device,
         dtype=dtype,
     )
-    transform = OsuVideoTransform.fit_centered(
-        patch_meta.frame_width,
-        patch_meta.frame_height,
+    transform, _ = transform_from_settings_or_sample(
+        settings,
+        sample,
+        frame_width=patch_meta.frame_width,
+        frame_height=patch_meta.frame_height,
     )
     radius_osu = _finite_float(
         sample.get("circle_radius_osu_pixels"),

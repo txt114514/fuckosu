@@ -21,6 +21,7 @@ class SegmentFrameDataset(Dataset[dict[str, Any]]):
         max_frames_per_segment: int | None = None,
         visibility_post_ms: float = 100.0,
         normalize_images: bool = True,
+        coordinate_transform: dict[str, Any] | None = None,
     ):
         if not records:
             raise ValueError("records must not be empty")
@@ -33,6 +34,7 @@ class SegmentFrameDataset(Dataset[dict[str, Any]]):
         )
         self.visibility_post_ms = visibility_post_ms
         self.normalize_images = normalize_images
+        self.coordinate_transform = coordinate_transform
         self._reader: VideoReader | None = None
 
     def __len__(self) -> int:
@@ -79,6 +81,7 @@ class SegmentFrameDataset(Dataset[dict[str, Any]]):
                 record.annotation.difficulty.circle_radius_osu_pixels
             ),
             "approach_preempt_ms": record.annotation.difficulty.approach_preempt_ms,
+            "coordinate_transform": self.coordinate_transform,
         }
 
     def __getstate__(self) -> dict[str, Any]:

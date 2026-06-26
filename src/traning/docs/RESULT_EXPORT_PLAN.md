@@ -11,8 +11,15 @@
 
 - `visualize_click_label`：从 Dataset 选取单帧目标并渲染标注图。
 - `save_annotation_gallery`：选择批次最高分 trial，保存通过/失败图集。
+- `manifest.json` 保存 request metadata，包括 dataset、evaluation dataset、score、
+  candidate cache、transform、configuration、code、trial 和评估配置版本。
+- `index.csv` 稳定列出错误类型、segment、beatmap、sample、trial、课程阶段、参数组、
+  score、图像路径、predicted/target 坐标、action/ambiguity 和版本字段。
 - `OptionalTrainingVisualizer`：可视化失败不抛入训练流程，只返回一次 warning 后静默禁用。
-- `traning.lib.visualization`：渲染、保存、图集抽样、输出身份和可选 ffplay 显示。
+- Gallery 实现位于 `src/visualization/core/gallery/exporter.py`；`traning.lib.visualization.gallery`
+  只保留兼容 re-export。
+- `full-flow` 最终 artifact 会绑定 gallery request、score report、candidate cache manifest 和
+  checkpoint 继承关系，复制到其他目录后仍可按 artifact manifest 相对路径校验。
 
 ## 批次输入契约
 
@@ -53,6 +60,7 @@ score 相同按 trial_id 字典序从小到大
 - `passed`
 - `target_source_index`
 - 可选 `predicted_osu_xy`
+- 可选 `predicted_video_xy`
 - 可选 `primary_error`
 - 可选 `error_tags`
 - 可选 `spatial_error`
@@ -60,7 +68,9 @@ score 相同按 trial_id 字典序从小到大
 - 可选 `frequency_limited`
 - 可选 `metrics`
 
-图集模块不根据 `predicted_osu_xy` 或 metrics 重算通过状态，只按已有 `passed` 分类。
+图集模块不根据 `predicted_osu_xy`、`predicted_video_xy` 或 metrics 重算通过状态。
+同一 `sample_key` 下任一待导出帧失败时，该样本组归入 `failed`；全部通过时归入
+`passed`。
 
 ## 输出目录
 
@@ -69,9 +79,10 @@ score 相同按 trial_id 字典序从小到大
 ```text
 output_<次数>__<UTC时间>__<batch>__<best_trial>/
   best_parameters.json
+  index.csv
   manifest.json
-  passed/<subproject>/*.png
-  failed/<subproject>/*.png
+  passed/<subproject>/<sample-group>/*.png
+  failed/<subproject>/<sample-group>/*.png
 ```
 
 输出次数记录在 `traning_example/.output_counter`，避免覆盖历史图集。UTC 时间和次数进入
@@ -87,9 +98,13 @@ single_point / slider / multi_point / point_slider / spinner / long_sequence
 
 每个已评估子项目中：
 
-- 通过最多随机抽取 10 帧；
-- 不通过最多随机抽取 10 帧；
-- 数量不足时全部输出；
+- 通过最多随机抽取 10 组测试样本；
+- 不通过最多随机抽取 10 组测试样本；
+- 每个测试样本以 `sample_key` 为组，一个样本组输出到一个独立文件夹；
+- 样本组内输出该样本所有参与判定、需要人工检查的打击帧；
+- 样本组只有 1 个待打击/待检查帧时，只输出 1 张图；
+- 纯 `no-op` 且无错误的帧不进入图集；
+- 样本组数量不足时全部输出；
 - 未进入课程的子项目不创建目录；
 - 随机结果由 `random_seed` 固定，保证可复现。
 
@@ -106,9 +121,7 @@ single_point / slider / multi_point / point_slider / spinner / long_sequence
 
 `spinner` 和 `long_sequence` 暂无独立连续通过阈值。
 
-## 后续计划
+## 当前限制
 
-- 接入正式 runner 输出的 score、passed、错误归因和资源指标。
-- 在 manifest 中保存数据版本、score 版本、评估集版本和代码版本。
-- 增加 HTML 或 CSV 索引，方便按错误类型、子项目和 trial 参数浏览。
-- 将导出目录与模型 artifact 关联，支持后续复现实验。
+`save_annotation_gallery` 只消费已经生成的 `BatchGalleryRequest`，不会重新评分；评分和错误归因
+仍由 `core/optimization/scoring/run_outputs.py` 与完整训练 pipeline 负责。

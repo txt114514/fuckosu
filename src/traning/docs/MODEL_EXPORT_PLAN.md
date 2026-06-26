@@ -80,8 +80,11 @@ traning.core.decision
 - `manifest.json` 记录 artifact 版本、score 版本、candidate cache 版本、代码版本、文件大小和 sha256。
 - `validate_model_artifact` 会校验 manifest 版本、文件存在性和 sha256。
 - 已区分 `resume` 包和 `inference` 包。
+- `migrate_settings_file` 会把旧 settings 补到当前配置 schema，写出 migration log，并由
+  `import_model_artifact` 调用。
+- `smoke_test_model_artifact` 会从 artifact 反加载 settings，重建空间模型，执行一帧空间
+  forward，并构建时序模型执行一次 `step`，CPU 环境可运行。
 
 ## 后续计划
 
-- 增加 artifact smoke test：加载导出包，运行一帧空间推理和一次 temporal step。
-- 增加 schema migration：旧配置字段迁移到当前 `conf` 模型，并记录迁移日志。
+- 增加真实训练 checkpoint 权重加载后的更大规模 artifact 推理回归。

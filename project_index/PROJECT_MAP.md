@@ -7,11 +7,13 @@
 
 | 模块 | 源码目录 | 对外说明 | Codex 索引 |
 |---|---|---|---|
+| 用户文档 | `docs` | [`INDEX.md`](../docs/INDEX.md)、[`QUICK_START.md`](../docs/QUICK_START.md)、[`TRAINING_WORKFLOW.md`](../docs/TRAINING_WORKFLOW.md) | [`codex/INDEX.md`](../docs/codex/INDEX.md) |
 | 启动入口与自检 | `src/start` | [`README.md`](../src/start/README.md) | 公开入口：`src/start/main.py` |
 | 全局共享 API | `src/package` | [`README.md`](../src/package/README.md) | 公开入口：`src/package/__init__.py` |
 | 运行环境检查 | `environment` | 环境/CUDA 诊断脚本与 Python 检查 API | 公开入口：`environment/__init__.py` |
 | 训练前处理 | `src/before_traning` | [`README.md`](../src/before_traning/docs/README.md) | [`CODEX_INDEX.md`](../src/before_traning/docs/CODEX_INDEX.md) |
-| 模型训练 | `src/traning` | [`TRAINING_PLAN.md`](../src/traning/docs/TRAINING_PLAN.md)、[`TRAINING_READINESS.md`](../src/traning/docs/TRAINING_READINESS.md)、[`OPTIMIZATION_MODULE.md`](../src/traning/docs/OPTIMIZATION_MODULE.md)、[`LIB_STRUCTURE_AUDIT.md`](../src/traning/docs/LIB_STRUCTURE_AUDIT.md)、[`DATASET_IMPORT_PLAN.md`](../src/traning/docs/DATASET_IMPORT_PLAN.md)、[`SPATIAL_PLAN.md`](../src/traning/docs/SPATIAL_PLAN.md)、[`TEMPORAL_PLAN.md`](../src/traning/docs/TEMPORAL_PLAN.md)、[`DECISION_PLAN.md`](../src/traning/docs/DECISION_PLAN.md)、[`RESULT_EXPORT_PLAN.md`](../src/traning/docs/RESULT_EXPORT_PLAN.md)、[`MODEL_EXPORT_PLAN.md`](../src/traning/docs/MODEL_EXPORT_PLAN.md)、[`ENVIRONMENT.md`](../src/traning/docs/ENVIRONMENT.md) | [`CODEX_INDEX.md`](../src/traning/docs/CODEX_INDEX.md) |
+| 模型训练 | `src/traning` | [`TRAINING_PLAN.md`](../src/traning/docs/TRAINING_PLAN.md)、[`TRAINING_READINESS.md`](../src/traning/docs/TRAINING_READINESS.md)、[`PLAN_GAP_AUDIT.md`](../src/traning/docs/PLAN_GAP_AUDIT.md)、[`OPTIMIZATION_MODULE.md`](../src/traning/docs/OPTIMIZATION_MODULE.md)、[`LIB_STRUCTURE_AUDIT.md`](../src/traning/docs/LIB_STRUCTURE_AUDIT.md)、[`DATASET_IMPORT_PLAN.md`](../src/traning/docs/DATASET_IMPORT_PLAN.md)、[`SPATIAL_PLAN.md`](../src/traning/docs/SPATIAL_PLAN.md)、[`TEMPORAL_PLAN.md`](../src/traning/docs/TEMPORAL_PLAN.md)、[`DECISION_PLAN.md`](../src/traning/docs/DECISION_PLAN.md)、[`RESULT_EXPORT_PLAN.md`](../src/traning/docs/RESULT_EXPORT_PLAN.md)、[`MODEL_EXPORT_PLAN.md`](../src/traning/docs/MODEL_EXPORT_PLAN.md)、[`ENVIRONMENT.md`](../src/traning/docs/ENVIRONMENT.md) | [`CODEX_INDEX.md`](../src/traning/docs/CODEX_INDEX.md) |
+| 中文训练可视化 | `src/visualization` | [`README.md`](../src/visualization/docs/README.md)、[`INDEX.md`](../src/visualization/docs/INDEX.md)、[`VISUALIZATION_ARCHITECTURE.md`](../src/visualization/docs/VISUALIZATION_ARCHITECTURE.md)、[`VISUALIZATION_API.md`](../src/visualization/docs/VISUALIZATION_API.md)、[`TERMINAL_UI.md`](../src/visualization/docs/TERMINAL_UI.md)、[`GALLERY_MIGRATION.md`](../src/visualization/docs/GALLERY_MIGRATION.md) | 公开入口：`src/visualization/lib/__init__.py` |
 
 ## 全局 API 约定
 
@@ -24,6 +26,8 @@
 - 当前跨模块稳定 API 包括 `package.contracts`、`package.checks` 和
   `package.dataset_split`；其中 dataset split 维护
   `training_package/splits/dataset_split_manifest.json`，供 start 同步、traning 读取。
+- 中文训练控制台的稳定 API 位于 `visualization.lib`；训练核心只能使用 reporter、
+  gallery API 和状态 DTO，不依赖 Rich、Panel 或 `visualization.core` 内部实现。
 
 ## start 最短阅读路径
 
@@ -62,8 +66,9 @@
 8. 运行 `python project_index/build_index.py --lookup 符号名` 定位实现。
 9. 当前 core 阶段目录：`core/dataset_import`、`core/spatial`、
    `core/temporal`、`core/decision`、`core/result_export`、`core/model_export`。
-   训练闭环控制目录是 `core/optimization`。空间训练入口是 `core/spatial`，
-   候选缓存与阶段编排入口是 `core/decision`。
+   训练闭环控制目录是 `core/optimization`，完整生命周期编排目录是
+   `core/full_flow`。空间训练入口是 `core/spatial`，候选缓存与单轮阶段编排入口是
+   `core/decision`。
 10. 批次评估图集入口是 `save-annotation-gallery`；结果契约位于
    `state/gallery_schema.py`，按最高分 trial 和六个数据子项目生成 `passed/failed`
    标注目录。
