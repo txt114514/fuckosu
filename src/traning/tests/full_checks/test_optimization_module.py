@@ -8,6 +8,7 @@ from traning.core.optimization import (
     AGGREGATE_SCORE_VERSION,
     OptimizationExecutorConfig,
     ParameterSearchConfig,
+    SQLiteTrialStore,
     SampleScoringInput,
     TrialHistoryEntry,
     analyze_trial_attribution,
@@ -16,6 +17,7 @@ from traning.core.optimization import (
     evaluate_curriculum_gate,
     execute_optimization_plan,
     plan_next_trial,
+    score_trial_objectives,
     score_sample,
     score_trial,
 )
@@ -101,6 +103,9 @@ class OptimizationModuleTests(unittest.TestCase):
         )
 
         self.assertEqual(plan.asha_action, "prune")
+        self.assertTrue(plan.asha_reasons)
+        self.assertIn("asha_reasons", plan.as_dict())
+        self.assertLess(plan.objective_score, report.quality_score)
         self.assertIn("temporal", plan.priority_domains)
         self.assertEqual(plan.parameter_updates["search"]["sampler"], "tpe")
         self.assertEqual(
@@ -198,6 +203,56 @@ class OptimizationModuleTests(unittest.TestCase):
             self.assertEqual(execution.source_trial_id, "trial-executor")
             self.assertEqual(execution.job.parent_checkpoint_path, checkpoint)
             self.assertGreaterEqual(execution.job.budget_steps, 5)
+
+    def test_sqlite_trial_store_records_execution(self) -> None:
+        sample = SampleScoringInput(
+            sample_key="item_000001/segment_sqlite",
+            subproject="single_point",
+            targets=(_circle_target(),),
+            predictions=(PredictedClick(time_ms=800.0, x=100.0, y=100.0),),
+            circle_radius=10.0,
+        )
+        report = score_trial(
+            "trial-sqlite",
+            (sample,),
+            metrics={"peak_vram_mb": 2048.0, "latency_ms": 12.0},
+        )
+        attribution = analyze_trial_attribution(report)
+        plan = plan_next_trial(report, attribution)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            store = SQLiteTrialStore(Path(tmpdir) / "trials.sqlite")
+            execute_optimization_plan(
+                report,
+                attribution,
+                plan,
+                config=OptimizationExecutorConfig(output_dir=Path(tmpdir)),
+                store=store,
+            )
+            records = store.load()
+
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]["source_trial_id"], "trial-sqlite")
+        self.assertIn("objective_score", records[0]["plan"])
+
+    def test_multi_objective_score_uses_quality_vram_and_latency(self) -> None:
+        sample = SampleScoringInput(
+            sample_key="item_000001/segment_objective",
+            subproject="single_point",
+            targets=(_circle_target(),),
+            predictions=(PredictedClick(time_ms=1000.0, x=100.0, y=100.0),),
+            circle_radius=10.0,
+        )
+        report = score_trial(
+            "trial-objective",
+            (sample,),
+            metrics={"peak_vram_mb": 1000.0, "latency_ms": 20.0},
+        )
+
+        objective = score_trial_objectives(report)
+
+        self.assertEqual(objective.values["quality_score"], 1.0)
+        self.assertLess(objective.composite_score, 1.0)
 
 
 if __name__ == "__main__":

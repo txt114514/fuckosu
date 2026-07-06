@@ -27,9 +27,11 @@ from traning.core.model_export import (
 from traning.state.versioning import collect_code_version
 from visualization.lib import (
     DatasetUsageState,
+    PipelinePhase,
     PipelineStageState,
     TrainingEvent,
     TrainingReporter,
+    TrainingStopState,
     collect_resource_state,
     create_dashboard_reporter,
 )
@@ -130,10 +132,30 @@ def run_training_ramp(
     progress_language: str = "zh-CN",
     resume_policy: str = "none",
     resume_stage_checkpoints: Mapping[str, Path] | None = None,
+    full_gallery_output_root: Path | None = None,
+    full_gallery_samples_per_group: int | None = None,
+    reporter: TrainingReporter | None = None,
 ) -> RampRunResult:
     selected_run_id = run_id or datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     output_dir = output_root / selected_run_id
     _init_layout(output_dir)
+    if reporter is not None:
+        return _run_training_ramp_with_reporter(
+            config_path=config_path,
+            device=device,
+            target_config_path=target_config_path,
+            run_id=selected_run_id,
+            output_dir=output_dir,
+            auto_launch_full=auto_launch_full,
+            force_level=force_level,
+            max_levels=max_levels,
+            run_full_checks=run_full_checks,
+            reporter=reporter,
+            resume_policy=resume_policy,
+            resume_stage_checkpoints=dict(resume_stage_checkpoints or {}),
+            full_gallery_output_root=full_gallery_output_root,
+            full_gallery_samples_per_group=full_gallery_samples_per_group,
+        )
     dashboard_handle = create_dashboard_reporter(
         run_id=selected_run_id,
         output_dir=output_dir / "dashboard",
@@ -154,6 +176,8 @@ def run_training_ramp(
             reporter=dashboard.reporter,
             resume_policy=resume_policy,
             resume_stage_checkpoints=dict(resume_stage_checkpoints or {}),
+            full_gallery_output_root=full_gallery_output_root,
+            full_gallery_samples_per_group=full_gallery_samples_per_group,
         )
 
 
@@ -171,6 +195,8 @@ def _run_training_ramp_with_reporter(
     reporter: TrainingReporter,
     resume_policy: str,
     resume_stage_checkpoints: Mapping[str, Path],
+    full_gallery_output_root: Path | None,
+    full_gallery_samples_per_group: int | None,
 ) -> RampRunResult:
     target_config = target_config_path or DEFAULT_FULL_CONFIG
     resolved_target_config, target = ensure_full_target_config(
@@ -203,22 +229,53 @@ def _run_training_ramp_with_reporter(
         )
     )
 
-    preflight = _run_preflight(
-        config_path=config_path,
-        device=device,
-        output_dir=output_dir,
-        run_full_checks=run_full_checks,
-        reporter=reporter,
-    )
+    active_level: RampLevelSpec | None = None
+    active_index = 0
+    try:
+        preflight = _run_preflight(
+            config_path=config_path,
+            device=device,
+            output_dir=output_dir,
+            run_full_checks=run_full_checks,
+            reporter=reporter,
+        )
+    except Exception as error:
+        manifest["status"] = "failed"
+        manifest["failed_at_utc"] = datetime.now(UTC).isoformat()
+        manifest["failure"] = {"type": type(error).__name__, "message": str(error)}
+        _write_json(output_dir / "manifest.json", manifest)
+        _report_ramp_failed(
+            reporter,
+            error=error,
+            active_level=None,
+            active_index=0,
+            completed_levels=0,
+            total_levels=0,
+        )
+        raise
     manifest["preflight"] = preflight
     _write_json(output_dir / "manifest.json", manifest)
 
     levels = build_ramp_levels(target)
     if max_levels is not None:
         levels = levels[:max_levels]
+    _report_ramp_started(
+        reporter,
+        levels=levels,
+        target=target,
+        auto_launch_full=auto_launch_full,
+    )
     completed = "level_00_preflight"
     try:
         for index, level in enumerate(levels, start=1):
+            active_level = level
+            active_index = index
+            _report_level_started(
+                reporter,
+                level=level,
+                index=index,
+                total_levels=len(levels),
+            )
             level_dir = output_dir / f"level_{index:02d}_{level.key}"
             state_path = level_dir / "level_state.json"
             if (
@@ -226,7 +283,16 @@ def _run_training_ramp_with_reporter(
                 and state_path.exists()
                 and _read_json(state_path).get("status") == "passed"
             ):
-                manifest["levels"].append(_read_json(state_path))
+                record = _read_json(state_path)
+                manifest["levels"].append(record)
+                _report_level_finished(
+                    reporter,
+                    level=level,
+                    index=index,
+                    total_levels=len(levels),
+                    record=record,
+                    restored=True,
+                )
                 completed = level.key
                 continue
             record = _run_level(
@@ -237,9 +303,18 @@ def _run_training_ramp_with_reporter(
                 reporter=reporter,
                 resume_policy=resume_policy,
                 resume_stage_checkpoints=resume_stage_checkpoints,
+                gallery_output_root=full_gallery_output_root,
+                gallery_samples_per_group=full_gallery_samples_per_group,
             )
             manifest["levels"].append(record)
             _write_json(output_dir / "manifest.json", manifest)
+            _report_level_finished(
+                reporter,
+                level=level,
+                index=index,
+                total_levels=len(levels),
+                record=record,
+            )
             completed = level.key
         readiness = _write_final_readiness(
             output_dir=output_dir,
@@ -248,22 +323,31 @@ def _run_training_ramp_with_reporter(
             levels=levels,
             auto_launch_full=auto_launch_full,
         )
+        _report_ramp_finished(
+            reporter,
+            levels=levels,
+            readiness_path=readiness,
+            auto_launch_full=auto_launch_full,
+        )
         full_run_dir = None
         full_started = False
         if auto_launch_full:
             full_run_dir = output_dir / "full_training"
+            _report_full_training_started(reporter, level=target.as_level())
             full_record = _launch_full_training(
                 level=target.as_level(),
                 config_path=resolved_target_config,
                 run_dir=full_run_dir,
                 device=device,
-                output_dir=output_dir,
                 reporter=reporter,
                 resume_policy=resume_policy,
                 resume_stage_checkpoints=resume_stage_checkpoints,
+                gallery_output_root=full_gallery_output_root,
+                gallery_samples_per_group=full_gallery_samples_per_group,
             )
             manifest["full_training"] = full_record
             full_started = True
+            _report_full_training_finished(reporter, record=full_record)
         manifest["status"] = "passed"
         manifest["completed_at_utc"] = datetime.now(UTC).isoformat()
         _write_json(output_dir / "manifest.json", manifest)
@@ -288,6 +372,16 @@ def _run_training_ramp_with_reporter(
             levels=levels,
             auto_launch_full=auto_launch_full,
             failure=str(error),
+        )
+        _report_ramp_failed(
+            reporter,
+            error=error,
+            active_level=active_level,
+            active_index=active_index,
+            completed_levels=len(
+                [item for item in manifest.get("levels", ()) if item.get("status") == "passed"]
+            ),
+            total_levels=len(levels),
         )
         raise
 
@@ -354,6 +448,12 @@ def _run_preflight(
     preflight_dir = output_dir / "level_00_preflight"
     preflight_dir.mkdir(parents=True, exist_ok=True)
     env = collect_environment_report()
+    reporter.update_metrics(
+        pipeline_phase=PipelinePhase.PRETRAIN_CHECK.value,
+        phase="训练预检",
+        status="checking",
+        trial_status=None,
+    )
     reporter.update_pipeline_stage(
         PipelineStageState(
             stage_id="gpu_bridge",
@@ -449,6 +549,408 @@ def _run_preflight(
     return result
 
 
+def _report_ramp_started(
+    reporter: TrainingReporter,
+    *,
+    levels: list[RampLevelSpec],
+    target: RampTarget,
+    auto_launch_full: bool,
+) -> None:
+    total_steps = sum(level.spatial_steps + level.temporal_steps for level in levels)
+    reporter.update_pipeline_stage(
+        PipelineStageState(
+            stage_id="training_ramp",
+            name="受控渐进放大",
+            status="running",
+            processed=0,
+            total=len(levels),
+            message="UI 已启动，准备自动执行渐进训练",
+        )
+    )
+    reporter.update_metrics(
+        pipeline_phase=PipelinePhase.PROGRESSIVE_PREPARATION.value,
+        phase="受控渐进放大准备",
+        status="running",
+        current_level=None,
+        trial_status=None,
+        completed_levels=0,
+        total_levels=len(levels),
+        global_step=0,
+        target_global_steps=total_steps,
+        spatial_step=0,
+        spatial_target=target.spatial_steps,
+        temporal_step=0,
+        temporal_target=target.temporal_steps,
+        current_grade="observing",
+        best_grade=None,
+        promotion_status=(
+            "渐进训练启动，完成后自动进入正式训练"
+            if auto_launch_full
+            else "渐进训练启动"
+        ),
+        consecutive_passes=0,
+        required_passes=len(levels),
+    )
+    reporter.emit_event(
+        TrainingEvent.create(
+            event_type="ramp",
+            severity="info",
+            message_key="stage_started",
+            message_args={"stage": "受控渐进放大"},
+        )
+    )
+
+
+def _report_level_started(
+    reporter: TrainingReporter,
+    *,
+    level: RampLevelSpec,
+    index: int,
+    total_levels: int,
+) -> None:
+    stage_id = _level_stage_id(level)
+    reporter.update_pipeline_stage(
+        PipelineStageState(
+            stage_id=stage_id,
+            name=_level_title(level),
+            status="running",
+            processed=0,
+            total=level.spatial_steps + level.temporal_steps,
+            message="正在训练并等待 gate 判定",
+        )
+    )
+    reporter.update_metrics(
+        pipeline_phase=PipelinePhase.TRAINING.value,
+        phase=_level_title(level),
+        status="running",
+        current_level=level.key,
+        trial_status="training",
+        completed_levels=index - 1,
+        total_levels=total_levels,
+        global_step=0,
+        target_global_steps=level.spatial_steps + level.temporal_steps,
+        spatial_step=0,
+        spatial_target=level.spatial_steps,
+        temporal_step=0,
+        temporal_target=level.temporal_steps,
+        current_trial_id=f"ramp-{level.key}",
+        current_grade="observing",
+        promotion_status=f"{_level_title(level)} 正在训练",
+        consecutive_passes=index - 1,
+        required_passes=total_levels,
+        current_parameters={"ramp_level": level.as_dict()},
+    )
+    reporter.emit_event(
+        TrainingEvent.create(
+            event_type="ramp_level",
+            severity="info",
+            message_key="stage_started",
+            message_args={"stage": _level_title(level)},
+            level=level.key,
+            trial_id=f"ramp-{level.key}",
+        )
+    )
+
+
+def _report_level_finished(
+    reporter: TrainingReporter,
+    *,
+    level: RampLevelSpec,
+    index: int,
+    total_levels: int,
+    record: Mapping[str, Any],
+    restored: bool = False,
+) -> None:
+    score = _record_quality_score(record)
+    threshold = _record_pass_threshold(record)
+    gallery_path = _record_gallery_path(record)
+    reporter.update_pipeline_stage(
+        PipelineStageState(
+            stage_id=_level_stage_id(level),
+            name=_level_title(level),
+            status="passed",
+            processed=level.spatial_steps + level.temporal_steps,
+            total=level.spatial_steps + level.temporal_steps,
+            output_path=str(record.get("artifact_manifest") or gallery_path or ""),
+            message="已通过 gate" + ("，来自已通过记录" if restored else ""),
+            score=score,
+            threshold=threshold,
+        )
+    )
+    reporter.update_pipeline_stage(
+        PipelineStageState(
+            stage_id="training_ramp",
+            name="受控渐进放大",
+            status="running" if index < total_levels else "passed",
+            processed=index,
+            total=total_levels,
+            output_path=str(record.get("artifact_manifest") or ""),
+            message=f"{_level_title(level)} 已通过",
+        )
+    )
+    reporter.update_metrics(
+        pipeline_phase=PipelinePhase.TRAINING.value,
+        phase=_level_title(level),
+        status="running" if index < total_levels else "passed",
+        current_level=level.key,
+        trial_status="promoted" if index < total_levels else "passed",
+        completed_levels=index,
+        total_levels=total_levels,
+        global_step=level.spatial_steps + level.temporal_steps,
+        target_global_steps=level.spatial_steps + level.temporal_steps,
+        spatial_step=level.spatial_steps,
+        spatial_target=level.spatial_steps,
+        temporal_step=level.temporal_steps,
+        temporal_target=level.temporal_steps,
+        score=score,
+        parameter_best_score=score,
+        level_best_score=score,
+        frames_per_second=record.get("frames_per_second"),
+        steps_per_second=record.get("steps_per_second"),
+        current_grade="reached",
+        best_grade="reached",
+        promotion_status=f"{_level_title(level)} 已通过 gate",
+        consecutive_passes=index,
+        required_passes=total_levels,
+    )
+    if restored and score is not None:
+        reporter.report_score(score=score, trial_id=f"ramp-{level.key}", level=level.key)
+    if gallery_path:
+        reporter.emit_event(
+            TrainingEvent.create(
+                event_type="gallery",
+                severity="success",
+                message_key="gallery_saved",
+                message_args={"path": gallery_path},
+                level=level.key,
+                trial_id=f"ramp-{level.key}",
+            )
+        )
+    reporter.emit_event(
+        TrainingEvent.create(
+            event_type="ramp_level",
+            severity="success",
+            message_key="stage_finished",
+            message_args={"stage": _level_title(level), "status": "已通过"},
+            level=level.key,
+            trial_id=f"ramp-{level.key}",
+        )
+    )
+
+
+def _report_ramp_finished(
+    reporter: TrainingReporter,
+    *,
+    levels: list[RampLevelSpec],
+    readiness_path: Path,
+    auto_launch_full: bool,
+) -> None:
+    reporter.update_pipeline_stage(
+        PipelineStageState(
+            stage_id="final_readiness",
+            name="最终 readiness",
+            status="passed",
+            processed=1,
+            total=1,
+            output_path=str(readiness_path),
+            message="渐进训练已全部通过",
+        )
+    )
+    reporter.update_metrics(
+        pipeline_phase=PipelinePhase.TRAINING.value,
+        phase="最终 readiness",
+        status="passed" if not auto_launch_full else "running",
+        trial_status="promoted" if auto_launch_full else "passed",
+        current_grade="promotable",
+        best_grade="promotable",
+        promotion_status=(
+            "全部 Level 已通过，正在进入正式训练"
+            if auto_launch_full
+            else "全部 Level 已通过"
+        ),
+        completed_levels=len(levels),
+        total_levels=len(levels),
+        consecutive_passes=len(levels),
+        required_passes=len(levels),
+    )
+    reporter.emit_event(
+        TrainingEvent.create(
+            event_type="ramp",
+            severity="success",
+            message_key="stage_finished",
+            message_args={"stage": "受控渐进放大", "status": "已通过"},
+        )
+    )
+
+
+def _report_full_training_started(
+    reporter: TrainingReporter,
+    *,
+    level: RampLevelSpec,
+) -> None:
+    reporter.update_pipeline_stage(
+        PipelineStageState(
+            stage_id="full_training",
+            name="全模型正式训练",
+            status="running",
+            processed=0,
+            total=level.spatial_steps + level.temporal_steps,
+            message="渐进训练通过后自动启动",
+        )
+    )
+    reporter.update_metrics(
+        pipeline_phase=PipelinePhase.TRAINING.value,
+        phase="全模型正式训练",
+        status="running",
+        current_level=level.key,
+        current_trial_id="full-model",
+        trial_status="training",
+        global_step=0,
+        target_global_steps=level.spatial_steps + level.temporal_steps,
+        spatial_step=0,
+        spatial_target=level.spatial_steps,
+        temporal_step=0,
+        temporal_target=level.temporal_steps,
+        current_grade="promoted",
+        promotion_status="正式训练进行中",
+    )
+
+
+def _report_full_training_finished(
+    reporter: TrainingReporter,
+    *,
+    record: Mapping[str, Any],
+) -> None:
+    summary = dict(record.get("summary") or {})
+    score = _summary_quality_score(summary)
+    reporter.update_pipeline_stage(
+        PipelineStageState(
+            stage_id="full_training",
+            name="全模型正式训练",
+            status="passed",
+            processed=int(summary.get("spatial_steps", 0))
+            + int(summary.get("temporal_steps", 0)),
+            total=None,
+            output_path=str(record.get("run_dir") or ""),
+            message="正式训练完成",
+        )
+    )
+    reporter.update_metrics(
+        pipeline_phase=PipelinePhase.TRAINING.value,
+        phase="全模型正式训练",
+        status="passed",
+        score=score,
+        trial_status="completed",
+        current_grade="promoted",
+        best_grade="promoted",
+        promotion_status="正式训练完成",
+    )
+    if score is not None:
+        reporter.report_score(score=score, trial_id="full-model", level="target")
+
+
+def _report_ramp_failed(
+    reporter: TrainingReporter,
+    *,
+    error: Exception,
+    active_level: RampLevelSpec | None,
+    active_index: int,
+    completed_levels: int,
+    total_levels: int,
+) -> None:
+    message = f"{type(error).__name__}: {error}"
+    if active_level is not None:
+        reporter.update_pipeline_stage(
+            PipelineStageState(
+                stage_id=_level_stage_id(active_level),
+                name=_level_title(active_level),
+                status="failed",
+                processed=0,
+                total=active_level.spatial_steps + active_level.temporal_steps,
+                error_reason=message,
+                blocks_training=True,
+                message="未通过 gate 或训练异常",
+            )
+        )
+    reporter.update_pipeline_stage(
+        PipelineStageState(
+            stage_id="training_ramp",
+            name="受控渐进放大",
+            status="failed",
+            processed=completed_levels,
+            total=total_levels,
+            error_reason=message,
+            blocks_training=True,
+            message="渐进训练失败",
+        )
+    )
+    reporter.update_metrics(
+        pipeline_phase=PipelinePhase.FAILED.value,
+        phase=_level_title(active_level) if active_level is not None else "受控渐进放大",
+        status="failed",
+        current_level=active_level.key if active_level is not None else None,
+        trial_status="failed",
+        completed_levels=completed_levels,
+        total_levels=total_levels,
+        current_grade="stopped",
+        promotion_status=(
+            f"{_level_title(active_level)} 失败"
+            if active_level is not None
+            else "渐进训练失败"
+        ),
+        consecutive_passes=completed_levels,
+        required_passes=total_levels,
+    )
+    reporter.request_stop(
+        TrainingStopState(
+            reason="RAMP_FAILED",
+            message=message,
+            exit_code=1,
+            step=active_index or None,
+            target_step=total_levels or None,
+        )
+    )
+
+
+def _level_stage_id(level: RampLevelSpec) -> str:
+    return f"level_{level.key}"
+
+
+def _level_title(level: RampLevelSpec | None) -> str:
+    if level is None:
+        return "受控渐进放大"
+    return f"Level {level.key.upper()}"
+
+
+def _record_quality_score(record: Mapping[str, Any]) -> float | None:
+    evaluation = record.get("evaluation")
+    if not isinstance(evaluation, Mapping):
+        return None
+    value = evaluation.get("quality_score")
+    return float(value) if value is not None else None
+
+
+def _record_pass_threshold(record: Mapping[str, Any]) -> float | None:
+    evaluation = record.get("evaluation")
+    if not isinstance(evaluation, Mapping):
+        return None
+    value = evaluation.get("pass_threshold")
+    return float(value) if value is not None else None
+
+
+def _summary_quality_score(summary: Mapping[str, Any]) -> float | None:
+    value = summary.get("quality_score")
+    return float(value) if value is not None else None
+
+
+def _record_gallery_path(record: Mapping[str, Any]) -> str | None:
+    evaluation = record.get("evaluation")
+    if not isinstance(evaluation, Mapping):
+        return None
+    value = evaluation.get("gallery_output_dir")
+    return str(value) if value else None
+
+
 def _run_level(
     *,
     level: RampLevelSpec,
@@ -458,6 +960,8 @@ def _run_level(
     reporter: TrainingReporter,
     resume_policy: str,
     resume_stage_checkpoints: Mapping[str, Path],
+    gallery_output_root: Path | None,
+    gallery_samples_per_group: int | None,
 ) -> dict[str, Any]:
     level_dir.mkdir(parents=True, exist_ok=True)
     config_path = _write_level_config(base_config, level_dir, level)
@@ -483,6 +987,7 @@ def _run_level(
             sequence_length=level.sequence_length,
             candidate_slots=level.candidate_slots,
             parameter_group_id=f"ramp-{level.key}",
+            curriculum_level=level.key,
             render_gallery=True,
             gallery_output_root=level_dir / "galleries",
             gallery_samples_per_group=level.gallery_samples_per_group,
@@ -527,6 +1032,21 @@ def _run_level(
         artifact_smoke=artifact_smoke,
         dry_run=dry_run,
     )
+    reporter.update_metrics(
+        pipeline_phase=PipelinePhase.TRAINING.value,
+        phase=_level_title(level),
+        status="passed",
+        current_level=level.key,
+        trial_status="passed",
+        current_parameters=_ramp_parameter_snapshot(
+            level=level,
+            record=record,
+            config_path=config_path,
+            device=device,
+            resume_policy=resume_policy,
+            resume_stage_checkpoints=resume_stage_checkpoints,
+        )
+    )
     reporter.report_score(
         score=float(record["evaluation"]["quality_score"]),
         trial_id=f"ramp-{level.key}",
@@ -544,6 +1064,8 @@ def _run_level(
             processed=level.spatial_steps + level.temporal_steps,
             total=level.spatial_steps + level.temporal_steps,
             output_path=str(level_dir / "level_state.json"),
+            score=float(record["evaluation"]["quality_score"]),
+            threshold=record["evaluation"].get("pass_threshold"),
         )
     )
     _write_json(level_dir / "level_state.json", record)
@@ -635,16 +1157,60 @@ def _gate_level(
     }
 
 
+def _ramp_parameter_snapshot(
+    *,
+    level: RampLevelSpec,
+    record: Mapping[str, Any],
+    config_path: Path,
+    device: str,
+    resume_policy: str,
+    resume_stage_checkpoints: Mapping[str, Path],
+) -> dict[str, Any]:
+    return {
+        "parameter_group_id": f"ramp-{level.key}",
+        "device": device,
+        "source_config": str(config_path),
+        "ramp": {
+            "level": level.as_dict(),
+            "steps_per_second": record["steps_per_second"],
+            "frames_per_second": record["frames_per_second"],
+            "peak_vram_gib": record["peak_vram_gib"],
+            "slider_score": record["slider_score"],
+            "slider_sample_count": record["slider_sample_count"],
+            "resume_policy": resume_policy,
+            "resume_stage_checkpoints": {
+                stage: str(path)
+                for stage, path in resume_stage_checkpoints.items()
+            },
+        },
+        "evaluation": {
+            "quality_score": record["evaluation"]["quality_score"],
+            "pass_threshold": record["evaluation"].get("pass_threshold"),
+            "passed": record["evaluation"]["passed"],
+            "gallery_status": record["evaluation"]["gallery_status"],
+            "report_path": record["evaluation"]["report_path"],
+            "asha_action": record["evaluation"].get("asha_action"),
+            "asha_reasons": record["evaluation"].get("asha_reasons", ()),
+        },
+        "artifact": {
+            "manifest": record["artifact_manifest"],
+            "smoke": record["artifact_smoke"],
+        },
+        "dry_run": record["dry_run"],
+    }
+
+
 def _launch_full_training(
     *,
     level: RampLevelSpec,
     config_path: Path,
     run_dir: Path,
     device: str,
-    output_dir: Path,
     reporter: TrainingReporter,
     resume_policy: str,
     resume_stage_checkpoints: Mapping[str, Path],
+    gallery_output_root: Path | None,
+    gallery_samples_per_group: int | None,
 ) -> dict[str, Any]:
     started = time.monotonic()
     settings = load_settings(config_path)
@@ -661,8 +1227,10 @@ def _launch_full_training(
             candidate_slots=level.candidate_slots,
             parameter_group_id="full-model",
             render_gallery=True,
-            gallery_output_root=output_dir / "galleries",
-            gallery_samples_per_group=level.gallery_samples_per_group,
+            gallery_output_root=gallery_output_root,
+            gallery_samples_per_group=(
+                gallery_samples_per_group or level.gallery_samples_per_group
+            ),
             reporter=reporter,
             resume_policy=resume_policy,
             resume_stage_checkpoints=resume_stage_checkpoints,
@@ -766,6 +1334,10 @@ def _run_job_dry_run(
             "--dry-run",
         ],
         cwd=Path.cwd(),
+        env={
+            **os.environ,
+            "PYTHONPATH": _pythonpath_with_src(),
+        },
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -773,6 +1345,14 @@ def _run_job_dry_run(
     )
     log_path.write_text(completed.stdout, encoding="utf-8")
     return {"returncode": completed.returncode, "log": str(log_path)}
+
+
+def _pythonpath_with_src() -> str:
+    entries = [str(Path.cwd() / "src"), str(Path.cwd())]
+    existing = os.environ.get("PYTHONPATH")
+    if existing:
+        entries.append(existing)
+    return os.pathsep.join(entries)
 
 
 def _write_level_config(

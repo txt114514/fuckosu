@@ -4,7 +4,7 @@ import unittest
 
 import torch
 
-from traning.lib.models import CausalTemporalModel
+from traning.lib.models import CausalTemporalModel, DynamicSparseLinear
 
 
 class CausalTemporalTests(unittest.TestCase):
@@ -35,6 +35,76 @@ class CausalTemporalTests(unittest.TestCase):
         state = model.initial_state(1, "cpu")
         output, next_state = model.step(torch.randn(1, 4), state)
         self.assertEqual(output.next_hidden_state.shape, next_state.shape)
+
+    def test_smet_sparse_heads_run(self) -> None:
+        model = CausalTemporalModel(
+            input_size=4,
+            hidden_size=6,
+            layers=1,
+            candidate_slots=2,
+            smet_enabled=True,
+            smet_sparsity=0.50,
+            smet_update_interval=1,
+        )
+        self.assertTrue(
+            any(isinstance(module, DynamicSparseLinear) for module in model.modules())
+        )
+        outputs, _ = model(torch.randn(3, 1, 4))
+        self.assertEqual(outputs[-1].selected_candidate_logits.shape, (1, 2))
+
+    def test_smet_sparse_heads_backward_after_dynamic_updates(self) -> None:
+        torch.manual_seed(321)
+        model = CausalTemporalModel(
+            input_size=4,
+            hidden_size=6,
+            layers=1,
+            candidate_slots=2,
+            smet_enabled=True,
+            smet_sparsity=0.50,
+            smet_update_interval=1,
+        )
+        model.train()
+        outputs, _ = model(torch.randn(4, 1, 4))
+        loss = sum(
+            output.action_logits.sum()
+            + output.selected_candidate_logits.sum()
+            + output.x.sum()
+            + output.y.sum()
+            + output.time_offset_ms.sum()
+            for output in outputs
+        )
+
+        loss.backward()
+
+        for parameter in model.parameters():
+            self.assertIsNotNone(parameter.grad)
+            self.assertTrue(torch.isfinite(parameter.grad).all())
+
+    def test_smet_training_forward_does_not_mutate_mask_buffers(self) -> None:
+        torch.manual_seed(654)
+        model = CausalTemporalModel(
+            input_size=4,
+            hidden_size=6,
+            layers=1,
+            candidate_slots=2,
+            smet_enabled=True,
+            smet_sparsity=0.50,
+            smet_update_interval=1,
+        )
+        model.train()
+        sparse_layers = [
+            module for module in model.modules() if isinstance(module, DynamicSparseLinear)
+        ]
+        versions = [layer.mask._version for layer in sparse_layers]
+
+        outputs, _ = model(torch.randn(4, 1, 4))
+        loss = sum(output.action_logits.sum() for output in outputs)
+        loss.backward()
+
+        self.assertEqual(
+            [layer.mask._version for layer in sparse_layers],
+            versions,
+        )
 
     def test_mutating_future_window_does_not_change_prefix(self) -> None:
         torch.manual_seed(456)

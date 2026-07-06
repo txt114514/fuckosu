@@ -101,14 +101,17 @@ memory:
   cudnn_benchmark: true
   matmul_float32_precision: high
   grad_scaler: auto
-  compile_model: false
+  compile_model: true
   max_vram_gib: 6.5
   reserve_vram_gib: 1.0
   max_ram_gib: 24.0
   reserve_ram_gib: 4.0
 
 smet:
-  enabled: false
+  enabled: true
+  sparsity: 0.50
+  update_interval: 16
+  min_density: 0.05
 
 candidate_cache:
   output_root: ../runs/candidate_cache
@@ -134,24 +137,30 @@ evaluation:
   min_click_interval_ms: 50.0
 
 visualization:
-  enabled: false
+  enabled: true
   every_n_steps: 500
   output_dir: ../traning_example
   save_images: true
   gallery_samples_per_group: 4
-  show_window: false
+  show_window: true
   window_title: osu! training annotation
   ffplay_binary: ffplay
 
 optimization:
-  enabled: false
+  enabled: true
   max_generated_jobs: 1
-  execute_generated_jobs: false
+  execute_generated_jobs: true
   dry_run: false
   job_only: true
   max_trials: 1
   max_stage: basic
   trial_store_path: ../runs/optimization/trials.jsonl
+  trial_store_backend: sqlite
+  trial_store_sqlite_path: ../runs/optimization/trials.sqlite
+  objective_weights:
+    quality_score: 1.0
+    peak_vram_mb: -0.00005
+    latency_ms: -0.001
 
 training_ramp:
   target:

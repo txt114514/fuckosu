@@ -35,15 +35,15 @@ class StartCliAdapterTests(unittest.TestCase):
         self.assertIsNone(config.patch_limit)
         self.assertIsNone(config.cache_max_frames)
 
-    def test_run_cli_alias_passes_arguments_to_business_function(self) -> None:
+    def test_run_cli_alias_passes_arguments_to_ui_full_flow_function(self) -> None:
         runner = CliRunner()
-        fake_result = SimpleNamespace(ok=True)
+        fake_result = SimpleNamespace(status="passed")
         with (
             patch(
-                "start.main.run_training_startup_flow",
+                "start.main.run_training_ui_flow",
                 return_value=fake_result,
             ) as business,
-            patch("start.main._render_flow_table"),
+            patch("start.main._render_full_flow_table"),
         ):
             result = runner.invoke(
                 start_main.app,
@@ -65,6 +65,28 @@ class StartCliAdapterTests(unittest.TestCase):
         self.assertEqual(kwargs["device"], "cpu")
         self.assertTrue(kwargs["dry_run"])
         self.assertEqual(kwargs["test_level"], "none")
+        self.assertTrue(kwargs["auto_launch_full"])
+        self.assertEqual(kwargs["gallery_output_root"], Path("traning_example"))
+
+    def test_no_args_defaults_to_ui_full_flow(self) -> None:
+        runner = CliRunner()
+        fake_result = SimpleNamespace(status="passed")
+        with (
+            patch(
+                "start.main.run_training_ui_flow",
+                return_value=fake_result,
+            ) as business,
+            patch("start.main._render_full_flow_table"),
+        ):
+            result = runner.invoke(start_main.app, [])
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        kwargs = business.call_args.kwargs
+        self.assertEqual(
+            kwargs["training_config"],
+            start_main.DEFAULT_UI_TRAINING_CONFIG,
+        )
+        self.assertEqual(kwargs["gallery_output_root"], Path("traning_example"))
 
     def test_run_help_is_available(self) -> None:
         runner = CliRunner()

@@ -36,10 +36,18 @@ class FullFlowStageSpec:
 
 FULL_FLOW_STAGES: tuple[FullFlowStageSpec, ...] = (
     FullFlowStageSpec(
+        "ENVIRONMENT_PREFLIGHT",
+        "环境、CUDA、磁盘和配置预检",
+        inputs=("training_config", "device"),
+        outputs=("startup_report",),
+        skippable=False,
+    ),
+    FullFlowStageSpec(
         "SOURCE_CHANGE_CHECK",
         "原始数据变更检测",
         inputs=("before_config", "matched_manifest"),
         outputs=("raw_data_report",),
+        dependencies=("ENVIRONMENT_PREFLIGHT",),
         skippable=False,
     ),
     FullFlowStageSpec(
@@ -75,19 +83,11 @@ FULL_FLOW_STAGES: tuple[FullFlowStageSpec, ...] = (
         skippable=False,
     ),
     FullFlowStageSpec(
-        "ENVIRONMENT_PREFLIGHT",
-        "环境、CUDA、磁盘和配置预检",
-        inputs=("training_config", "device"),
-        outputs=("startup_report",),
-        dependencies=("DATA_QUALITY_CHECK",),
-        skippable=False,
-    ),
-    FullFlowStageSpec(
         "RESUME_DISCOVERY",
         "继承状态发现与兼容性检查",
         inputs=("inherit_from", "resume_policy"),
         outputs=("resume_report",),
-        dependencies=("ENVIRONMENT_PREFLIGHT",),
+        dependencies=("DATA_QUALITY_CHECK",),
         skippable=False,
     ),
     FullFlowStageSpec(

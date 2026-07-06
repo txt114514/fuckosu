@@ -6,6 +6,10 @@ from math import isfinite
 from typing import Any, Literal
 
 from traning.core.optimization.attribution import ATTRIBUTION_DOMAINS, AttributionSummary
+from traning.core.optimization.parameter_search.objectives import (
+    DEFAULT_OBJECTIVE_WEIGHTS,
+    score_trial_objectives,
+)
 from traning.core.optimization.scoring import TrialScoreReport
 from traning.state import CurriculumStage, SearchMethod, TrialStatus
 
@@ -53,12 +57,18 @@ class ParameterSearchConfig:
     asha: ASHAConfig = field(default_factory=ASHAConfig)
     target_peak_vram_mb: float | None = None
     max_hard_examples: int = 64
+    objective_weights: Mapping[str, float] = field(
+        default_factory=lambda: dict(DEFAULT_OBJECTIVE_WEIGHTS)
+    )
 
     def __post_init__(self) -> None:
         if self.target_peak_vram_mb is not None and self.target_peak_vram_mb <= 0:
             raise ValueError("target_peak_vram_mb must be positive")
         if self.max_hard_examples < 0:
             raise ValueError("max_hard_examples must be nonnegative")
+        for weight in self.objective_weights.values():
+            if not isfinite(weight):
+                raise ValueError("objective weights must be finite")
 
 
 @dataclass(frozen=True)
@@ -91,8 +101,12 @@ class OptimizationPlan:
     parameter_updates: Mapping[str, Mapping[str, Any]]
     hard_example_keys: tuple[str, ...]
     priority_domains: tuple[str, ...]
+    asha_reasons: tuple[str, ...]
     reasons: tuple[str, ...]
     quality_score: float
+    objective_score: float
+    objective_values: Mapping[str, float]
+    objective_weights: Mapping[str, float]
     score_version: str
 
     def as_dict(self) -> dict[str, Any]:
@@ -109,8 +123,12 @@ class OptimizationPlan:
             },
             "hard_example_keys": list(self.hard_example_keys),
             "priority_domains": list(self.priority_domains),
+            "asha_reasons": list(self.asha_reasons),
             "reasons": list(self.reasons),
             "quality_score": self.quality_score,
+            "objective_score": self.objective_score,
+            "objective_values": dict(self.objective_values),
+            "objective_weights": dict(self.objective_weights),
             "score_version": self.score_version,
         }
 
@@ -282,6 +300,11 @@ def plan_next_trial(
         config=config.asha,
     )
     reasons = list(asha_reasons)
+    objectives = score_trial_objectives(
+        report,
+        weights=config.objective_weights,
+    )
+    reasons.append(f"multi-objective score {objectives.composite_score:.6f}")
     updates: dict[str, dict[str, Any]] = {}
     _apply_domain_updates(updates, attribution, reasons)
     _apply_overall_updates(updates, report, config, reasons)
@@ -309,8 +332,12 @@ def plan_next_trial(
             limit=config.max_hard_examples,
         ),
         priority_domains=_priority_domains(attribution),
+        asha_reasons=asha_reasons,
         reasons=tuple(dict.fromkeys(reasons)),
         quality_score=report.quality_score,
+        objective_score=objectives.composite_score,
+        objective_values=objectives.values,
+        objective_weights=objectives.weights,
         score_version=report.score_version,
     )
 

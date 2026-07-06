@@ -17,7 +17,7 @@ from traning.core.temporal.dataset import (
     TemporalCandidateWindowDataset,
     TemporalWindow,
 )
-from traning.lib.models import CausalTemporalModel
+from traning.lib.models import CausalTemporalModel, DynamicSparseLinear
 from traning.lib.runtime import (
     CudaRuntimeConfig,
     autocast_context,
@@ -137,6 +137,10 @@ def run_temporal_training(
         layers=settings.temporal.layers,
         candidate_slots=selected_candidate_slots,
         action_classes=4,
+        smet_enabled=settings.smet.enabled,
+        smet_sparsity=settings.smet.sparsity,
+        smet_update_interval=settings.smet.update_interval,
+        smet_min_density=settings.smet.min_density,
     )
     enforce_runtime_memory_budget(
         device=device,
@@ -405,6 +409,26 @@ def _write_checkpoint(
         "candidate_slots": result.candidate_slots,
         "action_classes": 4,
     }
+    state_source_config = {
+        "smet_enabled": any(
+            isinstance(module, DynamicSparseLinear)
+            for module in state_source.modules()
+        )
+    }
+    if state_source_config["smet_enabled"]:
+        first_sparse = next(
+            module
+            for module in state_source.modules()
+            if isinstance(module, DynamicSparseLinear)
+        )
+        state_source_config.update(
+            {
+                "smet_sparsity": float(first_sparse.sparsity),
+                "smet_update_interval": int(first_sparse.update_interval),
+                "smet_min_density": float(first_sparse.min_density),
+            }
+        )
+    model_config.update(state_source_config)
     payload = build_training_checkpoint(
         checkpoint_kind=checkpoint_kind,
         run_id=result.run_dir.name,

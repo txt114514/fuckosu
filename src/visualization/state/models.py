@@ -1,12 +1,10 @@
-from visualization.state.models import (
+from visualization.lib.models import (
     PipelinePhase,
     PipelineStageState,
     TrainingDashboardState,
 )
-from visualization.state.store import DashboardStateStore
 
 __all__ = [
-    "DashboardStateStore",
     "PipelinePhase",
     "PipelineStageState",
     "TrainingDashboardState",

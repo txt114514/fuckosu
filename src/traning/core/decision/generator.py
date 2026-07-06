@@ -219,6 +219,7 @@ def build_candidate_cache_record(
         candidate_rows.append(row)
     _apply_candidate_reviews(
         candidate_rows,
+        slider_rows=slider_rows,
         frame_width=frame_width,
         frame_height=frame_height,
         enabled=bool(
@@ -232,6 +233,7 @@ def build_candidate_cache_record(
     )
     _apply_local_refinement(
         candidate_rows,
+        slider_rows=slider_rows,
         frame_width=frame_width,
         frame_height=frame_height,
         enabled=bool(
@@ -534,6 +536,7 @@ def _candidate_ambiguity_reasons(
 def _apply_candidate_reviews(
     rows: list[dict[str, Any]],
     *,
+    slider_rows: Sequence[Mapping[str, Any]],
     frame_width: int,
     frame_height: int,
     enabled: bool,
@@ -546,13 +549,34 @@ def _apply_candidate_reviews(
         reasons = tuple(row.get("ambiguity_reasons") or ())
         if not reasons:
             continue
+        review = _review_candidate_locally(
+            row,
+            slider_rows=slider_rows,
+            frame_width=frame_width,
+            frame_height=frame_height,
+        )
         row["ambiguity_review"] = {
             "reasons": reasons,
-            "strategy": "bounded_metadata_review",
-            "resolved": False,
+            "strategy": "local_consistency_model_v1",
+            **review,
             "frame_bounds": [0, 0, frame_width, frame_height],
         }
-        row["ambiguous"] = True
+        if review["resolved"]:
+            unresolved = tuple(
+                reason
+                for reason in reasons
+                if reason
+                not in {
+                    "low_confidence",
+                    "close_score",
+                    "slider_path_ambiguous",
+                }
+            )
+            row["ambiguity_reasons"] = unresolved
+            row["ambiguous"] = bool(unresolved)
+        else:
+            row["ambiguity_reasons"] = tuple(dict.fromkeys((*reasons, "local_review_unresolved")))
+            row["ambiguous"] = True
         reviewed += 1
         if reviewed >= max_candidates:
             break
@@ -561,6 +585,7 @@ def _apply_candidate_reviews(
 def _apply_local_refinement(
     rows: list[dict[str, Any]],
     *,
+    slider_rows: Sequence[Mapping[str, Any]],
     frame_width: int,
     frame_height: int,
     enabled: bool,
@@ -578,23 +603,180 @@ def _apply_local_refinement(
     )
     for row in ordered[:top_k]:
         before = [float(row.get("x") or 0.0), float(row.get("y") or 0.0)]
-        after = [
+        clamped = [
             min(max(before[0], 0.0), float(frame_width - 1)),
             min(max(before[1], 0.0), float(frame_height - 1)),
         ]
+        after = _refined_candidate_xy(
+            row,
+            slider_rows=slider_rows,
+            current_xy=(clamped[0], clamped[1]),
+            radius_px=radius_px,
+        )
         score = float(row.get("score") or 0.0)
-        refined_score = min(1.0, score + 0.01 if row.get("ambiguous") else score)
+        moved = after != tuple(before)
+        refined_score = min(
+            1.0,
+            score + (0.03 if moved else 0.01)
+            if row.get("ambiguous")
+            else score,
+        )
         row["local_refinement"] = {
-            "strategy": "bounded_topk_stride1_review",
+            "strategy": "local_patch_consistency_refiner_v2",
             "triggered": True,
             "max_radius_px": radius_px,
             "before_xy": before,
-            "after_xy": after,
+            "after_xy": [after[0], after[1]],
             "before_score": score,
             "after_score": refined_score,
-            "changed": before != after or refined_score != score,
+            "changed": moved or refined_score != score,
         }
         row["x"], row["y"], row["score"] = after[0], after[1], refined_score
+
+
+def _review_candidate_locally(
+    row: Mapping[str, Any],
+    *,
+    slider_rows: Sequence[Mapping[str, Any]],
+    frame_width: int,
+    frame_height: int,
+) -> dict[str, Any]:
+    x = _optional_float(row.get("x")) or 0.0
+    y = _optional_float(row.get("y")) or 0.0
+    in_frame = 0.0 <= x < frame_width and 0.0 <= y < frame_height
+    local_score = _local_evidence_score(row)
+    slider_path = _row_slider_path(row, slider_rows)
+    slider_distance = None
+    if slider_path is not None:
+        slider_distance = _distance_to_polyline(
+            (x, y),
+            _polyline_from_row(slider_path),
+        )
+    reasons = tuple(row.get("ambiguity_reasons") or ())
+    missing_path = "missing_slider_path" in reasons
+    resolved = (
+        in_frame
+        and local_score >= 0.55
+        and not missing_path
+        and (slider_distance is None or slider_distance <= 48.0)
+    )
+    return {
+        "resolved": resolved,
+        "local_evidence_score": local_score,
+        "in_frame": in_frame,
+        "slider_distance_px": slider_distance,
+        "decision": "accept" if resolved else "keep_ambiguous",
+    }
+
+
+def _local_evidence_score(row: Mapping[str, Any]) -> float:
+    score = _optional_float(row.get("score")) or 0.0
+    center = _optional_float(row.get("center_score")) or score
+    visible = _optional_float(row.get("visible_score")) or score
+    type_score = _optional_float(row.get("type_score")) or score
+    slider = _optional_float(row.get("slider_score")) or score
+    spinner = _optional_float(row.get("spinner_score")) or score
+    object_type = str(row.get("object_type") or "")
+    if object_type.startswith("slider"):
+        type_evidence = max(type_score, slider)
+    elif object_type.startswith("spinner"):
+        type_evidence = max(type_score, spinner)
+    else:
+        type_evidence = type_score
+    return min(1.0, max(0.0, 0.35 * score + 0.30 * center + 0.20 * visible + 0.15 * type_evidence))
+
+
+def _refined_candidate_xy(
+    row: Mapping[str, Any],
+    *,
+    slider_rows: Sequence[Mapping[str, Any]],
+    current_xy: tuple[float, float],
+    radius_px: float,
+) -> tuple[float, float]:
+    if not str(row.get("object_type") or "").startswith("slider"):
+        return current_xy
+    slider_path = _row_slider_path(row, slider_rows)
+    if slider_path is None:
+        return current_xy
+    head = _point_from_row(slider_path.get("head"))
+    if head is not None and _point_distance(current_xy, head) <= radius_px:
+        return head
+    nearest = _nearest_polyline_point(current_xy, _polyline_from_row(slider_path))
+    if nearest is not None and _point_distance(current_xy, nearest) <= radius_px:
+        return nearest
+    return current_xy
+
+
+def _row_slider_path(
+    row: Mapping[str, Any],
+    slider_rows: Sequence[Mapping[str, Any]],
+) -> Mapping[str, Any] | None:
+    path_id = row.get("slider_path_id")
+    if path_id is None:
+        return None
+    for path in slider_rows:
+        if path.get("component_id") == path_id:
+            return path
+    return None
+
+
+def _point_from_row(value: Any) -> tuple[float, float] | None:
+    if (
+        isinstance(value, Sequence)
+        and not isinstance(value, str | bytes)
+        and len(value) >= 2
+    ):
+        return float(value[0]), float(value[1])
+    return None
+
+
+def _polyline_from_row(row: Mapping[str, Any]) -> tuple[tuple[float, float], ...]:
+    raw = row.get("polyline")
+    if not isinstance(raw, Sequence):
+        return ()
+    points = [
+        _point_from_row(point)
+        for point in raw
+        if isinstance(point, Sequence)
+    ]
+    return tuple(point for point in points if point is not None)
+
+
+def _nearest_polyline_point(
+    point: tuple[float, float],
+    polyline: Sequence[tuple[float, float]],
+) -> tuple[float, float] | None:
+    if not polyline:
+        return None
+    if len(polyline) == 1:
+        return polyline[0]
+    best_point = polyline[0]
+    best_distance = float("inf")
+    for start, end in zip(polyline, polyline[1:]):
+        candidate = _project_point_to_segment(point, start, end)
+        distance = _point_distance(point, candidate)
+        if distance < best_distance:
+            best_distance = distance
+            best_point = candidate
+    return best_point
+
+
+def _project_point_to_segment(
+    point: tuple[float, float],
+    start: tuple[float, float],
+    end: tuple[float, float],
+) -> tuple[float, float]:
+    px, py = point
+    ax, ay = start
+    bx, by = end
+    vx = bx - ax
+    vy = by - ay
+    length_squared = vx * vx + vy * vy
+    if length_squared <= 1e-6:
+        return start
+    t = ((px - ax) * vx + (py - ay) * vy) / length_squared
+    t = min(max(t, 0.0), 1.0)
+    return ax + t * vx, ay + t * vy
 
 
 def _has_close_neighbor(

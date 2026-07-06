@@ -20,6 +20,7 @@ core/optimization/
     curriculum.py         # 连续通过门槛和课程 gate
     hard_examples.py      # 难例采样权重计划
     executor.py           # trial 创建、记录、低预算 job 和 checkpoint 继承
+    objectives.py         # quality/VRAM/latency 多目标排序公式
 ```
 
 ## 分层约定
@@ -96,6 +97,7 @@ from traning.core.optimization import plan_next_trial
 - `parameter_updates`：按 `training / inference / sampling / search` 分组的参数修改建议
 - `hard_example_keys`：难例挖掘采样键
 - `priority_domains`：本轮优先优化的错误域
+- `objective_score` / `objective_values`：`multi-objective-v1` 综合排序分和各独立目标
 
 ## 执行器
 
@@ -111,7 +113,7 @@ from traning.core.optimization import execute_optimization_plan
 - 合并 `training / inference / sampling` 参数更新；
 - 生成低预算 `TrainingJobSpec`；
 - 保存 `parent_checkpoint_path`，用于同 trial 晋级或恢复；
-- 将完整执行记录追加到 JSONL trial store；
+- 将完整执行记录追加到 JSONL 或 SQLite trial store；
 - 同时输出课程 gate 和 hard example 采样权重。
 
 它不会直接调用 `train-spatial`、`train-temporal` 或其他 core 模块。真正训练仍由外部 runner/CLI
@@ -146,6 +148,18 @@ trial_score_report.json
 `run_training_job_spec` / `run_training` 业务函数。停止策略由
 `settings.optimization.max_generated_jobs`、`max_trials`、`max_stage`、`dry_run` 和
 `job_only` 控制；当前 pipeline 不会默认递归执行子 trial。
+
+trial store 默认保持 JSONL 兼容；需要 SQLite 时设置：
+
+```yaml
+optimization:
+  trial_store_backend: sqlite
+  trial_store_sqlite_path: ../runs/optimization/trials.sqlite
+```
+
+多目标排序版本为 `multi-objective-v1`。默认目标包括 `quality_score`、
+`peak_vram_mb` 和 `latency_ms`，权重可通过
+`optimization.objective_weights` 调整。
 
 统一生命周期入口 `core/full_flow/orchestrator.py::run_full_flow` 通过
 `core/training_ramp.py::run_training_ramp` 间接调用上述完整训练 pipeline，因此 full-flow 生成的

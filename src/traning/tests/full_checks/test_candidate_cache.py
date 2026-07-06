@@ -137,6 +137,37 @@ class CandidateCacheTests(unittest.TestCase):
             self.assertEqual(len(records), 1)
             self.assertEqual(json.loads(records[0])["sample_key"], "sample-a")
 
+    def test_local_consistency_review_resolves_supported_ambiguity(self) -> None:
+        settings = Settings()
+        settings.candidate_cache.ambiguity_review_enabled = True
+        candidates = (_candidate(score=0.58), _candidate(score=0.56))
+
+        record = build_candidate_cache_record(
+            {
+                "sample_key": "sample-review",
+                "frame_index": 1,
+                "timestamp_ms": 100.0,
+                "hit_objects": (),
+            },
+            candidates,
+            (_slider_path(ambiguous=True),),
+            frame_width=128,
+            frame_height=96,
+            device="cpu",
+            patches_processed=1,
+            frame_channels=3,
+            save_dtype="float32",
+            low_confidence_threshold=0.60,
+            close_score_margin=0.05,
+            slider_attach_distance_px=48.0,
+            settings=settings,
+        )
+
+        review = record["candidates"][0]["ambiguity_review"]
+        self.assertEqual(review["strategy"], "local_consistency_model_v1")
+        self.assertTrue(review["resolved"])
+        self.assertFalse(record["candidates"][0]["ambiguous"])
+
 
 if __name__ == "__main__":
     unittest.main()

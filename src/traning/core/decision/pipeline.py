@@ -20,11 +20,12 @@ from traning.core.decision.runner import (
 )
 from traning.core.optimization import (
     DecisionOutputScoreResult,
-    JsonlTrialStore,
     OptimizationExecutorConfig,
+    ParameterSearchConfig,
     TrialScoreSpec,
     analyze_trial_attribution,
     build_batch_gallery_request,
+    create_trial_store,
     execute_optimization_plan,
     plan_next_trial,
     score_decision_outputs,
@@ -37,6 +38,7 @@ from traning.core.temporal import TemporalTrainingResult, run_temporal_training
 from visualization.lib import (
     DatasetUsageState,
     NullReporter,
+    PipelinePhase,
     PipelineStageState,
     ResourceState,
     TrainingEvent,
@@ -70,6 +72,7 @@ class FullTrainingRunConfig:
     sequence_length: int | None = None
     candidate_slots: int | None = None
     parameter_group_id: str = "pg-0001"
+    curriculum_level: str | None = None
     render_gallery: bool = True
     gallery_output_root: Path | None = None
     gallery_samples_per_group: int | None = None
@@ -106,6 +109,7 @@ class FullTrainingRunConfig:
 class FullTrainingEvaluationResult:
     parameter_group_id: str
     quality_score: float
+    pass_threshold: float
     passed: bool
     target_count: int
     hit_count: int
@@ -125,11 +129,14 @@ class FullTrainingEvaluationResult:
     optimization_plan_path: Path | None = None
     next_job_path: Path | None = None
     gallery_warning: str | None = None
+    asha_action: str | None = None
+    asha_reasons: tuple[str, ...] = ()
 
     def as_dict(self) -> dict[str, Any]:
         return {
             "parameter_group_id": self.parameter_group_id,
             "quality_score": self.quality_score,
+            "pass_threshold": self.pass_threshold,
             "passed": self.passed,
             "target_count": self.target_count,
             "hit_count": self.hit_count,
@@ -149,6 +156,8 @@ class FullTrainingEvaluationResult:
             "optimization_plan_path": self.optimization_plan_path,
             "next_job_path": self.next_job_path,
             "gallery_warning": self.gallery_warning,
+            "asha_action": self.asha_action,
+            "asha_reasons": list(self.asha_reasons),
         }
 
 
@@ -196,7 +205,10 @@ class FullTrainingRunResult:
             "decision_output": self.decision.output_dir,
             "parameter_group_id": self.evaluation.parameter_group_id,
             "quality_score": self.evaluation.quality_score,
+            "quality_pass_threshold": self.evaluation.pass_threshold,
             "quality_passed": self.evaluation.passed,
+            "asha_action": self.evaluation.asha_action,
+            "asha_reasons": self.evaluation.asha_reasons,
             "score_targets": self.evaluation.target_count,
             "score_hits": self.evaluation.hit_count,
             "score_misses": self.evaluation.miss_count,
@@ -227,6 +239,19 @@ def run_full_training_pipeline(
 ) -> FullTrainingRunResult:
     config.run_dir.mkdir(parents=True, exist_ok=True)
     reporter = config.reporter
+    reporter.update_metrics(
+        pipeline_phase=PipelinePhase.TRAINING.value,
+        phase="完整训练流水线",
+        status="running",
+        current_trial_id=config.parameter_group_id,
+        trial_status="training",
+        current_level=config.curriculum_level or "full_training",
+        current_grade="observing",
+        global_step=0,
+        target_global_steps=config.spatial_max_steps + config.temporal_max_steps,
+        promotion_status="完整训练流水线启动",
+        current_parameters=_training_parameter_config_snapshot(settings, config=config),
+    )
     reporter.emit_event(
         TrainingEvent.create(
             event_type="training",
@@ -399,6 +424,12 @@ def run_full_training_pipeline(
         output_path=decision.output_dir,
     )
     _report_stage(reporter, "evaluation", "固定评估评分", "running")
+    reporter.update_metrics(
+        phase="固定评估评分",
+        status="evaluating",
+        trial_status="evaluating",
+        promotion_status="正在评估当前参数",
+    )
     evaluation = _evaluate_training_outputs(
         settings,
         config=config,
@@ -406,6 +437,30 @@ def run_full_training_pipeline(
         spatial=spatial,
         temporal=temporal,
         decision=decision,
+    )
+    trial_status, current_grade, promotion_status, prune_reason = _trial_outcome(
+        evaluation
+    )
+    reporter.update_metrics(
+        phase="固定评估评分",
+        status="passed" if evaluation.passed else "warning",
+        score=float(evaluation.quality_score),
+        current_grade=current_grade,
+        best_grade=current_grade if evaluation.passed else None,
+        trial_status=trial_status,
+        prune_reason=prune_reason,
+        promotion_status=promotion_status,
+        consecutive_passes=1 if evaluation.passed else 0,
+        required_passes=1,
+        current_parameters=_full_training_parameter_snapshot(
+            settings,
+            config=config,
+            spatial=spatial,
+            candidate_cache=candidate_cache,
+            temporal=temporal,
+            decision=decision,
+            evaluation=evaluation,
+        )
     )
     reporter.report_score(
         score=float(evaluation.quality_score),
@@ -430,6 +485,8 @@ def run_full_training_pipeline(
         total=evaluation.candidate_frame_count,
         output_path=evaluation.report_path,
         warnings=evaluation.unresolved_count,
+        score=evaluation.quality_score,
+        threshold=evaluation.pass_threshold,
     )
     summary_path = config.run_dir / "full_training_summary.json"
     result = FullTrainingRunResult(
@@ -538,9 +595,19 @@ def _evaluate_training_outputs(
     attribution_path = None
     plan_path = None
     next_job_path = None
+    asha_action = None
+    asha_reasons: tuple[str, ...] = ()
     if settings.optimization.enabled:
         attribution = analyze_trial_attribution(score_result.report)
-        plan = plan_next_trial(score_result.report, attribution)
+        plan = plan_next_trial(
+            score_result.report,
+            attribution,
+            config=ParameterSearchConfig(
+                objective_weights=settings.optimization.objective_weights
+            ),
+        )
+        asha_action = plan.asha_action
+        asha_reasons = plan.asha_reasons
         execution = execute_optimization_plan(
             score_result.report,
             attribution,
@@ -551,7 +618,11 @@ def _evaluate_training_outputs(
                 code_version=json.dumps(versions["code_version"], sort_keys=True),
                 data_version=str(versions["dataset_version"]),
             ),
-            store=JsonlTrialStore(settings.optimization.trial_store_path),
+            store=create_trial_store(
+                backend=settings.optimization.trial_store_backend,
+                jsonl_path=settings.optimization.trial_store_path,
+                sqlite_path=settings.optimization.trial_store_sqlite_path,
+            ),
         )
         attribution_path = output_dir / "attribution.json"
         plan_path = output_dir / "optimization_plan.json"
@@ -594,6 +665,8 @@ def _evaluate_training_outputs(
         gallery_warning=(
             gallery_result.warning if gallery_result is not None else None
         ),
+        asha_action=asha_action,
+        asha_reasons=asha_reasons,
     )
 
 
@@ -609,11 +682,14 @@ def _evaluation_result_from_score(
     optimization_plan_path: Path | None,
     next_job_path: Path | None,
     gallery_warning: str | None,
+    asha_action: str | None,
+    asha_reasons: tuple[str, ...],
 ) -> FullTrainingEvaluationResult:
     report = score_result.report
     return FullTrainingEvaluationResult(
         parameter_group_id=score_result.parameter_group_id,
         quality_score=report.quality_score,
+        pass_threshold=report.pass_threshold,
         passed=report.passed,
         target_count=report.target_count,
         hit_count=report.hit_count,
@@ -633,6 +709,8 @@ def _evaluation_result_from_score(
         optimization_plan_path=optimization_plan_path,
         next_job_path=next_job_path,
         gallery_warning=gallery_warning,
+        asha_action=asha_action,
+        asha_reasons=asha_reasons,
     )
 
 
@@ -685,6 +763,128 @@ def _json_ready(value: Any) -> Any:
     return value
 
 
+def _full_training_parameter_snapshot(
+    settings: Settings,
+    *,
+    config: FullTrainingRunConfig,
+    spatial: SpatialTrainingResult,
+    candidate_cache: CandidateCacheBuildResult,
+    temporal: TemporalTrainingResult,
+    decision: TemporalDecisionRunResult,
+    evaluation: FullTrainingEvaluationResult,
+) -> dict[str, Any]:
+    snapshot = _training_parameter_config_snapshot(settings, config=config)
+    snapshot.update(
+        {
+            "evaluation": {
+                "min_click_interval_ms": settings.evaluation.min_click_interval_ms,
+                "quality_score": evaluation.quality_score,
+                "pass_threshold": evaluation.pass_threshold,
+                "passed": evaluation.passed,
+                "report_path": evaluation.report_path,
+                "gallery_status": evaluation.gallery_status,
+                "gallery_samples_per_group": config.gallery_samples_per_group,
+                "asha_action": evaluation.asha_action,
+                "asha_reasons": evaluation.asha_reasons,
+            },
+            "outputs": {
+                "spatial_checkpoint": spatial.checkpoint_path,
+                "temporal_checkpoint": temporal.checkpoint_path,
+                "candidate_cache_records": candidate_cache.records_path,
+                "decision_path": decision.decisions_path,
+                "candidate_frames": candidate_cache.frames,
+                "candidate_count": candidate_cache.candidates,
+                "decision_frames": decision.frames,
+            },
+            "losses": {
+                "spatial_last_loss": spatial.last_loss,
+                "temporal_final_loss": temporal.final_loss,
+                "temporal_action_loss": temporal.action_loss,
+                "temporal_candidate_loss": temporal.candidate_loss,
+                "temporal_xy_loss": temporal.xy_loss,
+                "temporal_time_loss": temporal.time_loss,
+            },
+        }
+    )
+    return _json_ready(snapshot)
+
+
+def _training_parameter_config_snapshot(
+    settings: Settings,
+    *,
+    config: FullTrainingRunConfig,
+) -> dict[str, Any]:
+    return _json_ready(
+        {
+            "parameter_group_id": config.parameter_group_id,
+            "device": str(config.device),
+            "split": config.split,
+            "curriculum_level": config.curriculum_level,
+            "training": {
+                "spatial_max_steps": config.spatial_max_steps,
+                "temporal_max_steps": config.temporal_max_steps,
+                "spatial_learning_rate": config.spatial_learning_rate,
+                "temporal_learning_rate": config.temporal_learning_rate,
+                "patch_limit": config.patch_limit,
+                "resume_policy": config.resume_policy,
+                "resume_stage_checkpoints": dict(config.resume_stage_checkpoints),
+            },
+            "candidate_cache": {
+                "cache_max_frames": config.cache_max_frames,
+                "max_candidates": config.max_candidates,
+                "score_threshold": config.score_threshold,
+                "nms_radius_px": config.nms_radius_px,
+                "slider_threshold": config.slider_threshold,
+                "max_slider_paths": config.max_slider_paths,
+                "local_refiner_enabled": settings.candidate_cache.local_refiner_enabled,
+                "ambiguity_review_enabled": (
+                    settings.candidate_cache.ambiguity_review_enabled
+                ),
+            },
+            "temporal": {
+                "sequence_length": config.sequence_length,
+                "candidate_slots": config.candidate_slots,
+                "smet_enabled": settings.smet.enabled,
+                "smet_sparsity": settings.smet.sparsity,
+                "smet_update_interval": settings.smet.update_interval,
+                "smet_min_density": settings.smet.min_density,
+            },
+            "evaluation": {
+                "min_click_interval_ms": settings.evaluation.min_click_interval_ms,
+                "quality_score": None,
+                "pass_threshold": None,
+                "passed": None,
+                "report_path": None,
+                "gallery_status": "pending" if config.render_gallery else "skipped",
+                "gallery_samples_per_group": config.gallery_samples_per_group,
+                "asha_action": None,
+                "asha_reasons": (),
+            },
+            "optimization": {
+                "enabled": settings.optimization.enabled,
+                "trial_store_backend": settings.optimization.trial_store_backend,
+                "objective_weights": settings.optimization.objective_weights,
+            },
+        }
+    )
+
+
+def _trial_outcome(
+    evaluation: FullTrainingEvaluationResult,
+) -> tuple[str, str, str, str | None]:
+    if evaluation.asha_action == "prune":
+        reason = "; ".join(evaluation.asha_reasons) or "ASHA prune"
+        return "pruned", "pruned", "当前 trial 已淘汰", reason
+    if evaluation.asha_action == "promote":
+        return "promoted", "promoted", "当前 trial 已晋升", None
+    if evaluation.passed:
+        return "passed", "reached", "当前参数已通过评估", None
+    if evaluation.asha_action == "continue":
+        reason = "; ".join(evaluation.asha_reasons)
+        return "training", "continue", reason or "当前参数需要继续训练", None
+    return "failed", "stopped", "当前参数未通过评估", None
+
+
 def _report_stage(
     reporter: TrainingReporter,
     stage_id: str,
@@ -697,6 +897,8 @@ def _report_stage(
     warnings: int = 0,
     blocks_training: bool = False,
     error_reason: str | None = None,
+    score: float | None = None,
+    threshold: float | None = None,
 ) -> None:
     reporter.update_pipeline_stage(
         PipelineStageState(
@@ -709,6 +911,8 @@ def _report_stage(
             warning_count=warnings,
             blocks_training=blocks_training,
             error_reason=error_reason,
+            score=score,
+            threshold=threshold,
         )
     )
 

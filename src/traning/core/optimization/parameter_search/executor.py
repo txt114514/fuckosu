@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -129,6 +130,94 @@ class JsonlTrialStore:
         return tuple(records)
 
 
+class SQLiteTrialStore:
+    def __init__(self, path: Path) -> None:
+        self.path = path
+
+    def _connect(self) -> sqlite3.Connection:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        connection = sqlite3.connect(self.path)
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS optimization_trials (
+              trial_id TEXT PRIMARY KEY,
+              source_trial_id TEXT NOT NULL,
+              created_at_utc TEXT NOT NULL,
+              status TEXT NOT NULL,
+              curriculum_stage TEXT NOT NULL,
+              rung INTEGER NOT NULL,
+              quality_score REAL NOT NULL,
+              objective_score REAL,
+              payload_json TEXT NOT NULL
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_optimization_trials_source
+            ON optimization_trials(source_trial_id)
+            """
+        )
+        return connection
+
+    def append(self, execution: OptimizationExecution) -> None:
+        payload = execution.as_dict()
+        objective_score = payload.get("plan", {}).get("objective_score")
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT OR REPLACE INTO optimization_trials (
+                  trial_id,
+                  source_trial_id,
+                  created_at_utc,
+                  status,
+                  curriculum_stage,
+                  rung,
+                  quality_score,
+                  objective_score,
+                  payload_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    execution.trial.trial_id,
+                    execution.source_trial_id,
+                    execution.created_at_utc,
+                    execution.trial.status.value,
+                    execution.trial.curriculum_stage.value,
+                    execution.trial.rung,
+                    float(execution.trial.metrics.get("quality_score", 0.0)),
+                    float(objective_score) if isinstance(objective_score, int | float) else None,
+                    json.dumps(payload, ensure_ascii=False, sort_keys=True),
+                ),
+            )
+
+    def load(self) -> tuple[dict[str, Any], ...]:
+        if not self.path.exists():
+            return ()
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT payload_json
+                FROM optimization_trials
+                ORDER BY created_at_utc, trial_id
+                """
+            ).fetchall()
+        return tuple(json.loads(row[0]) for row in rows)
+
+
+def create_trial_store(
+    *,
+    backend: str,
+    jsonl_path: Path,
+    sqlite_path: Path,
+) -> JsonlTrialStore | SQLiteTrialStore:
+    if backend == "jsonl":
+        return JsonlTrialStore(jsonl_path)
+    if backend == "sqlite":
+        return SQLiteTrialStore(sqlite_path)
+    raise ValueError(f"unsupported trial store backend: {backend}")
+
+
 def _apply_section_updates(
     base: Mapping[str, object],
     updates: Mapping[str, Any],
@@ -201,7 +290,7 @@ def execute_optimization_plan(
     base_parameters: TrialParameters | None = None,
     parent_checkpoint_path: Path | None = None,
     config: OptimizationExecutorConfig = OptimizationExecutorConfig(),
-    store: JsonlTrialStore | None = None,
+    store: JsonlTrialStore | SQLiteTrialStore | None = None,
 ) -> OptimizationExecution:
     next_rung = 0 if plan.asha_action == "prune" else (
         1 if plan.next_stage != plan.current_stage else 0
@@ -228,6 +317,7 @@ def execute_optimization_plan(
         data_version=config.data_version,
         metrics={
             "quality_score": report.quality_score,
+            "objective_score": plan.objective_score,
             "hit_count": float(report.hit_count),
             "miss_count": float(report.miss_count),
             "unresolved_count": float(report.unresolved_count),
@@ -265,6 +355,8 @@ __all__ = [
     "OPTIMIZATION_RECORD_VERSION",
     "OptimizationExecution",
     "OptimizationExecutorConfig",
+    "SQLiteTrialStore",
     "TrainingJobSpec",
+    "create_trial_store",
     "execute_optimization_plan",
 ]

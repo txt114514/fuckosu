@@ -13,7 +13,7 @@
 | 运行环境检查 | `environment` | 环境/CUDA 诊断脚本与 Python 检查 API | 公开入口：`environment/__init__.py` |
 | 训练前处理 | `src/before_traning` | [`README.md`](../src/before_traning/docs/README.md) | [`CODEX_INDEX.md`](../src/before_traning/docs/CODEX_INDEX.md) |
 | 模型训练 | `src/traning` | [`TRAINING_PLAN.md`](../src/traning/docs/TRAINING_PLAN.md)、[`TRAINING_READINESS.md`](../src/traning/docs/TRAINING_READINESS.md)、[`PLAN_GAP_AUDIT.md`](../src/traning/docs/PLAN_GAP_AUDIT.md)、[`OPTIMIZATION_MODULE.md`](../src/traning/docs/OPTIMIZATION_MODULE.md)、[`LIB_STRUCTURE_AUDIT.md`](../src/traning/docs/LIB_STRUCTURE_AUDIT.md)、[`DATASET_IMPORT_PLAN.md`](../src/traning/docs/DATASET_IMPORT_PLAN.md)、[`SPATIAL_PLAN.md`](../src/traning/docs/SPATIAL_PLAN.md)、[`TEMPORAL_PLAN.md`](../src/traning/docs/TEMPORAL_PLAN.md)、[`DECISION_PLAN.md`](../src/traning/docs/DECISION_PLAN.md)、[`RESULT_EXPORT_PLAN.md`](../src/traning/docs/RESULT_EXPORT_PLAN.md)、[`MODEL_EXPORT_PLAN.md`](../src/traning/docs/MODEL_EXPORT_PLAN.md)、[`ENVIRONMENT.md`](../src/traning/docs/ENVIRONMENT.md) | [`CODEX_INDEX.md`](../src/traning/docs/CODEX_INDEX.md) |
-| 中文训练可视化 | `src/visualization` | [`README.md`](../src/visualization/docs/README.md)、[`INDEX.md`](../src/visualization/docs/INDEX.md)、[`VISUALIZATION_ARCHITECTURE.md`](../src/visualization/docs/VISUALIZATION_ARCHITECTURE.md)、[`VISUALIZATION_API.md`](../src/visualization/docs/VISUALIZATION_API.md)、[`TERMINAL_UI.md`](../src/visualization/docs/TERMINAL_UI.md)、[`GALLERY_MIGRATION.md`](../src/visualization/docs/GALLERY_MIGRATION.md) | 公开入口：`src/visualization/lib/__init__.py` |
+| 中文训练可视化 | `src/visualization` | [`README.md`](../src/visualization/docs/README.md)、[`INDEX.md`](../src/visualization/docs/INDEX.md) | 公开入口：`src/visualization/lib/__init__.py` |
 
 ## 全局 API 约定
 

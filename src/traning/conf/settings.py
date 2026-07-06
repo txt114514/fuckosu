@@ -272,6 +272,30 @@ class MemoryConfig(BaseModel):
 
 class SMETConfig(BaseModel):
     enabled: bool = False
+    sparsity: float = 0.50
+    update_interval: int = 16
+    min_density: float = 0.05
+
+    @field_validator("sparsity")
+    @classmethod
+    def _sparsity(cls, value: float) -> float:
+        if not 0.0 <= value < 1.0:
+            raise ValueError("SMET sparsity must be in [0, 1)")
+        return value
+
+    @field_validator("update_interval")
+    @classmethod
+    def _positive_interval(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("SMET update_interval must be positive")
+        return value
+
+    @field_validator("min_density")
+    @classmethod
+    def _density(cls, value: float) -> float:
+        if not 0.0 < value <= 1.0:
+            raise ValueError("SMET min_density must be in (0, 1]")
+        return value
 
 
 class CandidateCacheSettings(BaseModel):
@@ -337,6 +361,17 @@ class OptimizationSettings(BaseModel):
     max_trials: int = 1
     max_stage: str = "basic"
     trial_store_path: Path = REPO_ROOT / "runs" / "optimization" / "trials.jsonl"
+    trial_store_backend: Literal["jsonl", "sqlite"] = "jsonl"
+    trial_store_sqlite_path: Path = (
+        REPO_ROOT / "runs" / "optimization" / "trials.sqlite"
+    )
+    objective_weights: dict[str, float] = Field(
+        default_factory=lambda: {
+            "quality_score": 1.0,
+            "peak_vram_mb": -0.00005,
+            "latency_ms": -0.001,
+        }
+    )
 
     @field_validator("max_generated_jobs", "max_trials")
     @classmethod
@@ -344,6 +379,18 @@ class OptimizationSettings(BaseModel):
         if value <= 0:
             raise ValueError("optimization counts must be positive")
         return value
+
+    @field_validator("objective_weights")
+    @classmethod
+    def _finite_objective_weights(cls, value: dict[str, float]) -> dict[str, float]:
+        cleaned: dict[str, float] = {}
+        for key, weight in value.items():
+            if not key:
+                raise ValueError("objective weight names must not be empty")
+            if weight != weight or weight in (float("inf"), float("-inf")):
+                raise ValueError("objective weights must be finite")
+            cleaned[str(key)] = float(weight)
+        return cleaned
 
 
 class LoaderSettings(BaseModel):
@@ -595,6 +642,15 @@ def _resolve_paths(raw: dict[str, Any], base_dir: Path) -> dict[str, Any]:
             path if path.is_absolute() else (base_dir / path).resolve()
         )
     resolved["candidate_cache"] = candidate_cache
+    optimization = dict(resolved.get("optimization") or {})
+    for key in ("trial_store_path", "trial_store_sqlite_path"):
+        value = optimization.get(key)
+        if value is not None:
+            path = Path(value).expanduser()
+            optimization[key] = (
+                path if path.is_absolute() else (base_dir / path).resolve()
+            )
+    resolved["optimization"] = optimization
     return resolved
 
 

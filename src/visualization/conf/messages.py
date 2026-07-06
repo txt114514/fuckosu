@@ -15,6 +15,23 @@ STATUS_NAMES: dict[str, str] = {
     "skipped": "已跳过",
     "interrupted": "已中断",
     "completed": "已完成",
+    "training": "训练中",
+    "evaluating": "评估中",
+    "promoted": "已晋升",
+    "promotable": "满足晋升条件",
+    "pruned": "已淘汰",
+    "continue": "继续训练",
+    "stopped": "已停止",
+}
+
+PIPELINE_PHASE_NAMES: dict[str, str] = {
+    "startup": "启动",
+    "data_preparation": "数据准备",
+    "pretrain_check": "训练前检查",
+    "progressive_preparation": "渐进训练准备",
+    "training": "正式训练",
+    "completed": "已完成",
+    "failed": "已失败",
 }
 
 SEVERITY_NAMES: dict[str, str] = {

@@ -35,15 +35,74 @@ loader:
   prefetch_factor:
   drop_last: false
 
+memory:
+  amp_dtype: auto
+  gradient_checkpointing: true
+  backward_per_patch: true
+  cache_global_features: true
+  offload_candidates_to_cpu: true
+  channels_last: true
+  allow_tf32: true
+  cudnn_benchmark: true
+  matmul_float32_precision: high
+  grad_scaler: auto
+  compile_model: true
+  max_vram_gib: 6.5
+  reserve_vram_gib: 1.0
+  max_ram_gib: 24.0
+  reserve_ram_gib: 4.0
+
+smet:
+  enabled: true
+  sparsity: 0.50
+  update_interval: 16
+  min_density: 0.05
+
+candidate_cache:
+  output_root: ../../../runs/candidate_cache
+  max_candidates_per_frame: 32
+  save_dtype: float16
+  storage: jsonl
+  score_threshold: 0.05
+  nms_radius_px: 32.0
+  slider_threshold: 0.5
+  slider_min_cells: 4
+  slider_path_points: 32
+  max_slider_paths: 16
+  low_confidence_threshold: 0.60
+  close_score_margin: 0.05
+  slider_attach_distance_px: 48.0
+  local_refiner_enabled: true
+  local_refiner_top_k: 4
+  local_refiner_radius_px: 12.0
+  ambiguity_review_enabled: true
+  ambiguity_review_max_candidates: 8
+
 evaluation:
   min_click_interval_ms: 50.0
 
 visualization:
-  enabled: false
+  enabled: true
   every_n_steps: 500
   output_dir: ../../../traning_example
   save_images: true
   gallery_samples_per_group: 10
-  show_window: false
+  show_window: true
   window_title: "osu! training annotation"
   ffplay_binary: ffplay
+
+optimization:
+  enabled: true
+  max_generated_jobs: 1
+  execute_generated_jobs: true
+  dry_run: false
+  job_only: true
+  max_trials: 1
+  max_stage: basic
+  trial_store_path: ../../../runs/optimization/trials.jsonl
+  trial_store_backend: sqlite
+  trial_store_sqlite_path: ../../../runs/optimization/trials.sqlite
+  objective_weights:
+    quality_score: 1.0
+    peak_vram_mb: -0.00005
+    latency_ms: -0.001

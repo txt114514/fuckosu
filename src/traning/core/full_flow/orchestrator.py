@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -27,8 +28,12 @@ from traning.core.training_inheritance import (
 from traning.core.training_ramp import run_training_ramp
 from traning.state.versioning import collect_code_version, version_manifest
 from visualization.lib import (
+    PipelinePhase,
     PipelineStageState,
     TrainingEvent,
+    TrainingReporter,
+    TrainingStopState,
+    collect_resource_state,
     create_dashboard_reporter,
 )
 
@@ -68,6 +73,8 @@ class FullFlowConfig:
     test_ratio: float = 0.1
     allow_test_growth: bool = False
     test_level: str = "quick"
+    gallery_output_root: Path | None = None
+    gallery_samples_per_group: int | None = None
     from_stage: str | None = None
     until_stage: str | None = None
     force_stages: tuple[str, ...] = ()
@@ -87,6 +94,7 @@ class _FlowRuntime:
     final_readiness_path: Path | None = None
     final_artifact_path: Path | None = None
     inheritance_path: Path | None = None
+    reporter: TrainingReporter | None = None
 
     @property
     def state_path(self) -> Path:
@@ -135,6 +143,15 @@ def run_full_flow(config: FullFlowConfig) -> FullFlowResult:
         progress_language=config.progress_language,
     ) as dashboard:
         reporter = dashboard.reporter
+        runtime.reporter = reporter
+        reporter.update_metrics(
+            pipeline_phase=PipelinePhase.STARTUP.value,
+            phase="完整流程启动检查",
+            status="running",
+            trial_status=None,
+        )
+        _report_resource_snapshot(reporter)
+        _publish_initial_dashboard_stages(runtime)
         reporter.emit_event(
             TrainingEvent.create(
                 event_type="full_flow",
@@ -158,10 +175,24 @@ def run_full_flow(config: FullFlowConfig) -> FullFlowResult:
         except KeyboardInterrupt:
             _mark_interrupted(runtime, "用户中断完整流程")
             _persist(runtime, status="interrupted", stop_reason="用户中断完整流程")
+            reporter.request_stop(
+                TrainingStopState(
+                    reason="USER_INTERRUPTED",
+                    message="用户中断完整流程",
+                    exit_code=2,
+                )
+            )
             raise
         except Exception as error:
             _mark_failed(runtime, error)
             _persist(runtime, status="failed", stop_reason=str(error))
+            reporter.request_stop(
+                TrainingStopState(
+                    reason="FULL_FLOW_FAILED",
+                    message=f"{type(error).__name__}: {error}",
+                    exit_code=1,
+                )
+            )
             raise
 
 
@@ -227,19 +258,20 @@ def load_full_flow_status(
 
 def _run_startup_section(_runtime: _FlowRuntime, *, reporter) -> None:
     config = _runtime.config
+    selected_device = _select_device_name(config.device)
+    _start_stage(_runtime, "ENVIRONMENT_PREFLIGHT", reporter)
     _start_stage(_runtime, "SOURCE_CHANGE_CHECK", reporter)
     _start_stage(_runtime, "BEFORE_TRAINING", reporter)
     _start_stage(_runtime, "DATASET_CONVERSION", reporter)
     _start_stage(_runtime, "SPLIT_VALIDATION", reporter)
     _start_stage(_runtime, "DATA_QUALITY_CHECK", reporter)
-    _start_stage(_runtime, "ENVIRONMENT_PREFLIGHT", reporter)
     startup = run_startup_flow(
         StartupFlowConfig(
             training_config=config.config_path,
             before_config=config.before_config,
             split=config.split,
-            device=torch.device(_select_device_name(config.device)),
-            require_cuda=config.device == "cuda",
+            device=torch.device(selected_device),
+            require_cuda=selected_device == "cuda",
             matched_manifest_path=config.matched_manifest_path,
             run_before_traning=not config.skip_before_traning,
             before_match_probe=config.before_match_probe,
@@ -259,6 +291,13 @@ def _run_startup_section(_runtime: _FlowRuntime, *, reporter) -> None:
     )
     startup_path = _runtime.output_dir / "reports" / "startup_flow_report.json"
     _write_json(startup_path, startup.as_dict())
+    _finish_stage(
+        _runtime,
+        "ENVIRONMENT_PREFLIGHT",
+        "PASSED",
+        result=startup.tests.as_dict(),
+        artifacts=(str(startup_path),),
+    )
     _finish_stage(
         _runtime,
         "SOURCE_CHANGE_CHECK",
@@ -293,13 +332,6 @@ def _run_startup_section(_runtime: _FlowRuntime, *, reporter) -> None:
         "PASSED",
         result=startup.training_startup.as_dict(),
         warnings=tuple(startup.training_startup.warnings),
-        artifacts=(str(startup_path),),
-    )
-    _finish_stage(
-        _runtime,
-        "ENVIRONMENT_PREFLIGHT",
-        "PASSED",
-        result=startup.tests.as_dict(),
         artifacts=(str(startup_path),),
     )
     _persist(_runtime, status="startup-passed")
@@ -375,6 +407,9 @@ def _run_ramp_section(_runtime: _FlowRuntime, *, inheritance, reporter) -> None:
         progress_language=config.progress_language,
         resume_policy=inheritance.policy,
         resume_stage_checkpoints=inheritance.stage_checkpoint_paths,
+        full_gallery_output_root=config.gallery_output_root,
+        full_gallery_samples_per_group=config.gallery_samples_per_group,
+        reporter=reporter,
     )
     _runtime.ramp_manifest_path = ramp.manifest_path
     _runtime.final_readiness_path = ramp.final_readiness_path
@@ -432,8 +467,10 @@ def _finish_export_stage(
 ) -> None:
     stage = _runtime.stages["MODEL_EXPORT"]
     stage.mark_started()
+    _report_full_flow_stage(_runtime, "MODEL_EXPORT")
     if not record:
         stage.mark_finished("SKIPPED", result={"reason": "no training record"})
+        _report_full_flow_stage(_runtime, "MODEL_EXPORT")
         return
     spatial_path = _record_path(record, ("spatial", "checkpoint_path"))
     temporal_path = _record_path(record, ("temporal", "checkpoint_path"))
@@ -442,6 +479,7 @@ def _finish_export_stage(
             "WARNING",
             result={"reason": "missing checkpoint path in training record"},
         )
+        _report_full_flow_stage(_runtime, "MODEL_EXPORT")
         return
     artifact = export_model_artifact(
         ModelArtifactSpec(
@@ -462,6 +500,7 @@ def _finish_export_stage(
         result={"artifact_manifest": artifact.manifest_path},
         artifacts=(str(artifact.manifest_path),),
     )
+    _report_full_flow_stage(_runtime, "MODEL_EXPORT")
 
 
 def _finish_inheritance_stage(
@@ -472,13 +511,16 @@ def _finish_inheritance_stage(
 ) -> None:
     stage = _runtime.stages["INHERITANCE_FINALIZATION"]
     stage.mark_started()
+    _report_full_flow_stage(_runtime, "INHERITANCE_FINALIZATION")
     if not record:
         stage.mark_finished("SKIPPED", result={"reason": "no training record"})
+        _report_full_flow_stage(_runtime, "INHERITANCE_FINALIZATION")
         return
     spatial_path = _record_path(record, ("spatial", "checkpoint_path"))
     temporal_path = _record_path(record, ("temporal", "checkpoint_path"))
     if temporal_path is None:
         stage.mark_finished("WARNING", result={"reason": "missing temporal checkpoint"})
+        _report_full_flow_stage(_runtime, "INHERITANCE_FINALIZATION")
         return
     package = create_inheritance_package(
         output_dir=_runtime.output_dir,
@@ -500,6 +542,7 @@ def _finish_inheritance_stage(
         result=package.as_dict(),
         artifacts=(str(package.manifest_path),),
     )
+    _report_full_flow_stage(_runtime, "INHERITANCE_FINALIZATION")
 
 
 def _mark_plan(_runtime: _FlowRuntime) -> None:
@@ -517,6 +560,7 @@ def _mark_plan(_runtime: _FlowRuntime) -> None:
             )
         else:
             state.mark_finished("LOCKED", result={"reason": "outside stage range"})
+        _report_full_flow_stage(_runtime, stage_id)
 
 
 def _mark_training_skipped_for_dry_run(_runtime: _FlowRuntime) -> None:
@@ -532,6 +576,7 @@ def _mark_training_skipped_for_dry_run(_runtime: _FlowRuntime) -> None:
             "SKIPPED",
             result={"reason": "dry-run does not execute training or checkpoint writes"},
         )
+        _report_full_flow_stage(_runtime, stage_id)
 
 
 def _mark_failed(_runtime: _FlowRuntime, error: Exception) -> None:
@@ -541,12 +586,14 @@ def _mark_failed(_runtime: _FlowRuntime, error: Exception) -> None:
                 "FAILED",
                 error=f"{type(error).__name__}: {error}",
             )
+            _report_full_flow_stage(_runtime, state.stage_id)
 
 
 def _mark_interrupted(_runtime: _FlowRuntime, reason: str) -> None:
     for state in _runtime.stages.values():
         if state.status == "RUNNING":
             state.mark_finished("INTERRUPTED", error=reason)
+            _report_full_flow_stage(_runtime, state.stage_id)
 
 
 def _persist(
@@ -565,6 +612,7 @@ def _persist(
         if report_stage.status in {"PENDING", "RUNNING"}:
             if report_stage.status == "PENDING":
                 report_stage.mark_started()
+                _report_full_flow_stage(_runtime, "REPORT_GENERATION")
             report_stage.mark_finished(
                 "PASSED",
                 result={
@@ -576,6 +624,7 @@ def _persist(
                     str(_runtime.report_markdown_path),
                 ),
             )
+            _report_full_flow_stage(_runtime, "REPORT_GENERATION")
     state = {
         "schema_version": FULL_FLOW_SCHEMA_VERSION,
         "run_id": _runtime.run_id,
@@ -659,6 +708,8 @@ def _base_manifest(config: FullFlowConfig, _runtime: _FlowRuntime) -> dict[str, 
         "device": config.device,
         "mode": config.mode,
         "auto_launch_full": config.auto_launch_full,
+        "gallery_output_root": config.gallery_output_root,
+        "gallery_samples_per_group": config.gallery_samples_per_group,
         "stage_specs": tuple(stage.as_dict() for stage in FULL_FLOW_STAGES),
         "selected_stages": _selected_stage_ids(config),
         "force_stages": tuple(validate_stage_id(stage) for stage in config.force_stages),
@@ -677,15 +728,46 @@ def _initial_stage_states() -> dict[str, FullFlowStageState]:
     }
 
 
+def _publish_initial_dashboard_stages(_runtime: _FlowRuntime) -> None:
+    reporter = _runtime.reporter
+    if reporter is None:
+        return
+    for stage_id in _selected_stage_ids(_runtime.config):
+        stage = _runtime.stages[stage_id]
+        reporter.update_pipeline_stage(
+            PipelineStageState(
+                stage_id=stage.stage_id.lower(),
+                name=stage.display_name,
+                status="pending",
+            )
+        )
+    reporter.update_metrics(
+        pipeline_phase=PipelinePhase.STARTUP.value,
+        phase="完整流程启动检查",
+        status="running",
+    )
+
+
+def _report_resource_snapshot(reporter: TrainingReporter) -> None:
+    with suppress(Exception):
+        reporter.report_resource(collect_resource_state())
+
+
 def _start_stage(_runtime: _FlowRuntime, stage_id: str, reporter) -> None:
     if not _stage_enabled(_runtime, stage_id):
         _runtime.stages[stage_id].mark_finished(
             "LOCKED",
             result={"reason": "outside requested stage range"},
         )
+        _report_full_flow_stage(_runtime, stage_id)
         return
     stage = _runtime.stages[stage_id]
     stage.mark_started()
+    reporter.update_metrics(
+        pipeline_phase=_phase_for_full_flow_stage(stage_id).value,
+        phase=stage.display_name,
+        status="running",
+    )
     reporter.update_pipeline_stage(
         PipelineStageState(
             stage_id=stage_id.lower(),
@@ -715,6 +797,95 @@ def _finish_stage(
         artifacts=artifacts,
         restored=restored,
     )
+    _report_full_flow_stage(_runtime, stage_id)
+
+
+def _report_full_flow_stage(_runtime: _FlowRuntime, stage_id: str) -> None:
+    reporter = _runtime.reporter
+    if reporter is None:
+        return
+    stage = _runtime.stages[stage_id]
+    pipeline_phase = _phase_for_full_flow_stage(stage_id)
+    if stage.status in {"FAILED", "INTERRUPTED"}:
+        pipeline_phase = PipelinePhase.FAILED
+    elif stage.stage_id == "REPORT_GENERATION" and stage.status in {"PASSED", "COMPLETED"}:
+        pipeline_phase = PipelinePhase.COMPLETED
+    reporter.update_metrics(
+        pipeline_phase=pipeline_phase.value,
+        phase=stage.display_name,
+        status=_dashboard_status(stage.status),
+    )
+    result = dict(stage.result or {})
+    processed = _optional_int(result.get("processed"), default=0)
+    total = _optional_int(result.get("total"))
+    reporter.update_pipeline_stage(
+        PipelineStageState(
+            stage_id=stage.stage_id.lower(),
+            name=stage.display_name,
+            status=_dashboard_status(stage.status),
+            processed=processed or 0,
+            total=total,
+            output_path=stage.artifacts[0] if stage.artifacts else None,
+            warning_count=len(stage.warnings),
+            error_reason=stage.error,
+            blocks_training=stage.status in {"FAILED", "INTERRUPTED"},
+            message=str(result.get("message")) if result.get("message") else None,
+        )
+    )
+
+
+def _dashboard_status(status: str) -> str:
+    return {
+        "PENDING": "pending",
+        "READY": "pending",
+        "RUNNING": "running",
+        "PASSED": "passed",
+        "WARNING": "warning",
+        "FAILED": "failed",
+        "SKIPPED": "skipped",
+        "INTERRUPTED": "interrupted",
+        "RESTORED": "passed",
+        "COMPLETED": "completed",
+        "LOCKED": "skipped",
+    }.get(status, status.lower())
+
+
+def _phase_for_full_flow_stage(stage_id: str) -> PipelinePhase:
+    if stage_id in {
+        "SOURCE_CHANGE_CHECK",
+        "BEFORE_TRAINING",
+        "DATASET_CONVERSION",
+        "SPLIT_VALIDATION",
+    }:
+        return PipelinePhase.DATA_PREPARATION
+    if stage_id in {
+        "DATA_QUALITY_CHECK",
+        "ENVIRONMENT_PREFLIGHT",
+        "RESUME_DISCOVERY",
+        "RESUME_RESTORE",
+    }:
+        return PipelinePhase.PRETRAIN_CHECK
+    if stage_id == "FINAL_READINESS":
+        return PipelinePhase.PROGRESSIVE_PREPARATION
+    if stage_id in {
+        "RAMP_TRAINING",
+        "FULL_TRAINING",
+        "FINAL_EVALUATION",
+        "MODEL_EXPORT",
+        "INHERITANCE_FINALIZATION",
+        "REPORT_GENERATION",
+    }:
+        return PipelinePhase.TRAINING
+    return PipelinePhase.STARTUP
+
+
+def _optional_int(value: object, *, default: int | None = None) -> int | None:
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def _stage_enabled(_runtime: _FlowRuntime, stage_id: str) -> bool:

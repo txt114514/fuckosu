@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import pty
 import select
@@ -64,11 +65,36 @@ class VisualizationDashboardTests(unittest.TestCase):
                     message_key="raw_data_unchanged",
                 )
             )
+            reporter.update_metrics(
+                current_parameters={
+                    "parameter_group_id": "trial_1",
+                    "training": {"spatial_max_steps": 3},
+                }
+            )
             reporter.report_score(score=0.75, trial_id="trial_1", level="A")
 
         self.assertTrue((output / "dashboard_state.json").exists())
         self.assertTrue((output / "events.jsonl").exists())
         self.assertTrue((output / "best_parameters.json").exists())
+        self.assertTrue((output / "current_parameters.json").exists())
+        self.assertTrue((output / "current_parameter_status.json").exists())
+        current_parameters = json.loads(
+            (output / "current_parameters.json").read_text(encoding="utf-8")
+        )
+        current_status = json.loads(
+            (output / "current_parameter_status.json").read_text(encoding="utf-8")
+        )
+        best_parameters = json.loads(
+            (output / "best_parameters.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(current_parameters["parameter_group_id"], "trial_1")
+        self.assertEqual(current_status["trial_id"], "trial_1")
+        self.assertEqual(current_status["score"], 0.75)
+        self.assertIn("原始数据变更检测", current_status["passed_tests"])
+        self.assertEqual(
+            best_parameters["parameters"]["training"]["spatial_max_steps"],
+            3,
+        )
 
     def test_dataset_exhausted_stop_state_is_persisted(self) -> None:
         output = Path("/tmp/visualization_test_stop")

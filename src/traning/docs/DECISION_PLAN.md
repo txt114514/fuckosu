@@ -108,7 +108,9 @@ SMET 属于动态稀疏训练，适合候选 embedding 投影、大型 MLP、GRU
 Transformer、候选交互层和动作专家。它节省参数、梯度和优化器状态，但不直接解决
 高分辨率激活图显存。
 
-首版不实现 SMET 动态拓扑，只保留配置边界和后续接入位置。
+首版已实现动态 top-k 稀疏线性层，并接入时序模型的 action/candidate/xy/time heads。
+默认关闭，可通过 `smet.enabled`、`smet.sparsity`、`smet.update_interval`
+和 `smet.min_density` 启用与调节。
 
 ## 当前状态
 
@@ -116,18 +118,19 @@ Transformer、候选交互层和动作专家。它节省参数、梯度和优化
 - `run-decision` 已能加载 `train-temporal` 产出的 `temporal_model.pt`，消费候选缓存并导出
   `decisions.jsonl`。
 - 单对象评分和序列模拟底层 API 位于 `traning.lib.metrics`。
-- trial 级评分、三类错误归因、ASHA/TPE 参数调整计划、连续通过 gate、难例采样权重和 trial 记录执行器位于 `core/optimization`。
+- trial 级评分、三类错误归因、ASHA/TPE 参数调整计划、连续通过 gate、难例采样权重、JSONL/SQLite trial 记录执行器和多目标排序位于 `core/optimization`。
 - `core.decision.pipeline.TRAINING_STAGES` 当前真实登记
   `data_input / spatial / candidate_cache / temporal / decision / evaluation`。
   这是单轮训练流水线阶段；完整生命周期阶段另由
   `core.full_flow.stages.FULL_FLOW_STAGES` 登记。
 - 完整训练结束后可由 `settings.optimization.enabled` 触发 `analyze_trial_attribution`、
-  `plan_next_trial` 和 `execute_optimization_plan`，写出 trial JSONL、`attribution.json`、
-  `optimization_plan.json` 和 `next_training_job.json`。
+  `plan_next_trial` 和 `execute_optimization_plan`，写出 trial 记录、`attribution.json`、
+  `optimization_plan.json` 和 `next_training_job.json`；`optimization.trial_store_backend`
+  可选择 `jsonl` 或 `sqlite`。
 - `python -m traning.main run-job --job <next_training_job.json>` 可消费 job JSON，并调用普通
   `run_training_job_spec` / `run_training` 业务函数执行，不复制训练逻辑。
 
 ## 后续计划
 
-- 将 optimization JSONL 记录升级为 SQLite 或实验数据库。
-- 将 `quality_score`、`peak_vram_mb`、`latency_ms` 拆成独立目标，再定义可复现排序公式。
+- 基于真实训练结果校准 `multi-objective-v1` 的默认权重。
+- 将 SQLite trial store 扩展为更完整的实验数据库视图和查询工具。

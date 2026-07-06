@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from typing import Literal
 
 from visualization.conf.defaults import (
+    DEFAULT_AUTO_PAGE_SECONDS,
+    DEFAULT_COMPACT_TERMINAL_HEIGHT,
     DEFAULT_CRITICAL_VRAM_RATIO,
     DEFAULT_LANGUAGE,
     DEFAULT_PLAIN_INTERVAL_SECONDS,
@@ -25,6 +27,8 @@ class DashboardSettings:
     recent_event_limit: int = DEFAULT_RECENT_EVENT_LIMIT
     warning_vram_ratio: float = DEFAULT_WARNING_VRAM_RATIO
     critical_vram_ratio: float = DEFAULT_CRITICAL_VRAM_RATIO
+    compact_terminal_height: int = DEFAULT_COMPACT_TERMINAL_HEIGHT
+    auto_page_seconds: float = DEFAULT_AUTO_PAGE_SECONDS
     narrow_terminal_width: int = NARROW_TERMINAL_WIDTH
 
     def __post_init__(self) -> None:
@@ -36,3 +40,7 @@ class DashboardSettings:
             raise ValueError("plain_interval_seconds must be positive")
         if self.recent_event_limit <= 0:
             raise ValueError("recent_event_limit must be positive")
+        if self.compact_terminal_height <= 0:
+            raise ValueError("compact_terminal_height must be positive")
+        if self.auto_page_seconds <= 0:
+            raise ValueError("auto_page_seconds must be positive")

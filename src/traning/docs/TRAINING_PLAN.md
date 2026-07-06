@@ -65,7 +65,7 @@ main.py
   `SegmentFrameDataset` 和 `DataLoader`。
 - `spatial`：原分辨率帧、重叠 patch、全局/局部编码、稠密空间头、单帧训练 smoke 和单帧推理。
 - `decision`：离线候选缓存 JSONL/manifest，保留候选、embedding、slider polyline 和歧义标记。
-- `optimization`：trial/sample 级评分聚合、空间/时间/决策归因、ASHA/TPE 参数调整计划、连续通过 gate、难例采样权重和 trial 记录执行器。
+- `optimization`：trial/sample 级评分聚合、空间/时间/决策归因、ASHA/TPE 参数调整计划、连续通过 gate、难例采样权重、JSONL/SQLite trial 记录和多目标排序。
 - `result_export`：单帧标注预览、最佳 trial 图集、`passed/failed` 分类和稳定输出目录。
 - `state`：trial 参数、checkpoint lineage、课程阶段、gallery request 和 frame evaluation schema。
 - `lib.metrics`：`point-slider-v2` 单对象评分和 `click-sequence-v1` 序列模拟底层 API。
@@ -79,7 +79,7 @@ main.py
 - `full-flow` 是推荐的一条命令入口；`ramp-to-full` 保留为渐进放大兼容入口。
 - `run` 保留为单轮完整训练入口；`train-spatial`、`train-temporal` 等分步命令仍用于诊断。
 - `model_export` 已执行 CPU artifact smoke；更大规模 GPU 训练仍需按 `TRAINING_READINESS.md` 分级推进。
-- SMET 动态拓扑仍是可选质量增强层，当前配置默认关闭。
+- SMET 动态拓扑已有首版动态 top-k 稀疏线性层，并接入时序模型输出 heads；当前配置默认关闭。
 
 ## 核心技术约束
 

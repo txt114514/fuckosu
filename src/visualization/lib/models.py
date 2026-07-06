@@ -2,8 +2,19 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
+
+
+class PipelinePhase(StrEnum):
+    STARTUP = "startup"
+    DATA_PREPARATION = "data_preparation"
+    PRETRAIN_CHECK = "pretrain_check"
+    PROGRESSIVE_PREPARATION = "progressive_preparation"
+    TRAINING = "training"
+    COMPLETED = "completed"
+    FAILED = "failed"
 
 
 def utc_now() -> str:
@@ -65,6 +76,8 @@ class PipelineStageState:
     error_reason: str | None = None
     blocks_training: bool = False
     message: str | None = None
+    score: float | None = None
+    threshold: float | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -202,6 +215,7 @@ class GalleryExportRequest:
 class TrainingDashboardState:
     run_id: str
     phase: str = "初始化"
+    pipeline_phase: str = PipelinePhase.STARTUP.value
     status: str = "pending"
     pipeline_stages: dict[str, PipelineStageState] = field(default_factory=dict)
     current_level: str | None = None
@@ -217,6 +231,9 @@ class TrainingDashboardState:
     temporal_target: int | None = None
     current_trial_id: str | None = None
     current_parameters: dict[str, object] = field(default_factory=dict)
+    current_parameter_status: dict[str, object] = field(default_factory=dict)
+    trial_status: str | None = None
+    prune_reason: str | None = None
     metrics: CurrentTrainingMetrics = field(default_factory=CurrentTrainingMetrics)
     current_grade: str | None = None
     best_grade: str | None = None

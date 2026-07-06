@@ -5,12 +5,16 @@ from visualization.conf.messages import SEVERITY_NAMES, render_message
 from visualization.lib.models import TrainingDashboardState
 
 
-def render_events_panel(state: TrainingDashboardState) -> Panel:
+def render_events_panel(
+    state: TrainingDashboardState,
+    *,
+    limit: int = 12,
+) -> Panel:
     table = Table.grid(expand=True)
     table.add_column("时间")
     table.add_column("级别")
     table.add_column("事件")
-    for event in state.recent_events[-12:]:
+    for event in state.recent_events[-limit:]:
         table.add_row(
             event.timestamp[-8:],
             SEVERITY_NAMES.get(event.severity, event.severity),

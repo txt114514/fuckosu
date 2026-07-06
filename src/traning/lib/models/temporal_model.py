@@ -4,6 +4,7 @@ import torch
 from torch import nn
 
 from traning.lib.models.outputs import ActionPrediction
+from traning.lib.models.smet import maybe_sparse_linear
 
 
 class CausalTemporalModel(nn.Module):
@@ -17,6 +18,10 @@ class CausalTemporalModel(nn.Module):
         layers: int = 2,
         candidate_slots: int = 64,
         action_classes: int = 4,
+        smet_enabled: bool = False,
+        smet_sparsity: float = 0.50,
+        smet_update_interval: int = 16,
+        smet_min_density: float = 0.05,
     ) -> None:
         super().__init__()
         if min(input_size, hidden_size, layers, candidate_slots, action_classes) <= 0:
@@ -28,10 +33,16 @@ class CausalTemporalModel(nn.Module):
             nn.GRUCell(input_size if layer == 0 else hidden_size, hidden_size)
             for layer in range(layers)
         )
-        self.action_head = nn.Linear(hidden_size, action_classes)
-        self.candidate_head = nn.Linear(hidden_size, candidate_slots)
-        self.xy_head = nn.Linear(hidden_size, 2)
-        self.time_head = nn.Linear(hidden_size, 1)
+        sparse_head = {
+            "enabled": smet_enabled,
+            "sparsity": smet_sparsity,
+            "update_interval": smet_update_interval,
+            "min_density": smet_min_density,
+        }
+        self.action_head = maybe_sparse_linear(hidden_size, action_classes, **sparse_head)
+        self.candidate_head = maybe_sparse_linear(hidden_size, candidate_slots, **sparse_head)
+        self.xy_head = maybe_sparse_linear(hidden_size, 2, **sparse_head)
+        self.time_head = maybe_sparse_linear(hidden_size, 1, **sparse_head)
 
     def initial_state(
         self,

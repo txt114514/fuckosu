@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from visualization.conf import DashboardSettings
+from visualization.core.view_router import dashboard_view_kind
 from visualization.lib.reporter import DashboardReporter
 
 
@@ -12,7 +13,8 @@ class PlainDashboardRenderer:
     def start(self) -> None:
         state = self.reporter.snapshot()
         print(
-            f"[训练控制台] 运行：{state.run_id}，状态：{state.status}",
+            f"[训练控制台:{dashboard_view_kind(state)}] "
+            f"运行：{state.run_id}，状态：{state.status}",
             flush=True,
         )
 
@@ -20,12 +22,29 @@ class PlainDashboardRenderer:
         state = self.reporter.snapshot()
         metrics = state.metrics
         resources = state.resources
+        counts = _stage_counts(state.current_parameter_status)
         print(
-            "[训练控制台] "
+            f"[训练控制台:{dashboard_view_kind(state)}] "
             f"阶段：{state.phase}；评分：{metrics.score}; "
             f"最高：{metrics.run_global_best_score}; "
             f"等级：{state.current_grade or '未评级'}；"
             f"晋升：{state.promotion_status or '未评级'}；"
+            f"通过：{counts.get('passed', 0) + counts.get('completed', 0)}；"
+            f"警告：{counts.get('warning', 0)}；"
+            f"失败：{counts.get('failed', 0) + counts.get('interrupted', 0)}；"
             f"显存峰值：{resources.gpu_peak_reserved_gb}",
             flush=True,
         )
+
+
+def _stage_counts(status: dict[str, object]) -> dict[str, int]:
+    value = status.get("stage_counts")
+    if not isinstance(value, dict):
+        return {}
+    counts: dict[str, int] = {}
+    for key, item in value.items():
+        try:
+            counts[str(key)] = int(item)
+        except (TypeError, ValueError):
+            continue
+    return counts

@@ -19,12 +19,14 @@ from traning.core.decision import (
 )
 from traning.core.spatial import SpatialTrainingResult
 from traning.core.temporal import TemporalTrainingResult
+from visualization.lib import NullReporter, PipelinePhase, PipelineStageState
 
 
 class FullTrainingPipelineTests(unittest.TestCase):
     def test_pipeline_runs_all_training_steps_and_writes_summary(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             run_dir = Path(temporary)
+            reporter = _RecordingReporter()
             data_report = DataInputReport(
                 split="train",
                 segment_count=1,
@@ -165,6 +167,7 @@ class FullTrainingPipelineTests(unittest.TestCase):
                         sequence_length=2,
                         candidate_slots=2,
                         render_gallery=False,
+                        reporter=reporter,
                         resume_policy="strict",
                         resume_stage_checkpoints={
                             "spatial": run_dir / "resume_spatial.pt",
@@ -185,6 +188,41 @@ class FullTrainingPipelineTests(unittest.TestCase):
                 summary["temporal"]["checkpoint_path"],
                 str(temporal_result.checkpoint_path),
             )
+            parameter_updates = [
+                update["current_parameters"]
+                for update in reporter.metric_updates
+                if "current_parameters" in update
+            ]
+            phase_updates = [
+                update["pipeline_phase"]
+                for update in reporter.metric_updates
+                if "pipeline_phase" in update
+            ]
+            trial_status_updates = [
+                update["trial_status"]
+                for update in reporter.metric_updates
+                if "trial_status" in update
+            ]
+            self.assertTrue(parameter_updates)
+            self.assertIn(PipelinePhase.TRAINING.value, phase_updates)
+            self.assertIn("evaluating", trial_status_updates)
+            planned_parameters = parameter_updates[0]
+            self.assertEqual(planned_parameters["parameter_group_id"], "pg-0001")
+            self.assertIsNone(planned_parameters["evaluation"]["quality_score"])
+            current_parameters = parameter_updates[-1]
+            self.assertEqual(current_parameters["parameter_group_id"], "pg-0001")
+            self.assertEqual(current_parameters["training"]["spatial_max_steps"], 1)
+            self.assertEqual(current_parameters["temporal"]["sequence_length"], 2)
+            self.assertEqual(current_parameters["evaluation"]["quality_score"], 1.0)
+            self.assertEqual(current_parameters["evaluation"]["pass_threshold"], 0.8)
+            self.assertEqual(current_parameters["outputs"]["decision_frames"], 1)
+            evaluation_stages = [
+                stage
+                for stage in reporter.stage_updates
+                if stage.stage_id == "evaluation"
+            ]
+            self.assertEqual(evaluation_stages[-1].score, 1.0)
+            self.assertEqual(evaluation_stages[-1].threshold, 0.8)
             startup_mock.assert_called_once()
             spatial_mock.assert_called_once()
             cache_mock.assert_called_once_with(
@@ -212,6 +250,18 @@ class FullTrainingPipelineTests(unittest.TestCase):
             )
             self.assertEqual(temporal_mock.call_args.kwargs["resume_policy"], "strict")
             decision_mock.assert_called_once()
+
+
+class _RecordingReporter(NullReporter):
+    def __init__(self) -> None:
+        self.metric_updates: list[dict[str, object]] = []
+        self.stage_updates: list[PipelineStageState] = []
+
+    def update_metrics(self, **metrics: object) -> None:
+        self.metric_updates.append(metrics)
+
+    def update_pipeline_stage(self, stage: PipelineStageState) -> None:
+        self.stage_updates.append(stage)
 
 
 if __name__ == "__main__":

@@ -113,12 +113,14 @@ GPU 侧只保留必要的模型前向和 tensor copy。
 - `decode_spatial_candidates` 已提供 Top-K、局部最大值和半径 NMS。
 - `decode_slider_paths` 已提供连通域、端点、歧义标记和固定长度 polyline。
 - `build-candidate-cache` 已复用空间推理逐帧生成候选缓存。
-- 候选缓存已接入可关闭的 top-K 局部 refiner 和条件 ambiguity review，记录 refinement
-  前后坐标、置信度和触发原因，不对全帧做高分辨率重算。
+- 候选缓存已接入可关闭的 top-K 局部 refiner 和 `local_consistency_model_v1`
+  条件 ambiguity review。复查会综合 center/visible/type 分数、slider path 连接和端点距离，
+  能解决的歧义会从候选标记中移除；局部 refiner 可把 slider head 贴合到路径端点或中心线，
+  并记录 refinement 前后坐标、置信度和触发原因，不对全帧做高分辨率重算。
 - `run_spatial_training` 已接入配置化空间一致性 loss：
   `training.spatial_consistency_loss_weights.embedding/ring_radius/slider_continuity`，
   默认 0 保持兼容。
 
 ## 后续计划
 
-- 基于真实训练结果继续替换当前 bounded metadata review 为更强的局部模型复查。
+- 基于真实训练结果继续把确定性 `local_consistency_model_v1` 升级为可学习的局部复查模型。
