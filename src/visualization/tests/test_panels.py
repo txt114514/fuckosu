@@ -16,7 +16,12 @@ from visualization.core.panels import (
     render_resources_panel,
 )
 from visualization.core.view_router import render_dashboard_view
-from visualization.lib import PipelineStageState, TrainingDashboardState
+from visualization.lib import (
+    CurrentTrainingMetrics,
+    PipelineStageState,
+    ResourceState,
+    TrainingDashboardState,
+)
 
 
 class VisualizationPanelTests(unittest.TestCase):
@@ -55,7 +60,14 @@ class VisualizationPanelTests(unittest.TestCase):
             processed=8,
             total=100,
         )
-        for page in ("overview", "parameters", "tests", "scores", "resources", "events"):
+        for page in (
+            "overview",
+            "parameters",
+            "tests",
+            "scores",
+            "resources",
+            "events",
+        ):
             with self.subTest(page=page):
                 view = render_dashboard_view(state, compact=True, page=page)
                 self.assertIsNotNone(view)
@@ -75,6 +87,65 @@ class VisualizationPanelTests(unittest.TestCase):
         self.assertIn("正式训练", output)
         self.assertIn("评估中", output)
         self.assertNotIn("evaluating", output)
+
+    def test_dashboard_visible_labels_are_chinese(self) -> None:
+        state = TrainingDashboardState(
+            run_id="zh-visible-labels",
+            pipeline_phase="training",
+            current_trial_id="zh-001",
+            phase="Level A",
+            status="running",
+            current_grade="observing",
+            promotion_status="quality below ASHA prune floor",
+            metrics=CurrentTrainingMetrics(loss=0.12),
+            resources=ResourceState(
+                gpu_allocated_gb=1.0,
+                gpu_reserved_gb=2.0,
+                gpu_peak_allocated_gb=3.0,
+                gpu_peak_reserved_gb=4.0,
+            ),
+        )
+        state.pipeline_stages["gpu_bridge"] = PipelineStageState(
+            stage_id="gpu_bridge",
+            name="GPU bridge",
+            status="checking",
+            processed=1,
+            total=2,
+        )
+        state.category_scores = {"single_point": 0.9}
+        state.current_parameter_status = {
+            "trial_status": "training",
+            "curriculum_stage": "Level A",
+            "test_statuses": {"训练 readiness": "running"},
+            "prune_reason": "quality below ASHA prune floor",
+        }
+
+        console = Console(record=True, width=120)
+        console.print(render_dashboard_view(state, compact=False))
+        console.print(render_pipeline_panel(state))
+        output = console.export_text()
+
+        self.assertIn("GPU 桥接检查", output)
+        self.assertIn("训练就绪检查", output)
+        self.assertIn("等级 A", output)
+        self.assertIn("质量分低于 ASHA 淘汰下限", output)
+        self.assertIn("当前已分配显存", output)
+        for text in (
+            "GPU bridge",
+            "训练 readiness",
+            "Level A",
+            "Trial",
+            "Step",
+            "Epoch",
+            "Global step",
+            "Spatial step",
+            "Temporal step",
+            "allocated",
+            "reserved",
+            "N/A",
+            "loss",
+        ):
+            self.assertNotIn(text, output)
 
     def test_compact_startup_pages_render(self) -> None:
         state = TrainingDashboardState(run_id="compact-startup")

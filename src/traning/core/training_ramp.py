@@ -462,7 +462,34 @@ def _run_preflight(
         )
     )
     if device == "cuda" and not env.torch.cuda_available:
-        raise RampGateError("CUDA is not visible; run ramp-to-full through host-exec")
+        error_message = "CUDA is not visible; run ramp-to-full through host-exec"
+        reporter.update_pipeline_stage(
+            PipelineStageState(
+                stage_id="gpu_bridge",
+                name="GPU bridge",
+                status="failed",
+                processed=0,
+                total=1,
+                error_reason=error_message,
+                blocks_training=True,
+                message=error_message,
+            )
+        )
+        raise RampGateError(error_message)
+    reporter.update_pipeline_stage(
+        PipelineStageState(
+            stage_id="gpu_bridge",
+            name="GPU bridge",
+            status="passed" if env.torch.cuda_available else "skipped",
+            processed=1,
+            total=1,
+            message=(
+                f"CUDA 可见：{env.torch.gpu_name or '未知 GPU'}"
+                if env.torch.cuda_available
+                else "当前运行配置不要求 CUDA"
+            ),
+        )
+    )
     settings = load_settings(config_path)
     reporter.update_pipeline_stage(
         PipelineStageState(
@@ -1094,6 +1121,13 @@ def _gate_level(
     }.items():
         if not math.isfinite(float(value)):
             failures.append(f"{label} is not finite")
+    quality_score = float(result.evaluation.quality_score)
+    pass_threshold = float(result.evaluation.pass_threshold)
+    if not result.evaluation.passed or quality_score < pass_threshold:
+        failures.append(
+            "quality score "
+            f"{quality_score:.6f} below pass threshold {pass_threshold:.6f}"
+        )
     checkpoint_paths = (
         result.spatial.checkpoint_path,
         result.temporal.checkpoint_path,

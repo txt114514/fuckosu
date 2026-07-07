@@ -16,10 +16,10 @@ def launch_image_window(
 ) -> subprocess.Popen[bytes]:
     selected_display = display if display is not None else os.environ.get("DISPLAY")
     if not selected_display:
-        raise RuntimeError("DISPLAY is not configured")
+        raise RuntimeError("未配置 DISPLAY，无法打开图像窗口")
     executable = shutil.which(ffplay_binary)
     if executable is None:
-        raise RuntimeError(f"ffplay executable was not found: {ffplay_binary}")
+        raise RuntimeError(f"未找到 ffplay 可执行文件：{ffplay_binary}")
     if previous_process is not None and previous_process.poll() is None:
         previous_process.terminate()
 
@@ -47,7 +47,7 @@ def launch_image_window(
         return_code = process.wait(timeout=0.2)
     except subprocess.TimeoutExpired:
         return process
-    raise RuntimeError(f"ffplay exited immediately with code {return_code}")
+    raise RuntimeError(f"ffplay 立即退出，返回码 {return_code}")
 
 
 __all__ = ["launch_image_window"]

@@ -144,15 +144,22 @@ class DatasetUsageState:
 
 @dataclass
 class ResourceState:
+    gpu_index: int | None = None
     gpu_name: str | None = None
     gpu_allocated_gb: float | None = None
     gpu_reserved_gb: float | None = None
     gpu_peak_allocated_gb: float | None = None
     gpu_peak_reserved_gb: float | None = None
     gpu_total_gb: float | None = None
+    gpu_memory_used_gb: float | None = None
     gpu_utilization: float | None = None
+    gpu_utilization_avg: float | None = None
+    gpu_utilization_max: float | None = None
+    gpu_memory_utilization: float | None = None
     gpu_temperature_c: float | None = None
     gpu_power_w: float | None = None
+    gpu_monitor_source: str | None = None
+    gpu_monitor_error: str | None = None
     cpu_percent: float | None = None
     system_memory_gb: float | None = None
     process_memory_gb: float | None = None

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import csv
 import json
 import random
 import re
 import shutil
-import csv
 from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -12,15 +12,16 @@ from pathlib import Path
 from typing import Any
 
 from traning.lib.data import SegmentFrameDataset, SegmentRecord
-from visualization.core.gallery.manifest import allocate_output_identity
-from visualization.core.gallery.renderer import (
-    render_annotated_frame,
-    save_annotated_frame,
-)
 from traning.state.gallery_schema import (
     BatchGalleryRequest,
     EVALUATION_SUBPROJECTS,
     FrameEvaluation,
+)
+from visualization.conf.messages import display_text
+from visualization.core.gallery.manifest import allocate_output_identity
+from visualization.core.gallery.renderer import (
+    render_annotated_frame,
+    save_annotated_frame,
 )
 
 
@@ -73,10 +74,7 @@ def _frame_lookup(
 
 
 def _metric_lines(metrics: Mapping[str, float]) -> tuple[str, ...]:
-    return tuple(
-        f"{name}={value:.6g}"
-        for name, value in sorted(metrics.items())
-    )
+    return tuple(f"指标 {name}={value:.6g}" for name, value in sorted(metrics.items()))
 
 
 def _is_export_frame(frame: FrameEvaluation) -> bool:
@@ -129,7 +127,7 @@ def save_best_trial_gallery(
     samples_per_group: int = 10,
 ) -> tuple[Path, int, tuple[str, ...]]:
     if samples_per_group <= 0:
-        raise ValueError("samples_per_group must be positive")
+        raise ValueError("每组样本数必须为正数")
 
     best_trial = request.best_trial
     output_identity = allocate_output_identity(output_root)
@@ -152,13 +150,13 @@ def save_best_trial_gallery(
         resolved = lookup.get((frame.sample_key, frame.frame_index))
         if resolved is None:
             issues.append(
-                f"missing dataset frame {frame.sample_key}:{frame.frame_index}"
+                f"缺少数据集帧 {frame.sample_key}:{frame.frame_index}"
             )
             continue
         _, subproject = resolved
         if subproject not in EVALUATION_SUBPROJECTS:
             issues.append(
-                f"unsupported subproject {subproject!r} for "
+                f"不支持的子项目 {subproject!r}，来源 "
                 f"{frame.sample_key}:{frame.frame_index}"
             )
             continue
@@ -223,14 +221,14 @@ def save_best_trial_gallery(
                     dataset_index, _ = lookup[(frame.sample_key, frame.frame_index)]
                     sample = dataset[dataset_index]
                     metadata = (
-                        f"output={output_identity.sequence:06d}",
-                        f"output_time={output_identity.created_at_utc}",
-                        f"batch={request.batch_id}",
-                        f"trial={best_trial.trial_id} score={best_trial.score:.6g}",
-                        f"score_version={best_trial.score_version}",
-                        f"sample_group={group_index:02d}",
-                        f"subproject={subproject}",
-                        f"outcome={OUTCOME_DIRECTORIES[passed]}",
+                        f"输出序号={output_identity.sequence:06d}",
+                        f"输出时间={output_identity.created_at_utc}",
+                        f"批次={request.batch_id}",
+                        f"试验={best_trial.trial_id} 评分={best_trial.score:.6g}",
+                        f"评分版本={best_trial.score_version}",
+                        f"样本组={group_index:02d}",
+                        f"子项目={display_text(subproject)}",
+                        f"结果={display_text(OUTCOME_DIRECTORIES[passed])}",
                         *_metric_lines(frame.metrics),
                     )
                     image = render_annotated_frame(

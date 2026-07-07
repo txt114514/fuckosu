@@ -25,7 +25,7 @@ from traning.core.training_inheritance import (
     create_inheritance_package,
     load_inheritance_package,
 )
-from traning.core.training_ramp import run_training_ramp
+from traning.core.training_ramp import RampGateError, run_training_ramp
 from traning.state.versioning import collect_code_version, version_manifest
 from visualization.lib import (
     PipelinePhase,
@@ -95,6 +95,7 @@ class _FlowRuntime:
     final_artifact_path: Path | None = None
     inheritance_path: Path | None = None
     reporter: TrainingReporter | None = None
+    stop_reason: str | None = None
 
     @property
     def state_path(self) -> Path:
@@ -183,6 +184,19 @@ def run_full_flow(config: FullFlowConfig) -> FullFlowResult:
                 )
             )
             raise
+        except RampGateError as error:
+            message = f"{type(error).__name__}: {error}"
+            _mark_failed(runtime, error)
+            _persist(runtime, status="failed", stop_reason=message)
+            if reporter.snapshot().stop_state is None:
+                reporter.request_stop(
+                    TrainingStopState(
+                        reason="RAMP_GATE_FAILED",
+                        message=message,
+                        exit_code=1,
+                    )
+                )
+            return _result(runtime, status="failed")
         except Exception as error:
             _mark_failed(runtime, error)
             _persist(runtime, status="failed", stop_reason=str(error))
@@ -602,6 +616,8 @@ def _persist(
     status: str,
     stop_reason: str | None = None,
 ) -> None:
+    if stop_reason is not None:
+        _runtime.stop_reason = stop_reason
     if status not in {
         "running",
         "startup-passed",
@@ -645,7 +661,7 @@ def _persist(
         ),
         "ramp_manifest_path": _runtime.ramp_manifest_path,
         "final_readiness_path": _runtime.final_readiness_path,
-        "stop_reason": stop_reason,
+        "stop_reason": _runtime.stop_reason,
     }
     manifest = dict(_runtime.manifest)
     manifest.update(
@@ -694,6 +710,7 @@ def _result(_runtime: _FlowRuntime, *, status: str) -> FullFlowResult:
         ),
         ramp_manifest_path=_runtime.ramp_manifest_path,
         final_readiness_path=_runtime.final_readiness_path,
+        stop_reason=_runtime.stop_reason,
     )
 
 

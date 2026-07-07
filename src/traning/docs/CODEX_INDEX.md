@@ -38,7 +38,7 @@ tests/full_checks/runner.py -> full pytest checks
 
 ## 符号索引
 
-覆盖 `141` 个 Python 文件、`801` 个命名函数/方法、`188` 个类。匿名 lambda 不单独列出。
+覆盖 `143` 个 Python 文件、`806` 个命名函数/方法、`189` 个类。匿名 lambda 不单独列出。
 
 图例：`F` 模块函数，`M` 方法，`N` 嵌套函数，`C` 类；`IO-R/IO-W` 文件读写，`DB` 数据库，`PROCESS` 外部进程。
 
@@ -235,52 +235,52 @@ tests/full_checks/runner.py -> full pytest checks
 工程依赖：`start.flow`, `start.samples`, `traning.conf`, `traning.core.full_flow.result`, `traning.core.full_flow.stages`, `traning.core.model_export`, `traning.core.training_inheritance`, `traning.core.training_ramp`, `traning.state.versioning`
 
 - `C L47-L81` `FullFlowConfig` [CLASS]：封装 `FullFlowConfig` 相关数据或行为。
-- `C L85-L113` `_FlowRuntime` [CLASS]：封装 `FlowRuntime` 相关数据或行为。
-- `M L100-L101` `_FlowRuntime.state_path(self) -> Path` [PROPERTY]：执行 `state path` 对应逻辑。
-- `M L104-L105` `_FlowRuntime.manifest_path(self) -> Path` [PROPERTY]：执行 `manifest path` 对应逻辑。
-- `M L108-L109` `_FlowRuntime.report_json_path(self) -> Path` [PROPERTY]：执行 `report json path` 对应逻辑。
-- `M L112-L113` `_FlowRuntime.report_markdown_path(self) -> Path` [PROPERTY]：执行 `report markdown path` 对应逻辑。
-- `F L116-L196` `run_full_flow(config: FullFlowConfig) -> FullFlowResult`：执行 `run full flow` 对应逻辑。 调用：`_FlowRuntime`, `_base_manifest`, `_init_layout`, `_initial_stage_states`, `_mark_failed`, `_mark_interrupted`。
-- `F L199-L256` `load_full_flow_status(output_root: Path=DEFAULT_FULL_FLOW_ROOT, *, run_id: str | None=None) -> FullFlowResult`：加载 `full flow status` 对应的数据或结果。 调用：`FullFlowResult`, `FullFlowStageState`, `_read_json`。
-- `F L259-L337` `_run_startup_section(_runtime: _FlowRuntime, *, reporter) -> None`：执行 `run startup section` 对应逻辑。 调用：`_finish_stage`, `_persist`, `_select_device_name`, `_start_stage`, `_write_json`, `startup.as_dict`。
-- `F L340-L388` `_run_resume_section(_runtime: _FlowRuntime, *, reporter)`：执行 `run resume section` 对应逻辑。 调用：`_finish_stage`, `_persist`, `_start_stage`, `_write_json`, `inheritance.as_dict`, `load_inheritance_package`。
-- `F L391-L452` `_run_ramp_section(_runtime: _FlowRuntime, *, inheritance, reporter) -> None`：执行 `run ramp section` 对应逻辑。 调用：`_finish_stage`, `_last_training_record`, `_persist`, `_select_device_name`, `_stage_enabled`, `_stage_forced`。
-- `F L455-L459` `_run_finalize_section(_runtime: _FlowRuntime) -> None`：执行 `run finalize section` 对应逻辑。 调用：`_finish_export_stage`, `_finish_inheritance_stage`, `_last_training_record`, `load_settings`。
-- `F L462-L503` `_finish_export_stage(_runtime: _FlowRuntime, *, settings, record: Mapping[str, Any] | None) -> None`：执行 `finish export stage` 对应逻辑。 调用：`ModelArtifactSpec`, `_record_extra_files`, `_record_path`, `_report_full_flow_stage`, `collect_code_version`, `export_model_artifact`。
-- `F L506-L545` `_finish_inheritance_stage(_runtime: _FlowRuntime, *, settings, record: Mapping[str, Any] | None) -> None`：执行 `finish inheritance stage` 对应逻辑。 调用：`_record_extra_files`, `_record_path`, `_report_full_flow_stage`, `create_inheritance_package`, `package.as_dict`, `stage.mark_finished`。
-- `F L548-L563` `_mark_plan(_runtime: _FlowRuntime) -> None`：更新状态为 `plan` 对应的数据或结果。 调用：`_report_full_flow_stage`, `_selected_stage_ids`, `_stage_forced`, `state.mark_finished`。
-- `F L566-L579` `_mark_training_skipped_for_dry_run(_runtime: _FlowRuntime) -> None`：更新状态为 `training skipped for dry run` 对应的数据或结果。 调用：`_report_full_flow_stage`, `mark_finished`。
-- `F L582-L589` `_mark_failed(_runtime: _FlowRuntime, error: Exception) -> None`：更新状态为 `failed` 对应的数据或结果。 调用：`_report_full_flow_stage`, `state.mark_finished`。
-- `F L592-L596` `_mark_interrupted(_runtime: _FlowRuntime, reason: str) -> None`：更新状态为 `interrupted` 对应的数据或结果。 调用：`_report_full_flow_stage`, `state.mark_finished`。
-- `F L599-L674` `_persist(_runtime: _FlowRuntime, *, status: str, stop_reason: str | None=None) -> None`：执行 `persist` 对应逻辑。 调用：`_report_full_flow_stage`, `_write_json`, `_write_reports`, `report_stage.mark_finished`, `report_stage.mark_started`, `stage.as_dict`。
-- `F L677-L697` `_result(_runtime: _FlowRuntime, *, status: str) -> FullFlowResult`：执行 `result` 对应逻辑。 调用：`FullFlowResult`, `utc_now`。
-- `F L700-L721` `_base_manifest(config: FullFlowConfig, _runtime: _FlowRuntime) -> dict[str, Any]`：执行 `base manifest` 对应逻辑。 调用：`_dataset_fingerprint`, `_file_sha256`, `_selected_stage_ids`, `collect_code_version`, `collect_code_version.as_dict`, `load_settings`。
-- `F L724-L728` `_initial_stage_states() -> dict[str, FullFlowStageState]`：执行 `initial stage states` 对应逻辑。 调用：`FullFlowStageState`。
-- `F L731-L748` `_publish_initial_dashboard_stages(_runtime: _FlowRuntime) -> None`：执行 `publish initial dashboard stages` 对应逻辑。 调用：`_selected_stage_ids`, `reporter.update_metrics`, `reporter.update_pipeline_stage`。
-- `F L751-L753` `_report_resource_snapshot(reporter: TrainingReporter) -> None`：执行 `report resource snapshot` 对应逻辑。
-- `F L756-L777` `_start_stage(_runtime: _FlowRuntime, stage_id: str, reporter) -> None`：执行 `start stage` 对应逻辑。 调用：`_phase_for_full_flow_stage`, `_report_full_flow_stage`, `_stage_enabled`, `mark_finished`, `reporter.update_metrics`, `reporter.update_pipeline_stage`。
-- `F L780-L800` `_finish_stage(_runtime: _FlowRuntime, stage_id: str, status, *, result: Mapping[str, Any] | None=None, warnings: tuple[str, ...]=(), artifacts: tuple[str, ...]=(), restored: bool=False) -> None`：执行 `finish stage` 对应逻辑。 调用：`_report_full_flow_stage`, `_stage_forced`, `mark_finished`。
-- `F L803-L834` `_report_full_flow_stage(_runtime: _FlowRuntime, stage_id: str) -> None`：执行 `report full flow stage` 对应逻辑。 调用：`_dashboard_status`, `_optional_int`, `_phase_for_full_flow_stage`, `reporter.update_metrics`, `reporter.update_pipeline_stage`。
-- `F L837-L850` `_dashboard_status(status: str) -> str`：执行 `dashboard status` 对应逻辑。
-- `F L853-L879` `_phase_for_full_flow_stage(stage_id: str) -> PipelinePhase`：执行 `phase for full flow stage` 对应逻辑。
-- `F L882-L888` `_optional_int(value: object, *, default: int | None=None) -> int | None`：执行 `optional int` 对应逻辑。
-- `F L891-L892` `_stage_enabled(_runtime: _FlowRuntime, stage_id: str) -> bool`：执行 `stage enabled` 对应逻辑。 调用：`_selected_stage_ids`。
-- `F L895-L896` `_stage_forced(config: FullFlowConfig, stage_id: str) -> bool`：执行 `stage forced` 对应逻辑。 调用：`validate_stage_id`。
-- `F L899-L908` `_selected_stage_ids(config: FullFlowConfig) -> tuple[str, ...]`：执行 `selected stage ids` 对应逻辑。 调用：`validate_stage_id`。
-- `F L911-L926` `_validate_config(config: FullFlowConfig) -> None`：校验 `config` 对应的数据或结果。 调用：`_selected_stage_ids`, `validate_stage_id`。
-- `F L929-L941` `_init_layout(output_dir: Path) -> None` [IO-W]：执行 `init layout` 对应逻辑。
-- `F L944-L946` `_write_resolved_config(config_path: Path, output_dir: Path) -> None`：写入 `resolved config` 对应的数据或结果。
-- `F L949-L975` `_write_reports(_runtime: _FlowRuntime, state: Mapping[str, Any]) -> None` [IO-W]：写入 `reports` 对应的数据或结果。 调用：`_write_json`, `lines.append`。
-- `F L978-L997` `_last_training_record(ramp_manifest_path: Path | None) -> Mapping[str, Any] | None`：执行 `last training record` 对应逻辑。 调用：`_read_json`。
-- `F L1000-L1009` `_record_path(record: Mapping[str, Any], keys: tuple[str, ...]) -> Path | None`：执行 `record path` 对应逻辑。
-- `F L1012-L1019` `_record_extra_files(record: Mapping[str, Any]) -> dict[str, Path]`：执行 `record extra files` 对应逻辑。 调用：`_record_path`。
-- `F L1022-L1029` `_select_device_name(device: str) -> str`：选择 `device name` 对应的数据或结果。
-- `F L1032-L1042` `_dataset_fingerprint(settings) -> dict[str, Any]`：执行 `dataset fingerprint` 对应逻辑。
-- `F L1045-L1050` `_file_sha256(path: Path) -> str` [IO-R IO-W]：执行 `file sha256` 对应逻辑。
-- `F L1053-L1054` `_new_run_id() -> str`：执行 `new run id` 对应逻辑。
-- `F L1057-L1058` `_read_json(path: Path) -> dict[str, Any]` [IO-R]：读取 `json` 对应的数据或结果。
-- `F L1061-L1066` `_write_json(path: Path, value: Mapping[str, Any]) -> None` [IO-W]：写入 `json` 对应的数据或结果。 调用：`_json_ready`。
-- `F L1069-L1080` `_json_ready(value: Any) -> Any`：执行 `json ready` 对应逻辑。 调用：`_json_ready`。
+- `C L85-L114` `_FlowRuntime` [CLASS]：封装 `FlowRuntime` 相关数据或行为。
+- `M L101-L102` `_FlowRuntime.state_path(self) -> Path` [PROPERTY]：执行 `state path` 对应逻辑。
+- `M L105-L106` `_FlowRuntime.manifest_path(self) -> Path` [PROPERTY]：执行 `manifest path` 对应逻辑。
+- `M L109-L110` `_FlowRuntime.report_json_path(self) -> Path` [PROPERTY]：执行 `report json path` 对应逻辑。
+- `M L113-L114` `_FlowRuntime.report_markdown_path(self) -> Path` [PROPERTY]：执行 `report markdown path` 对应逻辑。
+- `F L117-L210` `run_full_flow(config: FullFlowConfig) -> FullFlowResult`：执行 `run full flow` 对应逻辑。 调用：`_FlowRuntime`, `_base_manifest`, `_init_layout`, `_initial_stage_states`, `_mark_failed`, `_mark_interrupted`。
+- `F L213-L270` `load_full_flow_status(output_root: Path=DEFAULT_FULL_FLOW_ROOT, *, run_id: str | None=None) -> FullFlowResult`：加载 `full flow status` 对应的数据或结果。 调用：`FullFlowResult`, `FullFlowStageState`, `_read_json`。
+- `F L273-L351` `_run_startup_section(_runtime: _FlowRuntime, *, reporter) -> None`：执行 `run startup section` 对应逻辑。 调用：`_finish_stage`, `_persist`, `_select_device_name`, `_start_stage`, `_write_json`, `startup.as_dict`。
+- `F L354-L402` `_run_resume_section(_runtime: _FlowRuntime, *, reporter)`：执行 `run resume section` 对应逻辑。 调用：`_finish_stage`, `_persist`, `_start_stage`, `_write_json`, `inheritance.as_dict`, `load_inheritance_package`。
+- `F L405-L466` `_run_ramp_section(_runtime: _FlowRuntime, *, inheritance, reporter) -> None`：执行 `run ramp section` 对应逻辑。 调用：`_finish_stage`, `_last_training_record`, `_persist`, `_select_device_name`, `_stage_enabled`, `_stage_forced`。
+- `F L469-L473` `_run_finalize_section(_runtime: _FlowRuntime) -> None`：执行 `run finalize section` 对应逻辑。 调用：`_finish_export_stage`, `_finish_inheritance_stage`, `_last_training_record`, `load_settings`。
+- `F L476-L517` `_finish_export_stage(_runtime: _FlowRuntime, *, settings, record: Mapping[str, Any] | None) -> None`：执行 `finish export stage` 对应逻辑。 调用：`ModelArtifactSpec`, `_record_extra_files`, `_record_path`, `_report_full_flow_stage`, `collect_code_version`, `export_model_artifact`。
+- `F L520-L559` `_finish_inheritance_stage(_runtime: _FlowRuntime, *, settings, record: Mapping[str, Any] | None) -> None`：执行 `finish inheritance stage` 对应逻辑。 调用：`_record_extra_files`, `_record_path`, `_report_full_flow_stage`, `create_inheritance_package`, `package.as_dict`, `stage.mark_finished`。
+- `F L562-L577` `_mark_plan(_runtime: _FlowRuntime) -> None`：更新状态为 `plan` 对应的数据或结果。 调用：`_report_full_flow_stage`, `_selected_stage_ids`, `_stage_forced`, `state.mark_finished`。
+- `F L580-L593` `_mark_training_skipped_for_dry_run(_runtime: _FlowRuntime) -> None`：更新状态为 `training skipped for dry run` 对应的数据或结果。 调用：`_report_full_flow_stage`, `mark_finished`。
+- `F L596-L603` `_mark_failed(_runtime: _FlowRuntime, error: Exception) -> None`：更新状态为 `failed` 对应的数据或结果。 调用：`_report_full_flow_stage`, `state.mark_finished`。
+- `F L606-L610` `_mark_interrupted(_runtime: _FlowRuntime, reason: str) -> None`：更新状态为 `interrupted` 对应的数据或结果。 调用：`_report_full_flow_stage`, `state.mark_finished`。
+- `F L613-L690` `_persist(_runtime: _FlowRuntime, *, status: str, stop_reason: str | None=None) -> None`：执行 `persist` 对应逻辑。 调用：`_report_full_flow_stage`, `_write_json`, `_write_reports`, `report_stage.mark_finished`, `report_stage.mark_started`, `stage.as_dict`。
+- `F L693-L714` `_result(_runtime: _FlowRuntime, *, status: str) -> FullFlowResult`：执行 `result` 对应逻辑。 调用：`FullFlowResult`, `utc_now`。
+- `F L717-L738` `_base_manifest(config: FullFlowConfig, _runtime: _FlowRuntime) -> dict[str, Any]`：执行 `base manifest` 对应逻辑。 调用：`_dataset_fingerprint`, `_file_sha256`, `_selected_stage_ids`, `collect_code_version`, `collect_code_version.as_dict`, `load_settings`。
+- `F L741-L745` `_initial_stage_states() -> dict[str, FullFlowStageState]`：执行 `initial stage states` 对应逻辑。 调用：`FullFlowStageState`。
+- `F L748-L765` `_publish_initial_dashboard_stages(_runtime: _FlowRuntime) -> None`：执行 `publish initial dashboard stages` 对应逻辑。 调用：`_selected_stage_ids`, `reporter.update_metrics`, `reporter.update_pipeline_stage`。
+- `F L768-L770` `_report_resource_snapshot(reporter: TrainingReporter) -> None`：执行 `report resource snapshot` 对应逻辑。
+- `F L773-L794` `_start_stage(_runtime: _FlowRuntime, stage_id: str, reporter) -> None`：执行 `start stage` 对应逻辑。 调用：`_phase_for_full_flow_stage`, `_report_full_flow_stage`, `_stage_enabled`, `mark_finished`, `reporter.update_metrics`, `reporter.update_pipeline_stage`。
+- `F L797-L817` `_finish_stage(_runtime: _FlowRuntime, stage_id: str, status, *, result: Mapping[str, Any] | None=None, warnings: tuple[str, ...]=(), artifacts: tuple[str, ...]=(), restored: bool=False) -> None`：执行 `finish stage` 对应逻辑。 调用：`_report_full_flow_stage`, `_stage_forced`, `mark_finished`。
+- `F L820-L851` `_report_full_flow_stage(_runtime: _FlowRuntime, stage_id: str) -> None`：执行 `report full flow stage` 对应逻辑。 调用：`_dashboard_status`, `_optional_int`, `_phase_for_full_flow_stage`, `reporter.update_metrics`, `reporter.update_pipeline_stage`。
+- `F L854-L867` `_dashboard_status(status: str) -> str`：执行 `dashboard status` 对应逻辑。
+- `F L870-L896` `_phase_for_full_flow_stage(stage_id: str) -> PipelinePhase`：执行 `phase for full flow stage` 对应逻辑。
+- `F L899-L905` `_optional_int(value: object, *, default: int | None=None) -> int | None`：执行 `optional int` 对应逻辑。
+- `F L908-L909` `_stage_enabled(_runtime: _FlowRuntime, stage_id: str) -> bool`：执行 `stage enabled` 对应逻辑。 调用：`_selected_stage_ids`。
+- `F L912-L913` `_stage_forced(config: FullFlowConfig, stage_id: str) -> bool`：执行 `stage forced` 对应逻辑。 调用：`validate_stage_id`。
+- `F L916-L925` `_selected_stage_ids(config: FullFlowConfig) -> tuple[str, ...]`：执行 `selected stage ids` 对应逻辑。 调用：`validate_stage_id`。
+- `F L928-L943` `_validate_config(config: FullFlowConfig) -> None`：校验 `config` 对应的数据或结果。 调用：`_selected_stage_ids`, `validate_stage_id`。
+- `F L946-L958` `_init_layout(output_dir: Path) -> None` [IO-W]：执行 `init layout` 对应逻辑。
+- `F L961-L963` `_write_resolved_config(config_path: Path, output_dir: Path) -> None`：写入 `resolved config` 对应的数据或结果。
+- `F L966-L992` `_write_reports(_runtime: _FlowRuntime, state: Mapping[str, Any]) -> None` [IO-W]：写入 `reports` 对应的数据或结果。 调用：`_write_json`, `lines.append`。
+- `F L995-L1014` `_last_training_record(ramp_manifest_path: Path | None) -> Mapping[str, Any] | None`：执行 `last training record` 对应逻辑。 调用：`_read_json`。
+- `F L1017-L1026` `_record_path(record: Mapping[str, Any], keys: tuple[str, ...]) -> Path | None`：执行 `record path` 对应逻辑。
+- `F L1029-L1036` `_record_extra_files(record: Mapping[str, Any]) -> dict[str, Path]`：执行 `record extra files` 对应逻辑。 调用：`_record_path`。
+- `F L1039-L1046` `_select_device_name(device: str) -> str`：选择 `device name` 对应的数据或结果。
+- `F L1049-L1059` `_dataset_fingerprint(settings) -> dict[str, Any]`：执行 `dataset fingerprint` 对应逻辑。
+- `F L1062-L1067` `_file_sha256(path: Path) -> str` [IO-R IO-W]：执行 `file sha256` 对应逻辑。
+- `F L1070-L1071` `_new_run_id() -> str`：执行 `new run id` 对应逻辑。
+- `F L1074-L1075` `_read_json(path: Path) -> dict[str, Any]` [IO-R]：读取 `json` 对应的数据或结果。
+- `F L1078-L1083` `_write_json(path: Path, value: Mapping[str, Any]) -> None` [IO-W]：写入 `json` 对应的数据或结果。 调用：`_json_ready`。
+- `F L1086-L1097` `_json_ready(value: Any) -> Any`：执行 `json ready` 对应逻辑。 调用：`_json_ready`。
 
 ## `src/traning/core/full_flow/result.py`
 
@@ -518,19 +518,19 @@ tests/full_checks/runner.py -> full pytest checks
 ## `src/traning/core/spatial/spatial_trainer.py`
 
 职责：首版单帧空间训练循环；冻结 global、串行 patch 前向和逐 patch backward。
-工程依赖：`traning.conf`, `traning.core.dataset_import`, `traning.core.training_inheritance`, `traning.lib.data`, `traning.lib.models`, `traning.lib.runtime`, `traning.lib.training.losses`, `traning.lib.training.spatial_targets`
+工程依赖：`traning.conf`, `traning.core.dataset_import`, `traning.core.training_inheritance`, `traning.lib.data`, `traning.lib.models`, `traning.lib.reporting`, `traning.lib.runtime`, `traning.lib.training.losses`, `traning.lib.training.spatial_targets`
 
-- `C L47-L85` `SpatialTrainingResult` [CLASS]：封装 `SpatialTrainingResult` 相关数据或行为。
-- `M L64-L66` `SpatialTrainingResult.__post_init__(self) -> None`：完成 dataclass 初始化后的派生字段设置。
-- `M L68-L85` `SpatialTrainingResult.as_dict(self) -> dict[str, Any]`：执行 `as dict` 对应逻辑。
-- `F L88-L339` `run_spatial_training(settings: Settings, *, device: torch.device, run_dir: Path, split: DataSplit='train', max_steps: int=1, learning_rate: float=0.0001, patch_limit: int | None=None, dataset: Sequence[dict[str, Any]] | None=None, reporter: TrainingReporter=NullReporter(), resume_checkpoint_path: Path | None=None, resume_policy: str='none') -> SpatialTrainingResult` [IO-W]：Run the first-version single-frame spatial training loop。 调用：`CudaRuntimeConfig`, `PatchStream`, `SpatialTrainingResult`, `TrainingPosition`, `_add_spatial_consistency_losses`, `_normalize_frame`。
-- `F L342-L373` `_add_spatial_consistency_losses(loss_dict: dict[str, torch.Tensor], *, prediction, target, weights) -> None`：执行 `add spatial consistency losses` 对应逻辑。 调用：`temporal_consistency_loss`。
-- `F L376-L381` `_normalize_frame(frame: torch.Tensor) -> torch.Tensor`：规范化 `frame` 对应的数据或结果。
-- `F L384-L390` `_write_summary(result: SpatialTrainingResult) -> None` [IO-W]：写入 `summary` 对应的数据或结果。 调用：`result.as_dict`。
-- `F L393-L453` `_write_checkpoint(result: SpatialTrainingResult, *, modules: dict[str, torch.nn.Module], settings: Settings, optimizer: torch.optim.Optimizer, scaler, position: TrainingPosition, checkpoint_kind: str) -> None` [IO-W]：写入 `checkpoint` 对应的数据或结果。 调用：`atomic_torch_save_checkpoint`, `build_training_checkpoint`。
-- `F L456-L523` `_restore_spatial_training_state(*, modules: dict[str, torch.nn.Module], optimizer: torch.optim.Optimizer, scaler, checkpoint_path: Path | None, policy: str, reporter: TrainingReporter) -> TrainingPosition`：执行 `restore spatial training state` 对应逻辑。 调用：`TrainingPosition`, `TrainingPosition.from_mapping`, `_optimizer_state_to_device`, `load_training_checkpoint`, `restore_module_state`, `restore_rng_state`。
-- `F L526-L533` `_optimizer_state_to_device(optimizer: torch.optim.Optimizer, device: torch.device) -> None`：执行 `optimizer state to device` 对应逻辑。
-- `F L536-L572` `_report_spatial_step(reporter: TrainingReporter, *, step: int, target: int, loss: float, sample: dict[str, Any], total_samples: int, generated_patches: int, device: torch.device) -> None`：执行 `report spatial step` 对应逻辑。 调用：`reporter.update_metrics`。
+- `C L49-L87` `SpatialTrainingResult` [CLASS]：封装 `SpatialTrainingResult` 相关数据或行为。
+- `M L66-L68` `SpatialTrainingResult.__post_init__(self) -> None`：完成 dataclass 初始化后的派生字段设置。
+- `M L70-L87` `SpatialTrainingResult.as_dict(self) -> dict[str, Any]`：执行 `as dict` 对应逻辑。
+- `F L90-L342` `run_spatial_training(settings: Settings, *, device: torch.device, run_dir: Path, split: DataSplit='train', max_steps: int=1, learning_rate: float=0.0001, patch_limit: int | None=None, dataset: Sequence[dict[str, Any]] | None=None, reporter: TrainingReporter=NullReporter(), resume_checkpoint_path: Path | None=None, resume_policy: str='none') -> SpatialTrainingResult` [IO-W]：Run the first-version single-frame spatial training loop。 调用：`CudaRuntimeConfig`, `PatchStream`, `SpatialTrainingResult`, `TrainingPosition`, `_add_spatial_consistency_losses`, `_normalize_frame`。
+- `F L345-L376` `_add_spatial_consistency_losses(loss_dict: dict[str, torch.Tensor], *, prediction, target, weights) -> None`：执行 `add spatial consistency losses` 对应逻辑。 调用：`temporal_consistency_loss`。
+- `F L379-L384` `_normalize_frame(frame: torch.Tensor) -> torch.Tensor`：规范化 `frame` 对应的数据或结果。
+- `F L387-L393` `_write_summary(result: SpatialTrainingResult) -> None` [IO-W]：写入 `summary` 对应的数据或结果。 调用：`result.as_dict`。
+- `F L396-L456` `_write_checkpoint(result: SpatialTrainingResult, *, modules: dict[str, torch.nn.Module], settings: Settings, optimizer: torch.optim.Optimizer, scaler, position: TrainingPosition, checkpoint_kind: str) -> None` [IO-W]：写入 `checkpoint` 对应的数据或结果。 调用：`atomic_torch_save_checkpoint`, `build_training_checkpoint`。
+- `F L459-L526` `_restore_spatial_training_state(*, modules: dict[str, torch.nn.Module], optimizer: torch.optim.Optimizer, scaler, checkpoint_path: Path | None, policy: str, reporter: TrainingReporter) -> TrainingPosition`：执行 `restore spatial training state` 对应逻辑。 调用：`TrainingPosition`, `TrainingPosition.from_mapping`, `_optimizer_state_to_device`, `load_training_checkpoint`, `restore_module_state`, `restore_rng_state`。
+- `F L529-L536` `_optimizer_state_to_device(optimizer: torch.optim.Optimizer, device: torch.device) -> None`：执行 `optimizer state to device` 对应逻辑。
+- `F L539-L584` `_report_spatial_step(reporter: TrainingReporter, *, step: int, target: int, loss: float, sample: dict[str, Any], total_samples: int, generated_patches: int, device: torch.device) -> None`：执行 `report spatial step` 对应逻辑。 调用：`reporter.update_metrics`, `reporter.update_pipeline_stage`。
 
 ## `src/traning/core/temporal/dataset.py`
 
@@ -566,18 +566,18 @@ tests/full_checks/runner.py -> full pytest checks
 ## `src/traning/core/temporal/trainer.py`
 
 职责：因果 GRU 时序训练入口；消费候选窗口并写 summary/checkpoint。
-工程依赖：`traning.conf`, `traning.core.temporal.dataset`, `traning.core.training_inheritance`, `traning.lib.models`, `traning.lib.runtime`
+工程依赖：`traning.conf`, `traning.core.temporal.dataset`, `traning.core.training_inheritance`, `traning.lib.models`, `traning.lib.reporting`, `traning.lib.runtime`
 
-- `C L51-L96` `TemporalTrainingResult` [CLASS]：封装 `TemporalTrainingResult` 相关数据或行为。
-- `M L77-L96` `TemporalTrainingResult.as_dict(self) -> dict[str, Any]`：执行 `as dict` 对应逻辑。
-- `F L99-L303` `run_temporal_training(settings: Settings, *, cache_dir: Path, device: torch.device, run_dir: Path, max_steps: int=1, learning_rate: float=0.0001, sequence_length: int | None=None, candidate_slots: int | None=None, dataset: Sequence[TemporalWindow] | None=None, reporter: TrainingReporter=NullReporter(), resume_checkpoint_path: Path | None=None, resume_policy: str='none') -> TemporalTrainingResult`：执行 `run temporal training` 对应逻辑。 调用：`CausalTemporalModel`, `CudaRuntimeConfig`, `TemporalCandidateWindowDataset.from_cache_dir`, `TemporalTrainingResult`, `TrainingPosition`, `_compute_temporal_loss`。
-- `F L306-L325` `_window_to_device(window: TemporalWindow, *, device: torch.device) -> dict[str, torch.Tensor]`：执行 `window to device` 对应逻辑。 调用：`tensor_to_device`。
-- `F L328-L380` `_compute_temporal_loss(outputs, *, action_target: torch.Tensor, selected_candidate_target: torch.Tensor, xy_target: torch.Tensor, time_offset_target: torch.Tensor, frame_mask: torch.Tensor, weights) -> tuple[torch.Tensor, dict[str, torch.Tensor]]`：执行 `compute temporal loss` 对应逻辑。
-- `F L383-L388` `_write_summary(result: TemporalTrainingResult) -> None` [IO-W]：写入 `summary` 对应的数据或结果。 调用：`result.as_dict`。
-- `F L391-L466` `_write_checkpoint(result: TemporalTrainingResult, *, model: torch.nn.Module, optimizer: torch.optim.Optimizer, scaler, hidden_size: int, layers: int, position: TrainingPosition, checkpoint_kind: str) -> None` [IO-W]：写入 `checkpoint` 对应的数据或结果。 调用：`atomic_torch_save_checkpoint`, `build_training_checkpoint`。
-- `F L469-L524` `_restore_temporal_training_state(*, model: torch.nn.Module, optimizer: torch.optim.Optimizer, scaler, checkpoint_path: Path | None, policy: str, reporter: TrainingReporter) -> TrainingPosition`：执行 `restore temporal training state` 对应逻辑。 调用：`TrainingPosition`, `TrainingPosition.from_mapping`, `_optimizer_state_to_device`, `load_training_checkpoint`, `restore_module_state`, `restore_rng_state`。
-- `F L527-L534` `_optimizer_state_to_device(optimizer: torch.optim.Optimizer, device: torch.device) -> None`：执行 `optimizer state to device` 对应逻辑。
-- `F L537-L572` `_report_temporal_step(reporter: TrainingReporter, *, step: int, target: int, loss: float, window: TemporalWindow, total_windows: int, device: torch.device) -> None`：执行 `report temporal step` 对应逻辑。 调用：`reporter.update_metrics`。
+- `C L53-L98` `TemporalTrainingResult` [CLASS]：封装 `TemporalTrainingResult` 相关数据或行为。
+- `M L79-L98` `TemporalTrainingResult.as_dict(self) -> dict[str, Any]`：执行 `as dict` 对应逻辑。
+- `F L101-L306` `run_temporal_training(settings: Settings, *, cache_dir: Path, device: torch.device, run_dir: Path, max_steps: int=1, learning_rate: float=0.0001, sequence_length: int | None=None, candidate_slots: int | None=None, dataset: Sequence[TemporalWindow] | None=None, reporter: TrainingReporter=NullReporter(), resume_checkpoint_path: Path | None=None, resume_policy: str='none') -> TemporalTrainingResult`：执行 `run temporal training` 对应逻辑。 调用：`CausalTemporalModel`, `CudaRuntimeConfig`, `TemporalCandidateWindowDataset.from_cache_dir`, `TemporalTrainingResult`, `TrainingPosition`, `_compute_temporal_loss`。
+- `F L309-L328` `_window_to_device(window: TemporalWindow, *, device: torch.device) -> dict[str, torch.Tensor]`：执行 `window to device` 对应逻辑。 调用：`tensor_to_device`。
+- `F L331-L383` `_compute_temporal_loss(outputs, *, action_target: torch.Tensor, selected_candidate_target: torch.Tensor, xy_target: torch.Tensor, time_offset_target: torch.Tensor, frame_mask: torch.Tensor, weights) -> tuple[torch.Tensor, dict[str, torch.Tensor]]`：执行 `compute temporal loss` 对应逻辑。
+- `F L386-L391` `_write_summary(result: TemporalTrainingResult) -> None` [IO-W]：写入 `summary` 对应的数据或结果。 调用：`result.as_dict`。
+- `F L394-L469` `_write_checkpoint(result: TemporalTrainingResult, *, model: torch.nn.Module, optimizer: torch.optim.Optimizer, scaler, hidden_size: int, layers: int, position: TrainingPosition, checkpoint_kind: str) -> None` [IO-W]：写入 `checkpoint` 对应的数据或结果。 调用：`atomic_torch_save_checkpoint`, `build_training_checkpoint`。
+- `F L472-L527` `_restore_temporal_training_state(*, model: torch.nn.Module, optimizer: torch.optim.Optimizer, scaler, checkpoint_path: Path | None, policy: str, reporter: TrainingReporter) -> TrainingPosition`：执行 `restore temporal training state` 对应逻辑。 调用：`TrainingPosition`, `TrainingPosition.from_mapping`, `_optimizer_state_to_device`, `load_training_checkpoint`, `restore_module_state`, `restore_rng_state`。
+- `F L530-L537` `_optimizer_state_to_device(optimizer: torch.optim.Optimizer, device: torch.device) -> None`：执行 `optimizer state to device` 对应逻辑。
+- `F L540-L584` `_report_temporal_step(reporter: TrainingReporter, *, step: int, target: int, loss: float, window: TemporalWindow, total_windows: int, device: torch.device) -> None`：执行 `report temporal step` 对应逻辑。 调用：`reporter.update_metrics`, `reporter.update_pipeline_stage`。
 
 ## `src/traning/core/training_inheritance/checkpoint.py`
 
@@ -634,40 +634,40 @@ tests/full_checks/runner.py -> full pytest checks
 - `F L184-L386` `_run_training_ramp_with_reporter(*, config_path: Path, device: str, target_config_path: Path | None, run_id: str, output_dir: Path, auto_launch_full: bool, force_level: bool, max_levels: int | None, run_full_checks: bool, reporter: TrainingReporter, resume_policy: str, resume_stage_checkpoints: Mapping[str, Path], full_gallery_output_root: Path | None, full_gallery_samples_per_group: int | None) -> RampRunResult`：执行 `run training ramp with reporter` 对应逻辑。 调用：`RampRunResult`, `_launch_full_training`, `_read_json`, `_report_full_training_finished`, `_report_full_training_started`, `_report_level_finished`。
 - `F L389-L405` `ensure_full_target_config(*, source_config: Path, target_config: Path, output_dir: Path) -> tuple[Path, RampTarget]` [IO-W]：确保 `full target config` 对应的数据或结果。 调用：`_absolutize_config`, `_build_default_full_config`, `_read_yaml`, `_target_from_raw`, `_write_yaml`。
 - `F L408-L437` `build_ramp_levels(target: RampTarget) -> list[RampLevelSpec]`：构建并返回 `ramp levels` 对应的数据或结果。 调用：`RampLevelSpec`, `_clip_level`, `_level_reaches_target`, `as_dict`, `clipped.as_dict`, `levels.append`。
-- `F L440-L549` `_run_preflight(*, config_path: Path, device: str, output_dir: Path, run_full_checks: bool, reporter: TrainingReporter) -> dict[str, Any]` [IO-W PROCESS]：执行 `run preflight` 对应逻辑。 调用：`RampGateError`, `_write_json`, `inspect_data_input`, `load_settings`, `reporter.update_metrics`, `reporter.update_pipeline_stage`。
-- `F L552-L601` `_report_ramp_started(reporter: TrainingReporter, *, levels: list[RampLevelSpec], target: RampTarget, auto_launch_full: bool) -> None`：执行 `report ramp started` 对应逻辑。 调用：`reporter.update_metrics`, `reporter.update_pipeline_stage`。
-- `F L604-L652` `_report_level_started(reporter: TrainingReporter, *, level: RampLevelSpec, index: int, total_levels: int) -> None`：执行 `report level started` 对应逻辑。 调用：`_level_stage_id`, `_level_title`, `level.as_dict`, `reporter.update_metrics`, `reporter.update_pipeline_stage`。
-- `F L655-L738` `_report_level_finished(reporter: TrainingReporter, *, level: RampLevelSpec, index: int, total_levels: int, record: Mapping[str, Any], restored: bool=False) -> None`：执行 `report level finished` 对应逻辑。 调用：`_level_stage_id`, `_level_title`, `_record_gallery_path`, `_record_pass_threshold`, `_record_quality_score`, `reporter.update_metrics`。
-- `F L741-L783` `_report_ramp_finished(reporter: TrainingReporter, *, levels: list[RampLevelSpec], readiness_path: Path, auto_launch_full: bool) -> None`：执行 `report ramp finished` 对应逻辑。 调用：`reporter.update_metrics`, `reporter.update_pipeline_stage`。
-- `F L786-L816` `_report_full_training_started(reporter: TrainingReporter, *, level: RampLevelSpec) -> None`：执行 `report full training started` 对应逻辑。 调用：`reporter.update_metrics`, `reporter.update_pipeline_stage`。
-- `F L819-L849` `_report_full_training_finished(reporter: TrainingReporter, *, record: Mapping[str, Any]) -> None`：执行 `report full training finished` 对应逻辑。 调用：`_summary_quality_score`, `reporter.update_metrics`, `reporter.update_pipeline_stage`。
-- `F L852-L912` `_report_ramp_failed(reporter: TrainingReporter, *, error: Exception, active_level: RampLevelSpec | None, active_index: int, completed_levels: int, total_levels: int) -> None`：执行 `report ramp failed` 对应逻辑。 调用：`_level_stage_id`, `_level_title`, `reporter.update_metrics`, `reporter.update_pipeline_stage`。
-- `F L915-L916` `_level_stage_id(level: RampLevelSpec) -> str`：执行 `level stage id` 对应逻辑。
-- `F L919-L922` `_level_title(level: RampLevelSpec | None) -> str`：执行 `level title` 对应逻辑。
-- `F L925-L930` `_record_quality_score(record: Mapping[str, Any]) -> float | None`：执行 `record quality score` 对应逻辑。
-- `F L933-L938` `_record_pass_threshold(record: Mapping[str, Any]) -> float | None`：执行 `record pass threshold` 对应逻辑。
-- `F L941-L943` `_summary_quality_score(summary: Mapping[str, Any]) -> float | None`：执行 `summary quality score` 对应逻辑。
-- `F L946-L951` `_record_gallery_path(record: Mapping[str, Any]) -> str | None`：执行 `record gallery path` 对应逻辑。
-- `F L954-L1072` `_run_level(*, level: RampLevelSpec, base_config: Path, level_dir: Path, device: str, reporter: TrainingReporter, resume_policy: str, resume_stage_checkpoints: Mapping[str, Path], gallery_output_root: Path | None, gallery_samples_per_group: int | None) -> dict[str, Any]` [IO-W]：执行 `run level` 对应逻辑。 调用：`FullTrainingRunConfig`, `ModelArtifactSpec`, `_gate_level`, `_level_title`, `_ramp_parameter_snapshot`, `_run_job_dry_run`。
-- `F L1075-L1157` `_gate_level(*, level: RampLevelSpec, result, elapsed: float, artifact_path: Path, artifact_issues: tuple[str, ...], artifact_smoke: dict[str, Any], dry_run: dict[str, Any]) -> dict[str, Any]`：执行 `gate level` 对应逻辑。 调用：`RampGateError`, `_read_json`, `failures.append`, `level.as_dict`, `result.candidate_cache.as_dict`, `result.decision.as_dict`。
-- `F L1160-L1200` `_ramp_parameter_snapshot(*, level: RampLevelSpec, record: Mapping[str, Any], config_path: Path, device: str, resume_policy: str, resume_stage_checkpoints: Mapping[str, Path]) -> dict[str, Any]`：执行 `ramp parameter snapshot` 对应逻辑。 调用：`level.as_dict`。
-- `F L1203-L1245` `_launch_full_training(*, level: RampLevelSpec, config_path: Path, run_dir: Path, device: str, reporter: TrainingReporter, resume_policy: str, resume_stage_checkpoints: Mapping[str, Path], gallery_output_root: Path | None, gallery_samples_per_group: int | None) -> dict[str, Any]`：执行 `launch full training` 对应逻辑。 调用：`FullTrainingRunConfig`, `load_settings`, `result.as_summary`, `run_full_training_pipeline`。
-- `F L1248-L1308` `_write_final_readiness(*, output_dir: Path, manifest: dict[str, Any], target: RampTarget, levels: list[RampLevelSpec], auto_launch_full: bool, failure: str | None=None) -> Path` [IO-W]：写入 `final readiness` 对应的数据或结果。 调用：`_full_command_text`, `_write_json`, `lines.append`。
-- `F L1311-L1347` `_run_job_dry_run(*, job_path: Path | None, config_path: Path, level_dir: Path, device: str) -> dict[str, Any]` [IO-W PROCESS]：执行 `run job dry run` 对应逻辑。 调用：`_pythonpath_with_src`, `subprocess.run`。
-- `F L1350-L1355` `_pythonpath_with_src() -> str`：执行 `pythonpath with src` 对应逻辑。 调用：`entries.append`。
-- `F L1358-L1372` `_write_level_config(base_config: Path, level_dir: Path, level: RampLevelSpec) -> Path`：写入 `level config` 对应的数据或结果。 调用：`_absolutize_config`, `_read_yaml`, `_write_yaml`, `level.as_dict`。
-- `F L1375-L1387` `_build_default_full_config(source: dict[str, Any]) -> dict[str, Any]`：构建 `default full config` 对应的数据或结果。 调用：`RampTarget`。
-- `F L1390-L1405` `_target_from_raw(raw: dict[str, Any]) -> RampTarget`：执行 `target from raw` 对应逻辑。 调用：`RampTarget`。
-- `F L1408-L1422` `_clip_level(level: RampLevelSpec, target: RampTarget) -> RampLevelSpec`：执行 `clip level` 对应逻辑。 调用：`RampLevelSpec`。
-- `F L1425-L1433` `_level_reaches_target(level: RampLevelSpec, target: RampTarget) -> bool`：执行 `level reaches target` 对应逻辑。
-- `F L1436-L1438` `_init_layout(output_dir: Path) -> None` [IO-W]：执行 `init layout` 对应逻辑。
-- `F L1441-L1453` `_full_command_text(config_path: Path, target: RampTarget) -> str`：执行 `full command text` 对应逻辑。
-- `F L1456-L1457` `_read_json(path: Path) -> dict[str, Any]` [IO-R]：读取 `json` 对应的数据或结果。
-- `F L1460-L1465` `_write_json(path: Path, value: dict[str, Any]) -> None` [IO-W]：写入 `json` 对应的数据或结果。 调用：`_json_ready`。
-- `F L1468-L1472` `_read_yaml(path: Path) -> dict[str, Any]` [IO-R]：读取 `yaml` 对应的数据或结果。
-- `F L1475-L1480` `_write_yaml(path: Path, value: dict[str, Any]) -> None` [IO-W]：写入 `yaml` 对应的数据或结果。 调用：`_json_ready`。
-- `F L1483-L1498` `_absolutize_config(raw: dict[str, Any], base_dir: Path) -> dict[str, Any]`：执行 `absolutize config` 对应逻辑。
-- `F L1501-L1510` `_json_ready(value: Any) -> Any`：执行 `json ready` 对应逻辑。 调用：`_json_ready`。
+- `F L440-L576` `_run_preflight(*, config_path: Path, device: str, output_dir: Path, run_full_checks: bool, reporter: TrainingReporter) -> dict[str, Any]` [IO-W PROCESS]：执行 `run preflight` 对应逻辑。 调用：`RampGateError`, `_write_json`, `inspect_data_input`, `load_settings`, `reporter.update_metrics`, `reporter.update_pipeline_stage`。
+- `F L579-L628` `_report_ramp_started(reporter: TrainingReporter, *, levels: list[RampLevelSpec], target: RampTarget, auto_launch_full: bool) -> None`：执行 `report ramp started` 对应逻辑。 调用：`reporter.update_metrics`, `reporter.update_pipeline_stage`。
+- `F L631-L679` `_report_level_started(reporter: TrainingReporter, *, level: RampLevelSpec, index: int, total_levels: int) -> None`：执行 `report level started` 对应逻辑。 调用：`_level_stage_id`, `_level_title`, `level.as_dict`, `reporter.update_metrics`, `reporter.update_pipeline_stage`。
+- `F L682-L765` `_report_level_finished(reporter: TrainingReporter, *, level: RampLevelSpec, index: int, total_levels: int, record: Mapping[str, Any], restored: bool=False) -> None`：执行 `report level finished` 对应逻辑。 调用：`_level_stage_id`, `_level_title`, `_record_gallery_path`, `_record_pass_threshold`, `_record_quality_score`, `reporter.update_metrics`。
+- `F L768-L810` `_report_ramp_finished(reporter: TrainingReporter, *, levels: list[RampLevelSpec], readiness_path: Path, auto_launch_full: bool) -> None`：执行 `report ramp finished` 对应逻辑。 调用：`reporter.update_metrics`, `reporter.update_pipeline_stage`。
+- `F L813-L843` `_report_full_training_started(reporter: TrainingReporter, *, level: RampLevelSpec) -> None`：执行 `report full training started` 对应逻辑。 调用：`reporter.update_metrics`, `reporter.update_pipeline_stage`。
+- `F L846-L876` `_report_full_training_finished(reporter: TrainingReporter, *, record: Mapping[str, Any]) -> None`：执行 `report full training finished` 对应逻辑。 调用：`_summary_quality_score`, `reporter.update_metrics`, `reporter.update_pipeline_stage`。
+- `F L879-L939` `_report_ramp_failed(reporter: TrainingReporter, *, error: Exception, active_level: RampLevelSpec | None, active_index: int, completed_levels: int, total_levels: int) -> None`：执行 `report ramp failed` 对应逻辑。 调用：`_level_stage_id`, `_level_title`, `reporter.update_metrics`, `reporter.update_pipeline_stage`。
+- `F L942-L943` `_level_stage_id(level: RampLevelSpec) -> str`：执行 `level stage id` 对应逻辑。
+- `F L946-L949` `_level_title(level: RampLevelSpec | None) -> str`：执行 `level title` 对应逻辑。
+- `F L952-L957` `_record_quality_score(record: Mapping[str, Any]) -> float | None`：执行 `record quality score` 对应逻辑。
+- `F L960-L965` `_record_pass_threshold(record: Mapping[str, Any]) -> float | None`：执行 `record pass threshold` 对应逻辑。
+- `F L968-L970` `_summary_quality_score(summary: Mapping[str, Any]) -> float | None`：执行 `summary quality score` 对应逻辑。
+- `F L973-L978` `_record_gallery_path(record: Mapping[str, Any]) -> str | None`：执行 `record gallery path` 对应逻辑。
+- `F L981-L1099` `_run_level(*, level: RampLevelSpec, base_config: Path, level_dir: Path, device: str, reporter: TrainingReporter, resume_policy: str, resume_stage_checkpoints: Mapping[str, Path], gallery_output_root: Path | None, gallery_samples_per_group: int | None) -> dict[str, Any]` [IO-W]：执行 `run level` 对应逻辑。 调用：`FullTrainingRunConfig`, `ModelArtifactSpec`, `_gate_level`, `_level_title`, `_ramp_parameter_snapshot`, `_run_job_dry_run`。
+- `F L1102-L1191` `_gate_level(*, level: RampLevelSpec, result, elapsed: float, artifact_path: Path, artifact_issues: tuple[str, ...], artifact_smoke: dict[str, Any], dry_run: dict[str, Any]) -> dict[str, Any]`：执行 `gate level` 对应逻辑。 调用：`RampGateError`, `_read_json`, `failures.append`, `level.as_dict`, `result.candidate_cache.as_dict`, `result.decision.as_dict`。
+- `F L1194-L1234` `_ramp_parameter_snapshot(*, level: RampLevelSpec, record: Mapping[str, Any], config_path: Path, device: str, resume_policy: str, resume_stage_checkpoints: Mapping[str, Path]) -> dict[str, Any]`：执行 `ramp parameter snapshot` 对应逻辑。 调用：`level.as_dict`。
+- `F L1237-L1279` `_launch_full_training(*, level: RampLevelSpec, config_path: Path, run_dir: Path, device: str, reporter: TrainingReporter, resume_policy: str, resume_stage_checkpoints: Mapping[str, Path], gallery_output_root: Path | None, gallery_samples_per_group: int | None) -> dict[str, Any]`：执行 `launch full training` 对应逻辑。 调用：`FullTrainingRunConfig`, `load_settings`, `result.as_summary`, `run_full_training_pipeline`。
+- `F L1282-L1342` `_write_final_readiness(*, output_dir: Path, manifest: dict[str, Any], target: RampTarget, levels: list[RampLevelSpec], auto_launch_full: bool, failure: str | None=None) -> Path` [IO-W]：写入 `final readiness` 对应的数据或结果。 调用：`_full_command_text`, `_write_json`, `lines.append`。
+- `F L1345-L1381` `_run_job_dry_run(*, job_path: Path | None, config_path: Path, level_dir: Path, device: str) -> dict[str, Any]` [IO-W PROCESS]：执行 `run job dry run` 对应逻辑。 调用：`_pythonpath_with_src`, `subprocess.run`。
+- `F L1384-L1389` `_pythonpath_with_src() -> str`：执行 `pythonpath with src` 对应逻辑。 调用：`entries.append`。
+- `F L1392-L1406` `_write_level_config(base_config: Path, level_dir: Path, level: RampLevelSpec) -> Path`：写入 `level config` 对应的数据或结果。 调用：`_absolutize_config`, `_read_yaml`, `_write_yaml`, `level.as_dict`。
+- `F L1409-L1421` `_build_default_full_config(source: dict[str, Any]) -> dict[str, Any]`：构建 `default full config` 对应的数据或结果。 调用：`RampTarget`。
+- `F L1424-L1439` `_target_from_raw(raw: dict[str, Any]) -> RampTarget`：执行 `target from raw` 对应逻辑。 调用：`RampTarget`。
+- `F L1442-L1456` `_clip_level(level: RampLevelSpec, target: RampTarget) -> RampLevelSpec`：执行 `clip level` 对应逻辑。 调用：`RampLevelSpec`。
+- `F L1459-L1467` `_level_reaches_target(level: RampLevelSpec, target: RampTarget) -> bool`：执行 `level reaches target` 对应逻辑。
+- `F L1470-L1472` `_init_layout(output_dir: Path) -> None` [IO-W]：执行 `init layout` 对应逻辑。
+- `F L1475-L1487` `_full_command_text(config_path: Path, target: RampTarget) -> str`：执行 `full command text` 对应逻辑。
+- `F L1490-L1491` `_read_json(path: Path) -> dict[str, Any]` [IO-R]：读取 `json` 对应的数据或结果。
+- `F L1494-L1499` `_write_json(path: Path, value: dict[str, Any]) -> None` [IO-W]：写入 `json` 对应的数据或结果。 调用：`_json_ready`。
+- `F L1502-L1506` `_read_yaml(path: Path) -> dict[str, Any]` [IO-R]：读取 `yaml` 对应的数据或结果。
+- `F L1509-L1514` `_write_yaml(path: Path, value: dict[str, Any]) -> None` [IO-W]：写入 `yaml` 对应的数据或结果。 调用：`_json_ready`。
+- `F L1517-L1532` `_absolutize_config(raw: dict[str, Any], base_dir: Path) -> dict[str, Any]`：执行 `absolutize config` 对应逻辑。
+- `F L1535-L1544` `_json_ready(value: Any) -> Any`：执行 `json ready` 对应逻辑。 调用：`_json_ready`。
 
 ## `src/traning/lib/coordinates.py`
 
@@ -964,6 +964,12 @@ tests/full_checks/runner.py -> full pytest checks
 - `M L47-L64` `CausalTemporalModel.initial_state(self, batch_size: int, device: torch.device | str, *, dtype: torch.dtype | None=None) -> torch.Tensor`：执行 `initial state` 对应逻辑。 调用：`self.parameters`。
 - `M L66-L93` `CausalTemporalModel.step(self, current_features: torch.Tensor, previous_state: torch.Tensor) -> tuple[ActionPrediction, torch.Tensor]`：执行 `step` 对应逻辑。 调用：`ActionPrediction`, `next_states.append`, `self.action_head`, `self.candidate_head`, `self.time_head`, `self.xy_head`。
 - `M L95-L106` `CausalTemporalModel.forward(self, sequence: torch.Tensor) -> tuple[list[ActionPrediction], torch.Tensor]`：执行 `forward` 对应逻辑。 调用：`outputs.append`, `self.initial_state`, `self.step`。
+
+## `src/traning/lib/reporting.py`
+
+职责：Python 模块；具体职责见下方符号及调用。
+
+- `F L4-L8` `should_report_training_step(step: int, target: int) -> bool`：执行 `should report training step` 对应逻辑。
 
 ## `src/traning/lib/runtime/memory.py`
 
@@ -1379,24 +1385,25 @@ tests/full_checks/runner.py -> full pytest checks
 ## `src/traning/tests/full_checks/test_full_flow.py`
 
 职责：Python 模块；具体职责见下方符号及调用。
-工程依赖：`traning.core.full_flow`, `traning.core.full_flow.orchestrator`, `traning.core.full_flow.result`
+工程依赖：`traning.core.full_flow`, `traning.core.full_flow.orchestrator`, `traning.core.full_flow.result`, `traning.core.training_ramp`
 
-- `C L27-L303` `FullFlowTests(unittest.TestCase)` [CLASS]：封装 `FullFlowTests` 相关数据或行为。
-- `M L28-L33` `FullFlowTests.test_stage_ids_are_unique_and_ordered(self) -> None`：执行 `test stage ids are unique and ordered` 对应逻辑。 调用：`self.assertEqual`, `self.assertTrue`, `stage_ids`。
-- `M L35-L59` `FullFlowTests.test_plan_mode_writes_manifest_state_and_reports(self) -> None`：执行 `test plan mode writes manifest state and reports` 对应逻辑。 调用：`FullFlowConfig`, `load_full_flow_status`, `run_full_flow`, `self.assertEqual`, `self.assertTrue`。
-- `M L61-L73` `FullFlowTests.test_critical_stages_cannot_be_skipped(self) -> None`：执行 `test critical stages cannot be skipped` 对应逻辑。 调用：`FullFlowConfig`, `run_full_flow`, `self.assertRaises`。
-- `M L75-L97` `FullFlowTests.test_force_stage_is_reported_in_plan_manifest(self) -> None` [IO-R]：执行 `test force stage is reported in plan manifest` 对应逻辑。 调用：`FullFlowConfig`, `run_full_flow`, `self.assertEqual`, `self.assertIn`, `self.assertTrue`。
-- `M L99-L112` `FullFlowTests.test_force_stage_cannot_conflict_with_skip(self) -> None`：执行 `test force stage cannot conflict with skip` 对应逻辑。 调用：`FullFlowConfig`, `run_full_flow`, `self.assertRaises`。
-- `M L114-L127` `FullFlowTests.test_force_stage_must_be_inside_selected_range(self) -> None`：执行 `test force stage must be inside selected range` 对应逻辑。 调用：`FullFlowConfig`, `run_full_flow`, `self.assertRaises`。
-- `M L129-L163` `FullFlowTests.test_finish_stage_updates_dashboard_reporter(self) -> None`：执行 `test finish stage updates dashboard reporter` 对应逻辑。 调用：`FullFlowConfig`, `_FlowRuntime`, `_finish_stage`, `_initial_stage_states`, `self.assertEqual`, `utc_now`。
-- `M L165-L196` `FullFlowTests.test_initial_dashboard_stages_are_published_as_pending(self) -> None`：执行 `test initial dashboard stages are published as pending` 对应逻辑。 调用：`FullFlowConfig`, `_FlowRuntime`, `_initial_stage_states`, `_publish_initial_dashboard_stages`, `self.assertEqual`, `self.assertTrue`。
-- `M L198-L256` `FullFlowTests.test_full_flow_reports_initial_resource_snapshot_to_dashboard(self) -> None`：执行 `test full flow reports initial resource snapshot to dashboard` 对应逻辑。 调用：`FullFlowConfig`, `run_full_flow`, `self.assertEqual`。
-- `C L203-L212` `FullFlowTests.test_full_flow_reports_initial_resource_snapshot_to_dashboard.FakeDashboardHandle` [CLASS]：封装 `FakeDashboardHandle` 相关数据或行为。
-- `N L204-L205` `FullFlowTests.test_full_flow_reports_initial_resource_snapshot_to_dashboard.FakeDashboardHandle.__init__(self, reporter: DashboardReporter) -> None`：初始化实例依赖、配置和运行状态。
-- `N L207-L208` `FullFlowTests.test_full_flow_reports_initial_resource_snapshot_to_dashboard.FakeDashboardHandle.__enter__(self)`：执行 `enter` 对应逻辑。
-- `N L210-L212` `FullFlowTests.test_full_flow_reports_initial_resource_snapshot_to_dashboard.FakeDashboardHandle.__exit__(self, exc_type, exc, traceback)`：执行 `exit` 对应逻辑。 调用：`self.reporter.close`。
-- `N L214-L220` `FullFlowTests.test_full_flow_reports_initial_resource_snapshot_to_dashboard.fake_dashboard_reporter(**kwargs)`：执行 `fake dashboard reporter` 对应逻辑。 调用：`FakeDashboardHandle`。
-- `M L258-L303` `FullFlowTests.test_ramp_section_passes_formal_gallery_output_root(self) -> None` [IO-W]：执行 `test ramp section passes formal gallery output root` 对应逻辑。 调用：`FullFlowConfig`, `_FlowRuntime`, `_initial_stage_states`, `_run_ramp_section`, `self.assertEqual`, `utc_now`。
+- `C L28-L339` `FullFlowTests(unittest.TestCase)` [CLASS]：封装 `FullFlowTests` 相关数据或行为。
+- `M L29-L34` `FullFlowTests.test_stage_ids_are_unique_and_ordered(self) -> None`：执行 `test stage ids are unique and ordered` 对应逻辑。 调用：`self.assertEqual`, `self.assertTrue`, `stage_ids`。
+- `M L36-L60` `FullFlowTests.test_plan_mode_writes_manifest_state_and_reports(self) -> None`：执行 `test plan mode writes manifest state and reports` 对应逻辑。 调用：`FullFlowConfig`, `load_full_flow_status`, `run_full_flow`, `self.assertEqual`, `self.assertTrue`。
+- `M L62-L74` `FullFlowTests.test_critical_stages_cannot_be_skipped(self) -> None`：执行 `test critical stages cannot be skipped` 对应逻辑。 调用：`FullFlowConfig`, `run_full_flow`, `self.assertRaises`。
+- `M L76-L98` `FullFlowTests.test_force_stage_is_reported_in_plan_manifest(self) -> None` [IO-R]：执行 `test force stage is reported in plan manifest` 对应逻辑。 调用：`FullFlowConfig`, `run_full_flow`, `self.assertEqual`, `self.assertIn`, `self.assertTrue`。
+- `M L100-L113` `FullFlowTests.test_force_stage_cannot_conflict_with_skip(self) -> None`：执行 `test force stage cannot conflict with skip` 对应逻辑。 调用：`FullFlowConfig`, `run_full_flow`, `self.assertRaises`。
+- `M L115-L128` `FullFlowTests.test_force_stage_must_be_inside_selected_range(self) -> None`：执行 `test force stage must be inside selected range` 对应逻辑。 调用：`FullFlowConfig`, `run_full_flow`, `self.assertRaises`。
+- `M L130-L163` `FullFlowTests.test_ramp_gate_error_returns_failed_result_without_raising(self) -> None`：执行 `test ramp gate error returns failed result without raising` 对应逻辑。 调用：`FullFlowConfig`, `RampGateError`, `run_full_flow`, `self.assertEqual`, `self.assertIn`, `self.assertTrue`。
+- `M L165-L199` `FullFlowTests.test_finish_stage_updates_dashboard_reporter(self) -> None`：执行 `test finish stage updates dashboard reporter` 对应逻辑。 调用：`FullFlowConfig`, `_FlowRuntime`, `_finish_stage`, `_initial_stage_states`, `self.assertEqual`, `utc_now`。
+- `M L201-L232` `FullFlowTests.test_initial_dashboard_stages_are_published_as_pending(self) -> None`：执行 `test initial dashboard stages are published as pending` 对应逻辑。 调用：`FullFlowConfig`, `_FlowRuntime`, `_initial_stage_states`, `_publish_initial_dashboard_stages`, `self.assertEqual`, `self.assertTrue`。
+- `M L234-L292` `FullFlowTests.test_full_flow_reports_initial_resource_snapshot_to_dashboard(self) -> None`：执行 `test full flow reports initial resource snapshot to dashboard` 对应逻辑。 调用：`FullFlowConfig`, `run_full_flow`, `self.assertEqual`。
+- `C L239-L248` `FullFlowTests.test_full_flow_reports_initial_resource_snapshot_to_dashboard.FakeDashboardHandle` [CLASS]：封装 `FakeDashboardHandle` 相关数据或行为。
+- `N L240-L241` `FullFlowTests.test_full_flow_reports_initial_resource_snapshot_to_dashboard.FakeDashboardHandle.__init__(self, reporter: DashboardReporter) -> None`：初始化实例依赖、配置和运行状态。
+- `N L243-L244` `FullFlowTests.test_full_flow_reports_initial_resource_snapshot_to_dashboard.FakeDashboardHandle.__enter__(self)`：执行 `enter` 对应逻辑。
+- `N L246-L248` `FullFlowTests.test_full_flow_reports_initial_resource_snapshot_to_dashboard.FakeDashboardHandle.__exit__(self, exc_type, exc, traceback)`：执行 `exit` 对应逻辑。 调用：`self.reporter.close`。
+- `N L250-L256` `FullFlowTests.test_full_flow_reports_initial_resource_snapshot_to_dashboard.fake_dashboard_reporter(**kwargs)`：执行 `fake dashboard reporter` 对应逻辑。 调用：`FakeDashboardHandle`。
+- `M L294-L339` `FullFlowTests.test_ramp_section_passes_formal_gallery_output_root(self) -> None` [IO-W]：执行 `test ramp section passes formal gallery output root` 对应逻辑。 调用：`FullFlowConfig`, `_FlowRuntime`, `_initial_stage_states`, `_run_ramp_section`, `self.assertEqual`, `utc_now`。
 
 ## `src/traning/tests/full_checks/test_full_training_pipeline.py`
 
@@ -1649,10 +1656,20 @@ tests/full_checks/runner.py -> full pytest checks
 职责：Python 模块；具体职责见下方符号及调用。
 工程依赖：`traning.core.training_ramp`
 
-- `C L22-L165` `TrainingRampTests(unittest.TestCase)` [CLASS]：封装 `TrainingRampTests` 相关数据或行为。
-- `M L23-L47` `TrainingRampTests.test_build_ramp_levels_clips_and_reaches_target(self) -> None`：执行 `test build ramp levels clips and reaches target` 对应逻辑。 调用：`RampTarget`, `build_ramp_levels`, `self.assertEqual`, `self.assertGreaterEqual`, `self.assertLessEqual`。
-- `M L49-L87` `TrainingRampTests.test_ensure_full_target_config_writes_target_and_absolutizes_paths(self) -> None` [IO-R IO-W]：执行 `test ensure full target config writes target and absolutizes paths` 对应逻辑。 调用：`RampTarget`, `ensure_full_target_config`, `self.assertEqual`, `self.assertTrue`。
-- `M L89-L165` `TrainingRampTests.test_ramp_reporter_tracks_level_pass_and_failure(self) -> None`：执行 `test ramp reporter tracks level pass and failure` 对应逻辑。 调用：`RampLevelSpec`, `RampTarget`, `_report_level_finished`, `_report_level_started`, `_report_ramp_failed`, `_report_ramp_started`。
+- `C L27-L284` `TrainingRampTests(unittest.TestCase)` [CLASS]：封装 `TrainingRampTests` 相关数据或行为。
+- `M L28-L52` `TrainingRampTests.test_build_ramp_levels_clips_and_reaches_target(self) -> None`：执行 `test build ramp levels clips and reaches target` 对应逻辑。 调用：`RampTarget`, `build_ramp_levels`, `self.assertEqual`, `self.assertGreaterEqual`, `self.assertLessEqual`。
+- `M L54-L92` `TrainingRampTests.test_ensure_full_target_config_writes_target_and_absolutizes_paths(self) -> None` [IO-R IO-W]：执行 `test ensure full target config writes target and absolutizes paths` 对应逻辑。 调用：`RampTarget`, `ensure_full_target_config`, `self.assertEqual`, `self.assertTrue`。
+- `M L94-L170` `TrainingRampTests.test_ramp_reporter_tracks_level_pass_and_failure(self) -> None`：执行 `test ramp reporter tracks level pass and failure` 对应逻辑。 调用：`RampLevelSpec`, `RampTarget`, `_report_level_finished`, `_report_level_started`, `_report_ramp_failed`, `_report_ramp_started`。
+- `M L172-L227` `TrainingRampTests.test_preflight_marks_gpu_bridge_passed_when_cuda_is_visible(self) -> None`：执行 `test preflight marks gpu bridge passed when cuda is visible` 对应逻辑。 调用：`_run_preflight`, `self.assertEqual`。
+- `M L229-L284` `TrainingRampTests.test_gate_rejects_quality_score_below_threshold(self) -> None` [IO-W]：执行 `test gate rejects quality score below threshold` 对应逻辑。 调用：`RampLevelSpec`, `_gate_level`, `self.assertRaisesRegex`。
+
+## `src/traning/tests/full_checks/test_training_reporting.py`
+
+职责：Python 模块；具体职责见下方符号及调用。
+工程依赖：`traning.lib`
+
+- `C L8-L15` `TrainingReportingTests(unittest.TestCase)` [CLASS]：封装 `TrainingReportingTests` 相关数据或行为。
+- `M L9-L15` `TrainingReportingTests.test_step_reporting_is_throttled_and_keeps_boundaries(self) -> None`：执行 `test step reporting is throttled and keeps boundaries` 对应逻辑。 调用：`self.assertFalse`, `self.assertTrue`, `should_report_training_step`。
 
 ## `src/traning/tests/startup_checks/items.py`
 

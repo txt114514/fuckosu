@@ -21,6 +21,7 @@ from traning.core.full_flow.orchestrator import (
     _run_ramp_section,
 )
 from traning.core.full_flow.result import utc_now
+from traning.core.training_ramp import RampGateError
 from visualization.lib import DashboardReporter, PipelinePhase, ResourceState
 
 
@@ -125,6 +126,41 @@ class FullFlowTests(unittest.TestCase):
                         force_stages=("RAMP_TRAINING",),
                     )
                 )
+
+    def test_ramp_gate_error_returns_failed_result_without_raising(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            with (
+                patch("traning.core.full_flow.orchestrator._run_startup_section"),
+                patch(
+                    "traning.core.full_flow.orchestrator._run_resume_section",
+                    return_value=SimpleNamespace(
+                        policy="none",
+                        stage_checkpoint_paths={},
+                    ),
+                ),
+                patch(
+                    "traning.core.full_flow.orchestrator.run_training_ramp",
+                    side_effect=RampGateError(
+                        "quality score 0.634000 below pass threshold 0.800000"
+                    ),
+                ),
+            ):
+                result = run_full_flow(
+                    FullFlowConfig(
+                        config_path=Path("configs/model_small_vram.yaml"),
+                        mode="execute",
+                        device="cpu",
+                        output_root=root,
+                        run_id="gate-fail",
+                        run_full_checks=False,
+                        progress_ui="plain",
+                    )
+                )
+
+            self.assertEqual(result.status, "failed")
+            self.assertIn("RampGateError", result.stop_reason or "")
+            self.assertTrue((root / "gate-fail" / "dashboard" / "stop_state.json").is_file())
 
     def test_finish_stage_updates_dashboard_reporter(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

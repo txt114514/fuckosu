@@ -6,7 +6,13 @@ from rich.console import Group
 from rich.panel import Panel
 from rich.table import Table
 
-from visualization.conf.messages import PIPELINE_PHASE_NAMES, STATUS_NAMES
+from visualization.conf.messages import (
+    display_grade,
+    display_page,
+    display_pipeline_phase,
+    display_status,
+    display_text,
+)
 from visualization.core.panels.best_parameters_panel import render_best_parameters_panel
 from visualization.core.panels.current_learning_panel import render_current_learning_panel
 from visualization.core.panels.events_panel import render_events_panel
@@ -43,7 +49,11 @@ def render_training_view(
             ),
             *_compact_training_panels(state, selected),
         )
-    return Group(
+    return Group(*dashboard_panels(state))
+
+
+def dashboard_panels(state: TrainingDashboardState) -> tuple[Panel, ...]:
+    return (
         render_current_trial_panel(state),
         render_parameters_panel(state),
         render_tests_panel(state),
@@ -68,7 +78,10 @@ def render_current_trial_panel(
     table.add_column("值")
     table.add_row("试验", state.current_trial_id or "无活动试验")
     table.add_row("流程阶段", _phase_name(state.pipeline_phase))
-    table.add_row("当前阶段", str(runtime.get("curriculum_stage") or state.phase))
+    table.add_row(
+        "当前阶段",
+        display_text(runtime.get("curriculum_stage") or state.phase),
+    )
     table.add_row("状态", _status_name(runtime.get("trial_status")))
     table.add_row(
         "步数",
@@ -86,7 +99,7 @@ def render_current_trial_panel(
         )
         table.add_row("检查点", str(runtime.get("checkpoint_path") or "无"))
         if runtime.get("prune_reason"):
-            table.add_row("淘汰原因", str(runtime["prune_reason"]))
+            table.add_row("淘汰原因", display_text(runtime["prune_reason"]))
     else:
         table.add_row("页面", _page_hint(page, pages))
     return Panel(table, title="当前试验")
@@ -132,8 +145,8 @@ def render_tests_panel(
     for name in rows:
         status = str(statuses.get(name, "pending"))
         table.add_row(
-            name,
-            STATUS_NAMES.get(status, status),
+            display_text(name),
+            display_status(status),
             _fmt_float(scores.get(name)),
             _fmt_float(thresholds.get(name)),
         )
@@ -170,12 +183,12 @@ def render_score_summary_panel(state: TrainingDashboardState) -> Panel:
     table = Table.grid(expand=True)
     table.add_column("指标")
     table.add_column("值")
-    table.add_row("当前 loss", _fmt_float(state.metrics.loss))
+    table.add_row("当前损失", _fmt_float(state.metrics.loss))
     table.add_row("当前评分", _fmt_float(state.metrics.score))
     table.add_row("参数最高", _fmt_float(state.metrics.parameter_best_score))
     table.add_row("本轮最高", _fmt_float(state.metrics.run_global_best_score))
-    table.add_row("当前等级", state.current_grade or "未评级")
-    table.add_row("晋升状态", state.promotion_status or "未评级")
+    table.add_row("当前等级", display_grade(state.current_grade))
+    table.add_row("晋升状态", display_text(state.promotion_status or "未评级"))
     table.add_row(
         "连续通过",
         _progress(
@@ -184,22 +197,14 @@ def render_score_summary_panel(state: TrainingDashboardState) -> Panel:
         ),
     )
     if state.best_parameters.trial_id:
-        table.add_row("最佳 Trial", state.best_parameters.trial_id)
+        table.add_row("最佳试验", state.best_parameters.trial_id)
     return Panel(table, title="评分摘要")
 
 
 def _page_hint(page: str, pages: tuple[str, ...]) -> str:
-    labels = {
-        "overview": "概览",
-        "parameters": "参数",
-        "tests": "测试",
-        "scores": "评分",
-        "resources": "资源",
-        "events": "事件",
-    }
     index = pages.index(page) + 1 if page in pages else 1
     return (
-        f"{index}/{len(pages)} {labels.get(page, page)}；"
+        f"{index}/{len(pages)} {display_page(page)}；"
         "1-6切页，Tab/空格下一页，b上一页，f完整视图，Ctrl+C中断"
     )
 
@@ -226,9 +231,9 @@ def _flatten_mapping(
 
 def _progress(value: object, total: object) -> str:
     if value is None and total is None:
-        return "N/A"
+        return "不适用"
     if total in (None, 0):
-        return str(value if value is not None else "N/A")
+        return str(value if value is not None else "不适用")
     return f"{value if value is not None else 0} / {total}"
 
 
@@ -254,10 +259,8 @@ def _fmt_value(value: object) -> str:
 
 
 def _phase_name(value: object) -> str:
-    text = str(value) if value is not None else ""
-    return PIPELINE_PHASE_NAMES.get(text, text or "无")
+    return display_pipeline_phase(value)
 
 
 def _status_name(value: object) -> str:
-    text = str(value) if value is not None else ""
-    return STATUS_NAMES.get(text, text or "无")
+    return display_status(value)

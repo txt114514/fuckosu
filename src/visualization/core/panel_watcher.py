@@ -32,14 +32,14 @@ from visualization.lib.models import (
 )
 
 
-app = typer.Typer(help="Watch one dashboard panel from dashboard_state.json.")
+app = typer.Typer(help="从 dashboard_state.json 监看一个可视化面板。")
 
 
 @app.command("watch")
 def watch_panel(
-    state_path: Path = typer.Argument(...),
-    panel: str = typer.Argument(...),
-    interval: float = typer.Option(1.0, "--interval", min=0.1),
+    state_path: Path = typer.Argument(..., help="dashboard_state.json 路径。"),
+    panel: str = typer.Argument(..., help="要显示的面板名称。"),
+    interval: float = typer.Option(1.0, "--interval", min=0.1, help="刷新间隔秒数。"),
 ) -> None:
     console = Console()
     with Live(

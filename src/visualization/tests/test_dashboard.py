@@ -69,6 +69,7 @@ class VisualizationDashboardTests(unittest.TestCase):
                 current_parameters={
                     "parameter_group_id": "trial_1",
                     "training": {"spatial_max_steps": 3},
+                    "artifact_path": Path("artifacts/model.pt"),
                 }
             )
             reporter.report_score(score=0.75, trial_id="trial_1", level="A")
@@ -88,12 +89,18 @@ class VisualizationDashboardTests(unittest.TestCase):
             (output / "best_parameters.json").read_text(encoding="utf-8")
         )
         self.assertEqual(current_parameters["parameter_group_id"], "trial_1")
+        self.assertEqual(current_parameters["artifact_path"], "artifacts/model.pt")
         self.assertEqual(current_status["trial_id"], "trial_1")
         self.assertEqual(current_status["score"], 0.75)
         self.assertIn("原始数据变更检测", current_status["passed_tests"])
         self.assertEqual(
             best_parameters["parameters"]["training"]["spatial_max_steps"],
             3,
+        )
+        event_lines = (output / "events.jsonl").read_text(encoding="utf-8").splitlines()
+        self.assertTrue(
+            any("stage_lifecycle_passed" in line for line in event_lines),
+            event_lines,
         )
 
     def test_dataset_exhausted_stop_state_is_persisted(self) -> None:
@@ -120,6 +127,39 @@ class VisualizationDashboardTests(unittest.TestCase):
             "DATASET_EXHAUSTED",
             (output / "stop_state.json").read_text(encoding="utf-8"),
         )
+
+    def test_stop_state_keeps_global_status_failed_after_report_stage_passes(self) -> None:
+        output = Path("/tmp/visualization_test_failed_status")
+        with create_dashboard_reporter(
+            run_id="failed-status-test",
+            output_dir=output,
+            progress_ui="plain",
+        ) as handle:
+            reporter = handle.reporter
+            reporter.request_stop(
+                TrainingStopState(
+                    reason="RAMP_FAILED",
+                    message="RampGateError: quality score below pass threshold",
+                    exit_code=1,
+                )
+            )
+            reporter.update_pipeline_stage(
+                PipelineStageState(
+                    stage_id="report_generation",
+                    name="运行报告",
+                    status="passed",
+                )
+            )
+            reporter.update_metrics(
+                pipeline_phase="completed",
+                status="passed",
+                phase="运行报告",
+            )
+
+        state = json.loads((output / "dashboard_state.json").read_text(encoding="utf-8"))
+        self.assertEqual(state["status"], "failed")
+        self.assertEqual(state["pipeline_phase"], "failed")
+        self.assertEqual(state["pipeline_stages"]["report_generation"]["status"], "passed")
 
     def test_stop_summary_exits_for_tty_keys(self) -> None:
         for label, key in {

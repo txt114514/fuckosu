@@ -29,6 +29,7 @@ from traning.lib.runtime import (
     module_to_device,
     tensor_to_device,
 )
+from traning.lib.reporting import should_report_training_step
 from traning.core.training_inheritance import (
     TrainingPosition,
     atomic_torch_save_checkpoint,
@@ -40,6 +41,7 @@ from traning.core.training_inheritance import (
 from visualization.lib import (
     DatasetUsageState,
     NullReporter,
+    PipelineStageState,
     ResourceState,
     TrainingEvent,
     TrainingReporter,
@@ -219,15 +221,16 @@ def run_temporal_training(
             if not math.isfinite(metrics["loss"]):
                 raise FloatingPointError("temporal committed loss is not finite")
             last_committed = step + 1
-            _report_temporal_step(
-                reporter,
-                step=last_committed,
-                target=max_steps,
-                loss=metrics["loss"],
-                window=window,
-                total_windows=len(source),
-                device=device,
-            )
+            if should_report_training_step(last_committed, max_steps):
+                _report_temporal_step(
+                    reporter,
+                    step=last_committed,
+                    target=max_steps,
+                    loss=metrics["loss"],
+                    window=window,
+                    total_windows=len(source),
+                    device=device,
+                )
     except BaseException:
         emergency = TemporalTrainingResult(
             run_dir=run_dir,
@@ -544,6 +547,15 @@ def _report_temporal_step(
     total_windows: int,
     device: torch.device,
 ) -> None:
+    reporter.update_pipeline_stage(
+        PipelineStageState(
+            stage_id="temporal",
+            name="时序训练",
+            status="running",
+            processed=step,
+            total=target,
+        )
+    )
     reporter.update_metrics(
         temporal_step=step,
         temporal_target=target,

@@ -48,13 +48,13 @@ def launch_panel_terminals(
             _launch_in_current_session(tmux, commands)
             return MultiTerminalLaunchResult(
                 status="launched",
-                message="已在当前 tmux session 中创建多面板终端",
+                message="已在当前 tmux 会话中创建多面板终端",
                 session_name=None,
             )
         _launch_detached_session(tmux, session_name, commands)
         return MultiTerminalLaunchResult(
             status="launched",
-            message=f"已创建 tmux session：{session_name}",
+            message=f"已创建 tmux 会话：{session_name}",
             session_name=session_name,
         )
     except Exception as error:
@@ -93,12 +93,12 @@ def launch_attached_training_terminals(
         if attached.returncode != 0:
             return MultiTerminalLaunchResult(
                 status="failed",
-                message=f"tmux attach 失败，返回码 {attached.returncode}",
+                message=f"附加到 tmux 会话失败，返回码 {attached.returncode}",
                 session_name=session_name,
             )
         return MultiTerminalLaunchResult(
             status="attached",
-            message=f"已启动并进入 tmux 多面板 session：{session_name}",
+            message=f"已启动并进入 tmux 多面板会话：{session_name}",
             session_name=session_name,
         )
     except Exception as error:

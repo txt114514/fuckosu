@@ -21,6 +21,7 @@ from traning.lib.runtime import (
     module_to_device,
     tensor_to_device,
 )
+from traning.lib.reporting import should_report_training_step
 from traning.lib.training.losses import compute_spatial_loss, temporal_consistency_loss
 from traning.lib.training.spatial_targets import build_spatial_loss_targets
 from traning.conf import DataSplit, Settings
@@ -36,6 +37,7 @@ from traning.core.training_inheritance import (
 from visualization.lib import (
     DatasetUsageState,
     NullReporter,
+    PipelineStageState,
     ResourceState,
     TrainingEvent,
     TrainingReporter,
@@ -260,16 +262,17 @@ def run_spatial_training(
                 raise FloatingPointError("spatial committed loss is not finite")
             last_patch_count = processed
             last_committed = step + 1
-            _report_spatial_step(
-                reporter,
-                step=last_committed,
-                target=max_steps,
-                loss=last_loss,
-                sample=sample,
-                total_samples=len(training_dataset),
-                generated_patches=processed,
-                device=device,
-            )
+            if should_report_training_step(last_committed, max_steps):
+                _report_spatial_step(
+                    reporter,
+                    step=last_committed,
+                    target=max_steps,
+                    loss=last_loss,
+                    sample=sample,
+                    total_samples=len(training_dataset),
+                    generated_patches=processed,
+                    device=device,
+                )
     except BaseException:
         _write_checkpoint(
             SpatialTrainingResult(
@@ -544,6 +547,15 @@ def _report_spatial_step(
     generated_patches: int,
     device: torch.device,
 ) -> None:
+    reporter.update_pipeline_stage(
+        PipelineStageState(
+            stage_id="spatial",
+            name="空间训练",
+            status="running",
+            processed=step,
+            total=target,
+        )
+    )
     reporter.update_metrics(
         spatial_step=step,
         spatial_target=target,

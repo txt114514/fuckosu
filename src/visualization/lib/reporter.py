@@ -28,6 +28,20 @@ def _now_seconds() -> float:
     return datetime.now(timezone.utc).timestamp()
 
 
+_ACTIVE_STAGE_STATUSES = {
+    "scanning",
+    "converting",
+    "checking",
+    "running",
+    "training",
+    "evaluating",
+}
+_PASSED_STAGE_STATUSES = {"passed", "completed"}
+_WARNING_STAGE_STATUSES = {"warning", "skipped"}
+_FAILED_STAGE_STATUSES = {"failed", "interrupted"}
+_GLOBAL_TERMINAL_STATUSES = {"failed", "interrupted"}
+
+
 class NullReporter:
     def update_pipeline_stage(self, stage: PipelineStageState) -> None:
         return None
@@ -89,6 +103,7 @@ class DashboardReporter:
         )
         self._state = TrainingDashboardState(run_id=run_id, status="running")
         self._best_score: float | None = None
+        self._last_resource_monitor_error: str | None = None
         self._refresh_callbacks: list[Callable[[], None]] = []
         self._sync_current_parameter_status()
         self._write_state()
@@ -101,11 +116,19 @@ class DashboardReporter:
             self._refresh_callbacks.remove(callback)
 
     def update_pipeline_stage(self, stage: PipelineStageState) -> None:
+        previous = self._state.pipeline_stages.get(stage.stage_id)
         self._state.pipeline_stages[stage.stage_id] = stage
         self._state.phase = stage.name
-        self._state.status = stage.status
+        if not _protects_terminal_global_state(self._state) or stage.status in {
+            "failed",
+            "interrupted",
+        }:
+            self._state.status = stage.status
         self._touch()
         self._sync_current_parameter_status()
+        event = _stage_lifecycle_event(previous, stage)
+        if event is not None:
+            self._record_event(event)
         self._write_state()
 
     def update_metrics(self, **metrics: Any) -> None:
@@ -119,6 +142,8 @@ class DashboardReporter:
                 self._state.current_parameters = _parameter_payload(value)
                 parameters_updated = True
             elif hasattr(self._state, key):
+                if _should_skip_terminal_global_metric(self._state, key, value):
+                    continue
                 setattr(self._state, key, value)
         self._state.metrics = CurrentTrainingMetrics(**current)
         self._touch()
@@ -202,6 +227,26 @@ class DashboardReporter:
         self._state.resources = resource
         self._touch()
         self.store.write_named("resource_history.jsonl.current.json", resource.as_dict())
+        monitor_error = resource.gpu_monitor_error
+        if monitor_error and monitor_error != self._last_resource_monitor_error:
+            self._record_event(
+                TrainingEvent.create(
+                    event_type="resource",
+                    severity="warning",
+                    message_key="resource_monitor_warning",
+                    message_args={"error": monitor_error},
+                )
+            )
+        elif self._last_resource_monitor_error and not monitor_error:
+            self._record_event(
+                TrainingEvent.create(
+                    event_type="resource",
+                    severity="success",
+                    message_key="resource_monitor_restored",
+                    message_args={"source": resource.gpu_monitor_source or "GPU 监控"},
+                )
+            )
+        self._last_resource_monitor_error = monitor_error
         self._write_state()
 
     def report_dataset_usage(self, usage: DatasetUsageState) -> None:
@@ -211,13 +256,16 @@ class DashboardReporter:
         self._write_state()
 
     def emit_event(self, event: TrainingEvent) -> None:
+        self._record_event(event)
+        self._touch()
+        self._sync_current_parameter_status()
+        self._write_state()
+
+    def _record_event(self, event: TrainingEvent) -> None:
         self._events.append(event)
         self._state.recent_events = list(self._events)
         with suppress(Exception):
             self.store.append_event(event)
-        self._touch()
-        self._sync_current_parameter_status()
-        self._write_state()
 
     def request_stop(self, stop: TrainingStopState) -> None:
         self._state.stop_state = stop
@@ -269,8 +317,8 @@ class DashboardReporter:
         return self._state
 
     def close(self) -> None:
-        self._state.status = "completed" if self._state.stop_state is None else self._state.status
-        if self._state.stop_state is None:
+        if not _protects_terminal_global_state(self._state):
+            self._state.status = "completed"
             self._state.pipeline_phase = PipelinePhase.COMPLETED.value
         self.emit_event(
             TrainingEvent.create(
@@ -311,6 +359,63 @@ def _parameter_payload(value: Any) -> dict[str, object]:
     if isinstance(value, Mapping):
         return {str(key): item for key, item in value.items()}
     return {"value": value}
+
+
+def _stage_lifecycle_event(
+    previous: PipelineStageState | None,
+    stage: PipelineStageState,
+) -> TrainingEvent | None:
+    if stage.status == "pending":
+        return None
+    if previous is not None and previous.status == stage.status:
+        return None
+    if stage.status in _ACTIVE_STAGE_STATUSES:
+        severity = "info"
+        message_key = "stage_lifecycle_started"
+    elif stage.status in _PASSED_STAGE_STATUSES:
+        severity = "success"
+        message_key = "stage_lifecycle_passed"
+    elif stage.status in _WARNING_STAGE_STATUSES:
+        severity = "warning" if stage.status == "warning" else "info"
+        message_key = (
+            "stage_lifecycle_warning"
+            if stage.status == "warning"
+            else "stage_lifecycle_skipped"
+        )
+    elif stage.status in _FAILED_STAGE_STATUSES:
+        severity = "error"
+        message_key = "stage_lifecycle_failed"
+    else:
+        return None
+    return TrainingEvent.create(
+        event_type="stage_lifecycle",
+        severity=severity,
+        message_key=message_key,
+        message_args={"stage": stage.name, "status": stage.status},
+        phase=stage.name,
+    )
+
+
+def _protects_terminal_global_state(state: TrainingDashboardState) -> bool:
+    return (
+        state.stop_state is not None
+        or state.status in _GLOBAL_TERMINAL_STATUSES
+        or state.pipeline_phase == PipelinePhase.FAILED.value
+    )
+
+
+def _should_skip_terminal_global_metric(
+    state: TrainingDashboardState,
+    key: str,
+    value: object,
+) -> bool:
+    if not _protects_terminal_global_state(state):
+        return False
+    if key == "status":
+        return str(value) not in _GLOBAL_TERMINAL_STATUSES
+    if key == "pipeline_phase":
+        return str(value) != PipelinePhase.FAILED.value
+    return False
 
 
 def _parameter_status_payload(state: TrainingDashboardState) -> dict[str, object]:

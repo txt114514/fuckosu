@@ -9,6 +9,7 @@ from contextlib import suppress
 from rich.console import Console
 from rich.panel import Panel
 
+from visualization.conf.messages import display_text
 from visualization.lib.models import TrainingStopState
 
 STOP_EXIT_CODES = {
@@ -26,11 +27,11 @@ STOP_EXIT_CODES = {
 def show_stop_summary(stop: TrainingStopState, *, wait_for_key: bool = True) -> None:
     console = Console()
     text = (
-        f"原因：{stop.message}\n"
+        f"原因：{display_text(stop.message)}\n"
         f"当前步数：{stop.step or 0} / {stop.target_step or '未知'}\n"
         f"已保存检查点：{stop.latest_checkpoint or '无'}\n"
         f"已生成继承状态：{stop.inheritance_path or '无'}\n\n"
-        "按 Q、Enter 或 Esc 退出"
+        "按 Q、回车或 Esc 退出"
     )
     console.print(Panel(text, title="训练已停止", border_style="red"))
     if wait_for_key and sys.stdin.isatty() and sys.stdout.isatty():

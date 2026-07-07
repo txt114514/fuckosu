@@ -41,7 +41,7 @@ def build_dashboard_handle(
                     event_type="ui",
                     severity="warning",
                     message_key="fatal_error",
-                    message_args={"error": f"Rich 初始化失败，切换 plain：{error}"},
+                    message_args={"error": f"Rich 初始化失败，切换纯文本模式：{error}"},
                 )
             )
             from visualization.core.renderers.plain_renderer import PlainDashboardRenderer

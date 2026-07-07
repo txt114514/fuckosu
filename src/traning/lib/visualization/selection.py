@@ -12,14 +12,14 @@ def select_click_frame(
 ) -> SelectedFrame:
     if not 0 <= segment_index < len(dataset.records):
         raise IndexError(
-            f"segment_index {segment_index} is outside "
+            f"segment_index {segment_index} 超出范围 "
             f"[0, {len(dataset.records)})"
         )
     record = dataset.records[segment_index]
     hit_objects = record.annotation.hit_objects
     if not 0 <= object_index < len(hit_objects):
         raise IndexError(
-            f"object_index {object_index} is outside [0, {len(hit_objects)})"
+            f"object_index {object_index} 超出范围 [0, {len(hit_objects)})"
         )
 
     target = hit_objects[object_index]
@@ -35,7 +35,7 @@ def select_click_frame(
         )
     except ValueError as error:
         raise ValueError(
-            f"segment {record.key} has no sampled frame references"
+            f"片段 {record.key} 没有抽样帧引用"
         ) from error
 
     return SelectedFrame(

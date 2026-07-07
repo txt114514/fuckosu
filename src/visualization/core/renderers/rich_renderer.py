@@ -12,7 +12,7 @@ from rich.console import Console
 from rich.live import Live
 
 from visualization.conf import DashboardSettings
-from visualization.core.view_router import dashboard_pages, render_dashboard_view
+from visualization.core.view_router import render_dashboard_page
 from visualization.lib.reporter import DashboardReporter
 
 
@@ -23,9 +23,8 @@ class RichDashboardRenderer:
         self.console = Console()
         self.live: Live | None = None
         self._refresh_callback = self.refresh
-        self._page = "overview"
-        self._force_full = False
-        self._last_page_switch = time.monotonic()
+        self._page_index = 0
+        self._page_count = 1
         self._stop_keyboard = threading.Event()
         self._keyboard_thread: threading.Thread | None = None
         self._refresh_lock = threading.Lock()
@@ -57,16 +56,22 @@ class RichDashboardRenderer:
 
     def _render(self):
         state = self.reporter.snapshot()
-        pages = dashboard_pages(state)
-        if self._page not in pages:
-            self._page = pages[0]
-        compact = (
-            not self._force_full
-            and self.console.size.height <= self.settings.compact_terminal_height
+        renderable, page_count = render_dashboard_page(
+            state,
+            page_index=self._page_index,
+            terminal_height=self.console.size.height,
+            terminal_width=self.console.size.width,
         )
-        if compact:
-            self._advance_page_if_due(pages)
-        return render_dashboard_view(state, compact=compact, page=self._page)
+        self._page_count = page_count
+        if self._page_index >= page_count:
+            self._page_index = max(page_count - 1, 0)
+            renderable, self._page_count = render_dashboard_page(
+                state,
+                page_index=self._page_index,
+                terminal_height=self.console.size.height,
+                terminal_width=self.console.size.width,
+            )
+        return renderable
 
     def _start_keyboard_listener(self) -> None:
         if self._keyboard_thread is not None:
@@ -99,6 +104,8 @@ class RichDashboardRenderer:
                 if not ready:
                     continue
                 char = sys.stdin.read(1)
+                if char == "\x1b":
+                    char += self._read_escape_tail()
                 if self._handle_key(char):
                     self.refresh()
         finally:
@@ -106,38 +113,35 @@ class RichDashboardRenderer:
                 termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
     def _handle_key(self, char: str) -> bool:
-        pages = dashboard_pages(self.reporter.snapshot())
-        if char in {"\t", " "}:
-            self._page = _relative_page(self._page, pages, 1)
-            self._last_page_switch = time.monotonic()
-            return True
-        if char in {"b", "B"}:
-            self._page = _relative_page(self._page, pages, -1)
-            self._last_page_switch = time.monotonic()
-            return True
-        if char in {"f", "F"}:
-            self._force_full = not self._force_full
-            return True
+        if char in {"\t", " ", "\x1b[B"}:
+            return self._set_page_index(self._page_index + 1)
+        if char in {"b", "B", "\x1b[A"}:
+            return self._set_page_index(self._page_index - 1)
         if char.isdigit():
             index = int(char) - 1
-            if 0 <= index < len(pages):
-                self._page = pages[index]
-                self._last_page_switch = time.monotonic()
-                return True
+            return self._set_page_index(index)
         return False
 
-    def _advance_page_if_due(self, pages: tuple[str, ...]) -> None:
-        if len(pages) <= 1:
-            return
-        now = time.monotonic()
-        if now - self._last_page_switch < self.settings.auto_page_seconds:
-            return
-        self._page = _relative_page(self._page, pages, 1)
-        self._last_page_switch = now
+    def _read_escape_tail(self) -> str:
+        tail: list[str] = []
+        deadline = time.monotonic() + 0.05
+        while len(tail) < 8:
+            timeout = max(deadline - time.monotonic(), 0.0)
+            if timeout <= 0:
+                break
+            ready, _, _ = select.select([sys.stdin], [], [], timeout)
+            if not ready:
+                break
+            item = sys.stdin.read(1)
+            tail.append(item)
+            if tail[0] == "[" and item.isalpha():
+                break
+        return "".join(tail)
 
-
-def _relative_page(current: str, pages: tuple[str, ...], offset: int) -> str:
-    if not pages:
-        return current
-    index = pages.index(current) if current in pages else 0
-    return pages[(index + offset) % len(pages)]
+    def _set_page_index(self, index: int) -> bool:
+        page_count = max(self._page_count, 1)
+        selected = min(max(index, 0), page_count - 1)
+        if selected == self._page_index:
+            return False
+        self._page_index = selected
+        return True

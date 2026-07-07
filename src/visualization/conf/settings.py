@@ -33,14 +33,14 @@ class DashboardSettings:
 
     def __post_init__(self) -> None:
         if self.mode not in {"auto", "rich", "plain", "off"}:
-            raise ValueError("mode must be auto, rich, plain, or off")
+            raise ValueError("界面模式必须是 auto、rich、plain 或 off")
         if self.refresh_per_second <= 0:
-            raise ValueError("refresh_per_second must be positive")
+            raise ValueError("刷新频率必须为正数")
         if self.plain_interval_seconds <= 0:
-            raise ValueError("plain_interval_seconds must be positive")
+            raise ValueError("纯文本刷新间隔必须为正数")
         if self.recent_event_limit <= 0:
-            raise ValueError("recent_event_limit must be positive")
+            raise ValueError("最近事件数量上限必须为正数")
         if self.compact_terminal_height <= 0:
-            raise ValueError("compact_terminal_height must be positive")
+            raise ValueError("紧凑终端高度阈值必须为正数")
         if self.auto_page_seconds <= 0:
-            raise ValueError("auto_page_seconds must be positive")
+            raise ValueError("自动翻页间隔必须为正数")

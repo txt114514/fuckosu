@@ -1,22 +1,27 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import yaml
 
 from traning.core.training_ramp import (
     RampLevelSpec,
+    RampGateError,
     RampTarget,
+    _gate_level,
     _report_level_finished,
     _report_level_started,
+    _run_preflight,
     _report_ramp_failed,
     _report_ramp_started,
     build_ramp_levels,
     ensure_full_target_config,
 )
-from visualization.lib import DashboardReporter
+from visualization.lib import DashboardReporter, ResourceState
 
 
 class TrainingRampTests(unittest.TestCase):
@@ -163,6 +168,120 @@ class TrainingRampTests(unittest.TestCase):
             self.assertEqual(failed.status, "failed")
             self.assertEqual(failed.stop_state.reason, "RAMP_FAILED")
             self.assertEqual(failed.pipeline_stages["level_a"].status, "failed")
+
+    def test_preflight_marks_gpu_bridge_passed_when_cuda_is_visible(self) -> None:
+        env = SimpleNamespace(
+            python_version="3.11",
+            torch=SimpleNamespace(
+                version="2.9.0",
+                torch_cuda="13.0",
+                cuda_available=True,
+                gpu_name="NVIDIA GPU",
+                total_vram_gib=8.0,
+                free_vram_gib=7.5,
+            ),
+        )
+        data_report = SimpleNamespace(
+            ok=True,
+            segment_count=2,
+            frame_count_estimate=20,
+            category_counts={},
+            dimension_counts={},
+            distribution={"data_quality_issues": ()},
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            reporter = DashboardReporter(
+                run_id="preflight-gpu",
+                output_dir=Path(temp_dir) / "dashboard",
+            )
+            with (
+                patch(
+                    "traning.core.training_ramp.collect_environment_report",
+                    return_value=env,
+                ),
+                patch("traning.core.training_ramp.load_settings", return_value=object()),
+                patch(
+                    "traning.core.training_ramp.inspect_data_input",
+                    return_value=data_report,
+                ),
+                patch(
+                    "traning.core.training_ramp.collect_resource_state",
+                    return_value=ResourceState(
+                        gpu_name="NVIDIA GPU",
+                        gpu_utilization=23.0,
+                        gpu_monitor_source="nvidia-smi",
+                    ),
+                ),
+            ):
+                _run_preflight(
+                    config_path=Path("config.yaml"),
+                    device="cuda",
+                    output_dir=Path(temp_dir),
+                    run_full_checks=False,
+                    reporter=reporter,
+                )
+
+            state = reporter.snapshot()
+            self.assertEqual(state.pipeline_stages["gpu_bridge"].status, "passed")
+            self.assertEqual(state.pipeline_stages["gpu_bridge"].processed, 1)
+            self.assertEqual(state.resources.gpu_utilization, 23.0)
+
+    def test_gate_rejects_quality_score_below_threshold(self) -> None:
+        level = RampLevelSpec("a", "level_a", 1, 1, 1, 1, 1, 1, 1)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            spatial_checkpoint = root / "spatial.pt"
+            temporal_checkpoint = root / "temporal.pt"
+            report_path = root / "report.json"
+            next_job_path = root / "next_job.json"
+            spatial_checkpoint.write_bytes(b"checkpoint")
+            temporal_checkpoint.write_bytes(b"checkpoint")
+            report_path.write_text('{"samples": []}\n', encoding="utf-8")
+            next_job_path.write_text("{}\n", encoding="utf-8")
+            result = SimpleNamespace(
+                spatial=SimpleNamespace(
+                    steps=1,
+                    last_loss=1.0,
+                    checkpoint_path=spatial_checkpoint,
+                    as_dict=lambda: {},
+                    cuda_max_reserved_gib=0.1,
+                ),
+                temporal=SimpleNamespace(
+                    steps=1,
+                    final_loss=1.0,
+                    checkpoint_path=temporal_checkpoint,
+                    as_dict=lambda: {},
+                    cuda_max_reserved_gib=0.2,
+                ),
+                evaluation=SimpleNamespace(
+                    quality_score=0.634,
+                    pass_threshold=0.8,
+                    passed=False,
+                    gallery_status="saved",
+                    gallery_saved_frame_count=1,
+                    report_path=report_path,
+                    next_job_path=next_job_path,
+                    as_dict=lambda: {
+                        "quality_score": 0.634,
+                        "pass_threshold": 0.8,
+                        "passed": False,
+                    },
+                ),
+                candidate_cache=SimpleNamespace(frames=1, as_dict=lambda: {}),
+                decision=SimpleNamespace(as_dict=lambda: {}),
+            )
+
+            with patch("traning.core.training_ramp.torch.load", return_value={}):
+                with self.assertRaisesRegex(RampGateError, "below pass threshold"):
+                    _gate_level(
+                        level=level,
+                        result=result,
+                        elapsed=1.0,
+                        artifact_path=root / "artifact.json",
+                        artifact_issues=(),
+                        artifact_smoke={"finite": True},
+                        dry_run={"returncode": 0},
+                    )
 
 
 if __name__ == "__main__":

@@ -21,7 +21,7 @@ TEXT_COLOR = (255, 255, 255)
 
 def _image_from_tensor(image: torch.Tensor) -> Image.Image:
     if image.ndim != 3 or image.shape[0] not in (1, 3, 4):
-        raise ValueError("image tensor must use CHW layout")
+        raise ValueError("图像张量必须使用 CHW 布局")
     data = image.detach().cpu()
     if data.is_floating_point():
         data = data.clamp(0, 1).mul(255)
@@ -219,20 +219,20 @@ def render_annotated_frame(
             target_point = point
 
     lines = [
-        f"sample={sample['sample_key']}",
-        f"frame={sample['frame_index']} t={sample['timestamp_ms']:.3f}ms",
-        f"visible={len(sample['visible_hit_objects'])}",
-        f"transform={transform_spec.version}:{transform_spec.source}",
+        f"样本={sample['sample_key']}",
+        f"帧={sample['frame_index']} 时间={sample['timestamp_ms']:.3f}ms",
+        f"可见物件={len(sample['visible_hit_objects'])}",
+        f"坐标变换={transform_spec.version}:{transform_spec.source}",
     ]
     if target_point is not None:
         osu_point = transform.video_to_osu(*target_point)
         lines.append(
-            "target "
-            f"video=({target_point[0]}, {target_point[1]}) "
+            "目标 "
+            f"视频=({target_point[0]}, {target_point[1]}) "
             f"osu=({osu_point[0]:.2f}, {osu_point[1]:.2f})"
         )
     elif spinner_target:
-        lines.append("target=spinner")
+        lines.append("目标=转盘")
     if predicted_video_xy is not None:
         predicted_point = (
             round(predicted_video_xy[0]),
@@ -240,8 +240,8 @@ def render_annotated_frame(
         )
         _draw_cross(draw, predicted_point, (255, 80, 255), size=16, width=4)
         line = (
-            "prediction "
-            f"video=({predicted_point[0]}, {predicted_point[1]})"
+            "预测 "
+            f"视频=({predicted_point[0]}, {predicted_point[1]})"
         )
         if predicted_osu_xy is not None:
             line += f" osu=({predicted_osu_xy[0]:.2f}, {predicted_osu_xy[1]:.2f})"
@@ -250,8 +250,8 @@ def render_annotated_frame(
         predicted_point = _point(transform, predicted_osu_xy[0], predicted_osu_xy[1])
         _draw_cross(draw, predicted_point, (255, 80, 255), size=16, width=4)
         lines.append(
-            "prediction "
-            f"video=({predicted_point[0]}, {predicted_point[1]}) "
+            "预测 "
+            f"视频=({predicted_point[0]}, {predicted_point[1]}) "
             f"osu=({predicted_osu_xy[0]:.2f}, {predicted_osu_xy[1]:.2f})"
         )
     lines.extend(str(line) for line in metadata_lines)

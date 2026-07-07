@@ -24,10 +24,11 @@ from start.samples import DEFAULT_MATCHED_MANIFEST
 from start.modules import source_module_entries
 from traning.conf import DataSplit, load_settings
 from traning.core.full_flow import FullFlowConfig, FullFlowResult, run_full_flow
+from visualization.conf.messages import display_status, display_text
 from visualization.core.multi_terminal import launch_attached_training_terminals
 
 
-app = typer.Typer(help="Unified src startup entry and preflight checks.")
+app = typer.Typer(help="统一的 src 启动入口和训练预检。")
 console = Console()
 DEFAULT_UI_TRAINING_CONFIG = Path("configs") / "model_full_small_vram.yaml"
 DEFAULT_UI_OUTPUT_ROOT = Path("artifacts") / "training_runs"
@@ -371,62 +372,71 @@ def _append_optional_int(args: list[str], option: str, value: object) -> None:
 
 
 def _render_modules_table() -> None:
-    table = Table(title="src module entries")
-    table.add_column("Key")
-    table.add_column("Import")
-    table.add_column("Public entry")
-    table.add_column("CLI")
-    table.add_column("Importable")
+    table = Table(title="src 模块入口")
+    table.add_column("键")
+    table.add_column("导入路径")
+    table.add_column("公开入口")
+    table.add_column("命令行入口")
+    table.add_column("可导入")
     for entry in source_module_entries(include_start=True):
         table.add_row(
             entry.key,
             entry.import_name,
             entry.public_entry,
             entry.cli_entry or "",
-            "yes" if entry.importable else "no",
+            "是" if entry.importable else "否",
         )
     console.print(table)
 
 
 def _render_check_table(report) -> None:
-    table = Table(title=f"startup checks: {report.scope}")
-    table.add_column("Check")
-    table.add_column("Status")
-    table.add_column("Message")
+    table = Table(title=f"启动检查：{display_text(report.scope)}")
+    table.add_column("检查项")
+    table.add_column("状态")
+    table.add_column("消息")
     for result in report.results:
-        table.add_row(result.key, result.status, result.message)
+        table.add_row(
+            display_text(result.key),
+            _status_text(result.status),
+            display_text(result.message),
+        )
     console.print(table)
 
 
 def _render_check_detail_table(title: str, report) -> None:
-    table = Table(title=title)
-    table.add_column("Check")
-    table.add_column("Status")
-    table.add_column("Message")
-    table.add_column("Details")
+    table = Table(title=display_text(title))
+    table.add_column("检查项")
+    table.add_column("状态")
+    table.add_column("消息")
+    table.add_column("详情")
     for item in report.results:
         details = _compact_details(getattr(item, "details", {}) or {})
-        table.add_row(item.key, item.status, item.message, details)
+        table.add_row(
+            display_text(item.key),
+            _status_text(item.status),
+            display_text(item.message),
+            details,
+        )
     console.print(table)
 
 
 def _render_parameter_group_score(evaluation) -> None:
-    table = Table(title="parameter group score")
-    table.add_column("Group")
-    table.add_column("Quality")
-    table.add_column("Passed")
-    table.add_column("Targets")
-    table.add_column("Hits")
-    table.add_column("Misses")
-    table.add_column("Unresolved")
-    table.add_column("Freq limited")
-    table.add_column("No-op")
-    table.add_column("Actions")
-    table.add_column("Gallery")
+    table = Table(title="参数组评分")
+    table.add_column("参数组")
+    table.add_column("质量分")
+    table.add_column("通过")
+    table.add_column("目标数")
+    table.add_column("命中")
+    table.add_column("漏检")
+    table.add_column("未解析")
+    table.add_column("频率受限")
+    table.add_column("无操作")
+    table.add_column("动作")
+    table.add_column("图集")
     table.add_row(
         str(evaluation.parameter_group_id),
         f"{evaluation.quality_score:.6f}",
-        "yes" if evaluation.passed else "no",
+        "是" if evaluation.passed else "否",
         str(evaluation.target_count),
         str(evaluation.hit_count),
         str(evaluation.miss_count),
@@ -435,21 +445,21 @@ def _render_parameter_group_score(evaluation) -> None:
         str(evaluation.no_op_frame_count),
         str(evaluation.action_frame_count),
         (
-            f"{evaluation.gallery_status}: {evaluation.gallery_output_dir}"
+            f"{display_text(evaluation.gallery_status)}: {evaluation.gallery_output_dir}"
             if evaluation.gallery_output_dir is not None
-            else evaluation.gallery_status
+            else display_text(evaluation.gallery_status)
         ),
     )
     console.print(table)
     if evaluation.gallery_warning:
-        console.print(f"[yellow]{evaluation.gallery_warning}[/yellow]")
+        console.print(f"[yellow]{display_text(evaluation.gallery_warning)}[/yellow]")
 
 
 def _render_flow_table(result) -> None:
-    table = Table(title="startup flow")
-    table.add_column("Step")
-    table.add_column("Status")
-    table.add_column("Detail")
+    table = Table(title="启动流程")
+    table.add_column("步骤")
+    table.add_column("状态")
+    table.add_column("详情")
     raw_data = _raw_data_details(result.before_startup)
     before_status = (
         "run"
@@ -457,49 +467,49 @@ def _render_flow_table(result) -> None:
         else "skip"
     )
     table.add_row(
-        "before_traning scan",
-        before_status,
-        str(raw_data.get("reason") or "raw-data check not available"),
+        "训练前扫描",
+        _status_text(before_status),
+        display_text(str(raw_data.get("reason") or "原始数据检查不可用")),
     )
     table.add_row(
-        "before_traning build",
-        result.before_run.status,
-        result.before_run.message,
+        "训练前构建",
+        _status_text(result.before_run.status),
+        display_text(result.before_run.message),
     )
     table.add_row(
-        "dataset split sync",
-        "changed" if result.split_sync.changed else "no-op",
+        "数据划分同步",
+        _status_text("changed" if result.split_sync.changed else "no-op"),
         (
             f"new={len(result.split_sync.new_items)}, "
             f"counts={result.split_sync.manifest.counts()}"
         ),
     )
     table.add_row(
-        "traning self-check",
-        "passed" if result.training_startup.ok else "failed",
-        f"{len(result.training_startup.results)} checks",
+        "训练自检",
+        _status_text("passed" if result.training_startup.ok else "failed"),
+        f"{len(result.training_startup.results)} 项检查",
     )
     table.add_row(
-        "progressive tests",
-        result.tests.status,
+        "渐进测试",
+        _status_text(result.tests.status),
         f"level={result.tests.level}, returncode={result.tests.returncode}",
     )
     table.add_row(
-        "full training",
-        "dry-run" if result.dry_run else "passed",
+        "完整训练",
+        _status_text("dry-run" if result.dry_run else "passed"),
         (
             str(result.full_training.run_dir)
             if result.full_training is not None
-            else "not executed"
+            else "未执行"
         ),
     )
     console.print(table)
     _render_check_detail_table(
-        "before_traning startup checks",
+        "训练前启动检查",
         result.before_startup,
     )
     _render_check_detail_table(
-        "traning startup checks",
+        "训练启动检查",
         result.training_startup,
     )
     printed_scopes = {
@@ -511,7 +521,7 @@ def _render_flow_table(result) -> None:
             continue
         printed_scopes.add(report.scope)
         _render_check_detail_table(
-            f"progressive checks: {report.scope}",
+            f"渐进检查：{report.scope}",
             report,
         )
     if result.full_training is not None:
@@ -519,21 +529,25 @@ def _render_flow_table(result) -> None:
 
 
 def _render_full_flow_table(result: FullFlowResult) -> None:
-    table = Table(title="full-flow startup, tests, and training")
-    table.add_column("Stage")
-    table.add_column("Status")
-    table.add_column("Detail")
+    table = Table(title="完整流程启动、检查与训练")
+    table.add_column("阶段")
+    table.add_column("状态")
+    table.add_column("详情")
     for stage in result.stages:
         detail = stage.error or ""
         if not detail and stage.artifacts:
             detail = stage.artifacts[0]
         if not detail and stage.result:
             detail = _compact_details(dict(stage.result))
-        table.add_row(stage.display_name, stage.status, detail)
+        table.add_row(
+            display_text(stage.display_name),
+            _status_text(stage.status),
+            _detail_text(detail),
+        )
     console.print(table)
-    console.print(f"[green]run[/green]: {result.output_dir}")
+    console.print(f"[green]运行目录[/green]: {result.output_dir}")
     if result.ramp_manifest_path is not None:
-        console.print(f"[green]ramp[/green]: {result.ramp_manifest_path}")
+        console.print(f"[green]渐进训练清单[/green]: {result.ramp_manifest_path}")
 
 
 def _write_full_flow_report(result: FullFlowResult, path: Path) -> None:
@@ -565,6 +579,35 @@ def _compact_details(details: dict) -> str:
             rendered_value = rendered_value[:77] + "..."
         rendered.append(f"{key}={rendered_value}")
     return ", ".join(rendered)
+
+
+def _status_text(value: object) -> str:
+    text = str(value) if value is not None else ""
+    aliases = {
+        "READY": "等待执行",
+        "RUNNING": "正在运行",
+        "PASSED": "已通过",
+        "FAILED": "已失败",
+        "SKIPPED": "已跳过",
+        "INTERRUPTED": "已中断",
+        "run": "执行",
+        "skip": "跳过",
+        "changed": "已更新",
+        "no-op": "无变化",
+        "dry-run": "演练",
+    }
+    if text in aliases:
+        return aliases[text]
+    return display_status(text.lower())
+
+
+def _detail_text(value: object) -> str:
+    text = str(value) if value is not None else ""
+    if not text:
+        return ""
+    if "=" in text:
+        return text
+    return display_text(text)
 
 
 @app.command("modules")
