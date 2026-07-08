@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import json
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import torch
 
@@ -17,6 +17,37 @@ from traning.core.decision import (
 )
 from traning.lib.training import SliderPathCandidate
 from traning.lib.training.spatial_decode import SpatialCandidate
+
+
+class _GroupedSampleDataset:
+    def __init__(self, group_count: int = 6, frames_per_group: int = 3) -> None:
+        self.records = tuple(
+            SimpleNamespace(key=f"sample-{group_index}")
+            for group_index in range(group_count)
+        )
+        references = []
+        for group_index in range(group_count):
+            for frame_index in range(frames_per_group):
+                references.append(
+                    SimpleNamespace(
+                        record_index=group_index,
+                        frame_index=frame_index,
+                    )
+                )
+        self.references = tuple(references)
+
+    def __len__(self) -> int:
+        return len(self.references)
+
+    def __getitem__(self, index: int) -> dict[str, object]:
+        reference = self.references[index]
+        record = self.records[reference.record_index]
+        return {
+            "image": torch.zeros((3, 24, 32)),
+            "sample_key": record.key,
+            "frame_index": reference.frame_index,
+            "timestamp_ms": float(index),
+        }
 
 
 def _candidate(
@@ -118,10 +149,11 @@ class CandidateCacheTests(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as temporary:
             output_dir = Path(temporary)
+            runner = SimpleNamespace(infer_frame=Mock(return_value=fake_result))
             with patch(
-                "traning.core.decision.generator.run_spatial_frame_inference",
-                return_value=fake_result,
-            ) as inference_mock:
+                "traning.core.decision.generator.prepare_spatial_frame_inference",
+                return_value=runner,
+            ) as prepare_mock:
                 checkpoint_path = output_dir / "spatial_model.pt"
                 result = generate_candidate_cache(
                     Settings(),
@@ -140,9 +172,60 @@ class CandidateCacheTests(unittest.TestCase):
             self.assertEqual(len(records), 1)
             self.assertEqual(json.loads(records[0])["sample_key"], "sample-a")
             self.assertEqual(
-                inference_mock.call_args.kwargs["checkpoint_path"],
+                prepare_mock.call_args.kwargs["checkpoint_path"],
                 checkpoint_path,
             )
+            self.assertEqual(runner.infer_frame.call_count, 1)
+
+    def test_candidate_cache_max_frames_samples_across_groups(self) -> None:
+        dataset = _GroupedSampleDataset(group_count=6, frames_per_group=3)
+        fake_result = SimpleNamespace(
+            candidates=(_candidate(score=0.8, object_type="hit_circle"),),
+            slider_paths=(),
+            patches_processed=1,
+            frame_channels=3,
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            output_dir = Path(temporary)
+            runner = SimpleNamespace(infer_frame=Mock(return_value=fake_result))
+            with patch(
+                "traning.core.decision.generator.prepare_spatial_frame_inference",
+                return_value=runner,
+            ):
+                result = generate_candidate_cache(
+                    Settings(runtime={"seed": 99}, temporal={"history_frames": 3}),
+                    output_dir=output_dir,
+                    device=torch.device("cpu"),
+                    dataset=dataset,
+                    max_frames=6,
+                )
+
+            manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
+            records = [
+                json.loads(line)
+                for line in result.records_path.read_text(encoding="utf-8").splitlines()
+            ]
+
+        selected_sample_keys = tuple(record["sample_key"] for record in records)
+        self.assertEqual(
+            manifest["sampling"]["mode"],
+            "seeded_group_contiguous_round_robin",
+        )
+        self.assertEqual(manifest["spatial_inference_context"], "reused_per_candidate_cache")
+        self.assertEqual(manifest["sampling"]["contiguous_block_frames"], 3)
+        self.assertEqual(manifest["sampling"]["unique_sample_groups"], 2)
+        self.assertEqual(len(set(selected_sample_keys)), 2)
+        for sample_key in set(selected_sample_keys):
+            frame_indices = [
+                int(record["frame_index"])
+                for record in records
+                if record["sample_key"] == sample_key
+            ]
+            self.assertEqual(
+                frame_indices,
+                list(range(frame_indices[0], frame_indices[0] + len(frame_indices))),
+            )
+        self.assertEqual(runner.infer_frame.call_count, 6)
 
     def test_local_consistency_review_resolves_supported_ambiguity(self) -> None:
         settings = Settings()

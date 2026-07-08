@@ -90,25 +90,55 @@ class SpatialFrameInferenceResult:
         }
 
 
-def run_spatial_frame_inference(
+@dataclass
+class SpatialFrameInferenceRunner:
+    settings: Settings
+    device: torch.device
+    memory_budget: RuntimeMemoryBudget
+    stream: PatchStream
+    runtime_state: Any
+    modules: dict[str, torch.nn.Module]
+
+    def infer_frame(
+        self,
+        sample: Mapping[str, Any],
+        *,
+        max_candidates: int = 16,
+        score_threshold: float = 0.0,
+        nms_radius_px: float = 32.0,
+        slider_threshold: float = 0.5,
+        max_slider_paths: int = 16,
+        slider_min_cells: int = 4,
+        slider_path_points: int = 32,
+        patch_limit: int | None = None,
+    ) -> SpatialFrameInferenceResult:
+        return _run_spatial_frame_inference_prepared(
+            self.settings,
+            sample,
+            device=self.device,
+            memory_budget=self.memory_budget,
+            stream=self.stream,
+            runtime_state=self.runtime_state,
+            modules=self.modules,
+            max_candidates=max_candidates,
+            score_threshold=score_threshold,
+            nms_radius_px=nms_radius_px,
+            slider_threshold=slider_threshold,
+            max_slider_paths=max_slider_paths,
+            slider_min_cells=slider_min_cells,
+            slider_path_points=slider_path_points,
+            patch_limit=patch_limit,
+        )
+
+
+def prepare_spatial_frame_inference(
     settings: Settings,
-    sample: Mapping[str, Any],
     *,
     device: torch.device,
     checkpoint_path: Path | None = None,
-    max_candidates: int = 16,
-    score_threshold: float = 0.0,
-    nms_radius_px: float = 32.0,
-    slider_threshold: float = 0.5,
-    max_slider_paths: int = 16,
-    slider_min_cells: int = 4,
-    slider_path_points: int = 32,
-    patch_limit: int | None = None,
-) -> SpatialFrameInferenceResult:
-    """Run one-frame spatial inference with explicit GPU/CPU work separation."""
+) -> SpatialFrameInferenceRunner:
+    """Prepare spatial models once for repeated frame inference."""
 
-    if patch_limit is not None and patch_limit <= 0:
-        raise ValueError("patch_limit must be positive when set")
     memory_budget = enforce_runtime_memory_budget(
         device=device,
         max_vram_gib=settings.memory.max_vram_gib,
@@ -116,7 +146,6 @@ def run_spatial_frame_inference(
         max_ram_gib=settings.memory.max_ram_gib,
         reserve_ram_gib=settings.memory.reserve_ram_gib,
     )
-    frame = _model_frame(sample["image"], settings=settings)
     stream = PatchStream(
         patch_width=settings.tiling.patch_width,
         patch_height=settings.tiling.patch_height,
@@ -146,6 +175,72 @@ def run_spatial_frame_inference(
         moved = maybe_compile_module(moved, enabled=settings.memory.compile_model)
         moved.eval()
         modules[name] = moved
+    return SpatialFrameInferenceRunner(
+        settings=settings,
+        device=device,
+        memory_budget=memory_budget,
+        stream=stream,
+        runtime_state=runtime_state,
+        modules=modules,
+    )
+
+
+def run_spatial_frame_inference(
+    settings: Settings,
+    sample: Mapping[str, Any],
+    *,
+    device: torch.device,
+    checkpoint_path: Path | None = None,
+    max_candidates: int = 16,
+    score_threshold: float = 0.0,
+    nms_radius_px: float = 32.0,
+    slider_threshold: float = 0.5,
+    max_slider_paths: int = 16,
+    slider_min_cells: int = 4,
+    slider_path_points: int = 32,
+    patch_limit: int | None = None,
+) -> SpatialFrameInferenceResult:
+    """Run one-frame spatial inference with explicit GPU/CPU work separation."""
+
+    runner = prepare_spatial_frame_inference(
+        settings,
+        device=device,
+        checkpoint_path=checkpoint_path,
+    )
+    return runner.infer_frame(
+        sample,
+        max_candidates=max_candidates,
+        score_threshold=score_threshold,
+        nms_radius_px=nms_radius_px,
+        slider_threshold=slider_threshold,
+        max_slider_paths=max_slider_paths,
+        slider_min_cells=slider_min_cells,
+        slider_path_points=slider_path_points,
+        patch_limit=patch_limit,
+    )
+
+
+def _run_spatial_frame_inference_prepared(
+    settings: Settings,
+    sample: Mapping[str, Any],
+    *,
+    device: torch.device,
+    memory_budget: RuntimeMemoryBudget,
+    stream: PatchStream,
+    runtime_state: Any,
+    modules: Mapping[str, torch.nn.Module],
+    max_candidates: int = 16,
+    score_threshold: float = 0.0,
+    nms_radius_px: float = 32.0,
+    slider_threshold: float = 0.5,
+    max_slider_paths: int = 16,
+    slider_min_cells: int = 4,
+    slider_path_points: int = 32,
+    patch_limit: int | None = None,
+) -> SpatialFrameInferenceResult:
+    if patch_limit is not None and patch_limit <= 0:
+        raise ValueError("patch_limit must be positive when set")
+    frame = _model_frame(sample["image"], settings=settings)
 
     frame_device = tensor_to_device(
         frame.unsqueeze(0),

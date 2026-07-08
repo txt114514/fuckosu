@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 
 from visualization.core.gui import MainWindow, load_state_snapshot
 
@@ -15,6 +15,7 @@ def main() -> int:
     args = parser.parse_args()
 
     app = QtWidgets.QApplication([])
+    _apply_cjk_font(app)
     window = MainWindow()
 
     def refresh() -> None:
@@ -36,6 +37,15 @@ def main() -> int:
 
         QtCore.QTimer.singleShot(500, finish)
     return int(app.exec())
+
+
+def _apply_cjk_font(app: QtWidgets.QApplication) -> None:
+    preferred = ("Noto Sans CJK SC", "Noto Sans CJK", "WenQuanYi Zen Hei")
+    available = set(QtGui.QFontDatabase.families())
+    for family in preferred:
+        if family in available:
+            app.setFont(QtGui.QFont(family, 10))
+            return
 
 
 if __name__ == "__main__":

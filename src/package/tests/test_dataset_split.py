@@ -71,6 +71,43 @@ class DatasetSplitTests(unittest.TestCase):
             self.assertTrue(result.changed)
             self.assertFalse(manifest_path.exists())
 
+    def test_seeded_initial_assignment_is_reproducible_and_seed_sensitive(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / "video_segments"
+            for index in range(12):
+                _segment(root, f"item_{index:06d}", "segment_000001")
+
+            first = sync_dataset_split_manifest(
+                root,
+                manifest_path=Path(tmpdir) / "splits_a" / "dataset_split_manifest.json",
+                seed=2026,
+                ratios=SplitRatios(train=0.75, validation=0.25, test=0.0),
+            )
+            second = sync_dataset_split_manifest(
+                root,
+                manifest_path=Path(tmpdir) / "splits_b" / "dataset_split_manifest.json",
+                seed=2026,
+                ratios=SplitRatios(train=0.75, validation=0.25, test=0.0),
+            )
+            different = sync_dataset_split_manifest(
+                root,
+                manifest_path=Path(tmpdir) / "splits_c" / "dataset_split_manifest.json",
+                seed=99,
+                ratios=SplitRatios(train=0.75, validation=0.25, test=0.0),
+            )
+
+        first_assignments = {
+            name: item.split for name, item in first.manifest.items.items()
+        }
+        second_assignments = {
+            name: item.split for name, item in second.manifest.items.items()
+        }
+        different_assignments = {
+            name: item.split for name, item in different.manifest.items.items()
+        }
+        self.assertEqual(first_assignments, second_assignments)
+        self.assertNotEqual(first_assignments, different_assignments)
+
 
 if __name__ == "__main__":
     unittest.main()

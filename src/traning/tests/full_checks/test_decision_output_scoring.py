@@ -85,6 +85,66 @@ class DecisionOutputScoringTests(unittest.TestCase):
             (320.0, 240.0),
         )
 
+    def test_scores_time_offset_as_frame_minus_action_boundary(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            cache_path = root / "frames.jsonl"
+            decisions_path = root / "decisions.jsonl"
+            cache_path.write_text(
+                json.dumps(
+                    {
+                        "sample_key": "item_0001/slider_0001",
+                        "frame_index": 42,
+                        "timestamp_ms": 1200.0,
+                        "frame_width": 640,
+                        "frame_height": 480,
+                        "temporal_target": {
+                            "target_strategy": "beatmap_action_v1",
+                            "action": "hold",
+                            "action_id": 2,
+                            "selected_candidate_id": None,
+                            "target_osu_xy": [256.0, 192.0],
+                            "time_offset_ms": 150.0,
+                            "object_type": "slider",
+                            "source_index": 8,
+                            "object_start_ms": 900.0,
+                            "object_end_ms": 1300.0,
+                        },
+                        "candidates": [],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            decisions_path.write_text(
+                json.dumps(
+                    {
+                        "sample_key": "item_0001/slider_0001",
+                        "frame_index": 42,
+                        "timestamp_ms": 1200.0,
+                        "action": "hold",
+                        "action_id": 2,
+                        "action_probability": 1.0,
+                        "selected_candidate_id": None,
+                        "selected_candidate_probability": None,
+                        "predicted_xy_normalized": [0.5, 0.5],
+                        "time_offset_ms": 150.0,
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = score_decision_outputs(
+                parameter_group_id="pg-offset",
+                candidate_cache_path=cache_path,
+                decisions_path=decisions_path,
+            )
+
+        self.assertEqual(result.report.hit_count, 1)
+        self.assertEqual(result.report.unresolved_count, 0)
+        self.assertGreater(result.report.quality_score, 0.9)
+
 
 if __name__ == "__main__":
     unittest.main()

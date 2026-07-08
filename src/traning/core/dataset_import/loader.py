@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from functools import partial
+import random
+
+import numpy as np
+import torch
 from torch.utils.data import DataLoader
 
 from package.coordinates import COORDINATE_TRANSFORM_VERSION
@@ -55,9 +60,15 @@ def build_dataloader(
     shuffle: bool | None = None,
 ) -> DataLoader:
     loader = settings.loader
+    generator = torch.Generator()
+    generator.manual_seed(int(settings.runtime.seed))
     worker_options = {}
     if loader.num_workers > 0:
         worker_options["persistent_workers"] = loader.persistent_workers
+        worker_options["worker_init_fn"] = partial(
+            _seed_worker,
+            base_seed=int(settings.runtime.seed),
+        )
         if loader.prefetch_factor is not None:
             worker_options["prefetch_factor"] = loader.prefetch_factor
     return DataLoader(
@@ -67,9 +78,17 @@ def build_dataloader(
         num_workers=loader.num_workers,
         pin_memory=loader.pin_memory,
         drop_last=loader.drop_last,
+        generator=generator,
         collate_fn=collate_frame_samples,
         **worker_options,
     )
+
+
+def _seed_worker(worker_id: int, *, base_seed: int) -> None:
+    worker_seed = (base_seed + worker_id) % 2**32
+    random.seed(worker_seed)
+    np.random.seed(worker_seed)
+    torch.manual_seed(worker_seed)
 
 
 __all__ = ["build_dataloader", "build_dataset"]

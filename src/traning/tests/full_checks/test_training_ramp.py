@@ -215,6 +215,10 @@ class TrainingRampTests(unittest.TestCase):
                         gpu_monitor_source="nvidia-smi",
                     ),
                 ),
+                patch(
+                    "traning.core.training_ramp._free_disk_bytes",
+                    return_value=20 * 1024**3,
+                ),
             ):
                 _run_preflight(
                     config_path=Path("config.yaml"),
@@ -226,8 +230,66 @@ class TrainingRampTests(unittest.TestCase):
 
             state = reporter.snapshot()
             self.assertEqual(state.pipeline_stages["gpu_bridge"].status, "passed")
+            self.assertEqual(state.pipeline_stages["output_disk"].status, "passed")
             self.assertEqual(state.pipeline_stages["gpu_bridge"].processed, 1)
             self.assertEqual(state.resources.gpu_utilization, 23.0)
+
+    def test_preflight_reports_disk_space_gate_failure(self) -> None:
+        env = SimpleNamespace(
+            python_version="3.11",
+            torch=SimpleNamespace(
+                version="2.9.0",
+                torch_cuda="13.0",
+                cuda_available=False,
+                gpu_name=None,
+                total_vram_gib=None,
+                free_vram_gib=None,
+            ),
+        )
+        data_report = SimpleNamespace(
+            ok=True,
+            segment_count=2,
+            frame_count_estimate=20,
+            category_counts={},
+            dimension_counts={},
+            distribution={"data_quality_issues": ()},
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            reporter = DashboardReporter(
+                run_id="preflight-disk",
+                output_dir=Path(temp_dir) / "dashboard",
+            )
+            with (
+                patch(
+                    "traning.core.training_ramp.collect_environment_report",
+                    return_value=env,
+                ),
+                patch("traning.core.training_ramp.load_settings", return_value=object()),
+                patch(
+                    "traning.core.training_ramp.inspect_data_input",
+                    return_value=data_report,
+                ),
+                patch(
+                    "traning.core.training_ramp._free_disk_bytes",
+                    return_value=2 * 1024**3,
+                ),
+                patch.dict(
+                    "os.environ",
+                    {"OSU_AI_MIN_RAMP_OUTPUT_FREE_GIB": "10"},
+                ),
+            ):
+                with self.assertRaisesRegex(RampGateError, "free space"):
+                    _run_preflight(
+                        config_path=Path("config.yaml"),
+                        device="cpu",
+                        output_dir=Path(temp_dir),
+                        run_full_checks=False,
+                        reporter=reporter,
+                    )
+
+            state = reporter.snapshot()
+            self.assertEqual(state.pipeline_stages["output_disk"].status, "failed")
+            self.assertTrue(state.pipeline_stages["output_disk"].blocks_training)
 
     def test_gate_rejects_quality_score_below_threshold(self) -> None:
         level = RampLevelSpec("a", "level_a", 1, 1, 1, 1, 1, 1, 1)
@@ -260,6 +322,9 @@ class TrainingRampTests(unittest.TestCase):
                     quality_score=0.634,
                     pass_threshold=0.8,
                     passed=False,
+                    hit_count=0,
+                    miss_count=0,
+                    unresolved_count=1,
                     gallery_status="saved",
                     gallery_saved_frame_count=1,
                     report_path=report_path,
@@ -276,6 +341,72 @@ class TrainingRampTests(unittest.TestCase):
 
             with patch("traning.core.training_ramp.torch.load", return_value={}):
                 with self.assertRaisesRegex(RampGateError, "below pass threshold"):
+                    _gate_level(
+                        level=level,
+                        result=result,
+                        elapsed=1.0,
+                        artifact_path=root / "artifact.json",
+                        artifact_issues=(),
+                        artifact_smoke={"finite": True},
+                        dry_run={"returncode": 0},
+                    )
+
+    def test_gate_reports_unresolved_evaluation_when_score_is_above_threshold(self) -> None:
+        level = RampLevelSpec("a", "level_a", 1, 1, 1, 1, 1, 1, 1)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            spatial_checkpoint = root / "spatial.pt"
+            temporal_checkpoint = root / "temporal.pt"
+            report_path = root / "report.json"
+            next_job_path = root / "next_job.json"
+            spatial_checkpoint.write_bytes(b"checkpoint")
+            temporal_checkpoint.write_bytes(b"checkpoint")
+            report_path.write_text('{"samples": []}\n', encoding="utf-8")
+            next_job_path.write_text("{}\n", encoding="utf-8")
+            result = SimpleNamespace(
+                spatial=SimpleNamespace(
+                    steps=1,
+                    last_loss=1.0,
+                    checkpoint_path=spatial_checkpoint,
+                    as_dict=lambda: {},
+                    cuda_max_reserved_gib=0.1,
+                ),
+                temporal=SimpleNamespace(
+                    steps=1,
+                    final_loss=1.0,
+                    checkpoint_path=temporal_checkpoint,
+                    as_dict=lambda: {},
+                    cuda_max_reserved_gib=0.2,
+                ),
+                evaluation=SimpleNamespace(
+                    quality_score=0.824,
+                    pass_threshold=0.8,
+                    passed=False,
+                    hit_count=0,
+                    miss_count=0,
+                    unresolved_count=88,
+                    gallery_status="saved",
+                    gallery_saved_frame_count=1,
+                    report_path=report_path,
+                    next_job_path=next_job_path,
+                    as_dict=lambda: {
+                        "quality_score": 0.824,
+                        "pass_threshold": 0.8,
+                        "passed": False,
+                        "hit_count": 0,
+                        "miss_count": 0,
+                        "unresolved_count": 88,
+                    },
+                ),
+                candidate_cache=SimpleNamespace(frames=1, as_dict=lambda: {}),
+                decision=SimpleNamespace(as_dict=lambda: {}),
+            )
+
+            with patch("traning.core.training_ramp.torch.load", return_value={}):
+                with self.assertRaisesRegex(
+                    RampGateError,
+                    "evaluation report did not pass.*unresolved=88",
+                ):
                     _gate_level(
                         level=level,
                         result=result,

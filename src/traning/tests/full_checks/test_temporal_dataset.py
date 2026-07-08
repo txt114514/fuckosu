@@ -146,6 +146,37 @@ class TemporalDatasetTests(unittest.TestCase):
         self.assertEqual(window.target_strategy, "beatmap_action_v1")
         self.assertTrue(torch.allclose(window.time_offset_target[0], torch.tensor([3.0])))
 
+    def test_preserves_selected_target_candidate_when_outside_top_scores(self) -> None:
+        records = [
+            _record(
+                "a",
+                0,
+                candidates=[
+                    _candidate(0.95, candidate_id=1, x=10.0),
+                    _candidate(0.90, candidate_id=2, x=20.0),
+                    _candidate(0.10, candidate_id=7, x=70.0),
+                ],
+                temporal_target={
+                    "target_strategy": "beatmap_action_v1",
+                    "action": "press",
+                    "action_id": 1,
+                    "selected_candidate_id": 7,
+                    "target_video_xy": [70.0, 10.0],
+                    "time_offset_ms": 0.0,
+                },
+            )
+        ]
+        dataset = TemporalCandidateWindowDataset(
+            records,
+            sequence_length=1,
+            feature_spec=TemporalFeatureSpec(candidate_slots=2, embedding_dim=2),
+        )
+        window = dataset[0]
+
+        self.assertEqual(window.candidate_ids[0], (1, 7))
+        self.assertEqual(window.selected_candidate_target.tolist(), [1])
+        self.assertTrue(torch.allclose(window.xy_target[0], torch.tensor([0.7, 0.2])))
+
 
 if __name__ == "__main__":
     unittest.main()

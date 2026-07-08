@@ -9,6 +9,7 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
+from visualization.conf.messages import display_text, render_message
 from visualization.lib.models import (
     BestParameterRecord,
     CurrentTrainingMetrics,
@@ -442,7 +443,8 @@ def _set_parameter_model(model, parameters: Mapping[str, object]) -> None:
 def _set_events(widget, events: list[TrainingEvent]) -> None:
     selected = events[-_EVENT_LIMIT:]
     lines = [
-        f"{event.timestamp} {event.severity} {event.raw_message or event.message_key} {event.message_args}"
+        f"{event.timestamp} {display_text(event.severity)} "
+        f"{_event_message(event)}"
         for event in selected
     ]
     previous_scroll = widget.verticalScrollBar().value()
@@ -450,6 +452,19 @@ def _set_events(widget, events: list[TrainingEvent]) -> None:
     widget.setPlainText("\n".join(lines))
     if at_bottom:
         widget.verticalScrollBar().setValue(widget.verticalScrollBar().maximum())
+
+
+def _event_message(event: TrainingEvent) -> str:
+    if event.raw_message:
+        return display_text(event.raw_message)
+    message = render_message(event.message_key, event.message_args)
+    if not event.message_args:
+        return message
+    details = "；".join(
+        f"{display_text(key)}={display_text(value)}"
+        for key, value in sorted(event.message_args.items())
+    )
+    return f"{message}（{details}）"
 
 
 def _mapping(value: object) -> Mapping[str, object]:

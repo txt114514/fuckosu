@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 import json
+import random
 
 import torch
 
@@ -13,7 +14,7 @@ from traning.lib.training.spatial_decode import SpatialCandidate
 from traning.conf import DataSplit, Settings
 from traning.core.dataset_import import build_dataset
 from traning.core.spatial import (
-    run_spatial_frame_inference,
+    prepare_spatial_frame_inference,
     slider_path_to_dict,
     spatial_candidate_to_dict,
 )
@@ -95,6 +96,13 @@ def generate_candidate_cache(
     frame_total = len(source) if max_frames is None else min(len(source), max_frames)
     if frame_total <= 0:
         raise ValueError("candidate cache dataset must not be empty")
+    selected_indices = _candidate_cache_indices(
+        source,
+        frame_total=frame_total,
+        seed=int(settings.runtime.seed),
+        diverse=max_frames is not None,
+        contiguous_block_frames=max(1, int(settings.temporal.history_frames)),
+    )
 
     total_candidates = 0
     total_slider_paths = 0
@@ -108,14 +116,16 @@ def generate_candidate_cache(
     target_frames_with_any_candidate = 0
     target_frames_with_matched_candidate = 0
     recall_hits = {16: 0, 32: 0, 64: 0}
+    inference_runner = prepare_spatial_frame_inference(
+        settings,
+        device=device,
+        checkpoint_path=spatial_checkpoint_path,
+    )
     with records_path.open("w", encoding="utf-8") as handle:
-        for index in range(frame_total):
+        for index in selected_indices:
             sample = source[index]
-            result = run_spatial_frame_inference(
-                settings,
+            result = inference_runner.infer_frame(
                 sample,
-                device=device,
-                checkpoint_path=spatial_checkpoint_path,
                 max_candidates=selected_max_candidates,
                 score_threshold=selected_score_threshold,
                 nms_radius_px=selected_nms_radius,
@@ -219,7 +229,19 @@ def generate_candidate_cache(
         "spatial_checkpoint_path": (
             str(spatial_checkpoint_path) if spatial_checkpoint_path is not None else None
         ),
+        "spatial_inference_context": "reused_per_candidate_cache",
         "frames": frame_total,
+        "sampling": {
+            "mode": (
+                "seeded_group_contiguous_round_robin"
+                if max_frames is not None
+                else "sequential_all"
+            ),
+            "seed": int(settings.runtime.seed),
+            "contiguous_block_frames": max(1, int(settings.temporal.history_frames)),
+            "selected_indices_preview": selected_indices[:100],
+            "unique_sample_groups": len(_sample_groups_for_indices(source, selected_indices)),
+        },
         "records": str(records_path.name),
         "max_candidates_per_frame": selected_max_candidates,
         "score_threshold": selected_score_threshold,
@@ -250,6 +272,78 @@ def generate_candidate_cache(
         ambiguous_slider_paths=ambiguous_slider_paths,
         diagnostics=diagnostics,
     )
+
+
+def _candidate_cache_indices(
+    source: Sequence[Mapping[str, Any]],
+    *,
+    frame_total: int,
+    seed: int,
+    diverse: bool,
+    contiguous_block_frames: int = 1,
+) -> tuple[int, ...]:
+    if not diverse or frame_total >= len(source):
+        return tuple(range(frame_total))
+    groups: dict[str, list[int]] = {}
+    for index in range(len(source)):
+        groups.setdefault(_source_group_key(source, index), []).append(index)
+    rng = random.Random(seed)
+    ordered_groups = sorted(groups)
+    rng.shuffle(ordered_groups)
+    for indices in groups.values():
+        indices.sort()
+    block_size = max(1, contiguous_block_frames)
+    active_group_count = max(1, min(len(ordered_groups), max(1, frame_total // block_size)))
+    active_groups = ordered_groups[:active_group_count]
+    starts: dict[str, int] = {}
+    positions: dict[str, int] = {}
+    for group in active_groups:
+        indices = groups[group]
+        max_start = max(0, len(indices) - block_size)
+        start = rng.randint(0, max_start) if max_start > 0 else 0
+        starts[group] = start
+        positions[group] = start
+    selected: list[int] = []
+    while len(selected) < frame_total and active_groups:
+        progressed = False
+        for group in tuple(active_groups):
+            position = positions[group]
+            indices = groups[group]
+            if position >= len(indices):
+                continue
+            for _ in range(block_size):
+                if position >= len(indices) or len(selected) >= frame_total:
+                    break
+                selected.append(indices[position])
+                position += 1
+                progressed = True
+            positions[group] = position
+            if position >= len(indices) and starts[group] > 0 and len(selected) < frame_total:
+                positions[group] = 0
+                starts[group] = 0
+            if len(selected) >= frame_total:
+                break
+        if not progressed:
+            break
+    return tuple(selected)
+
+
+def _sample_groups_for_indices(
+    source: Sequence[Mapping[str, Any]],
+    indices: Sequence[int],
+) -> tuple[str, ...]:
+    return tuple(sorted({_source_group_key(source, index) for index in indices}))
+
+
+def _source_group_key(source: Sequence[Mapping[str, Any]], index: int) -> str:
+    references = getattr(source, "references", None)
+    records = getattr(source, "records", None)
+    if isinstance(references, Sequence) and isinstance(records, Sequence):
+        reference = references[index]
+        record = records[getattr(reference, "record_index")]
+        return str(getattr(record, "key", index))
+    sample = source[index]
+    return str(sample.get("sample_key") or sample.get("segment_id") or index)
 
 
 def build_candidate_cache_record(

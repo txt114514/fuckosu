@@ -39,6 +39,7 @@ from traning.core.decision import (
     run_full_training_pipeline,
     run_temporal_decision,
 )
+from traning.core.diagnostics import run_oracle_diagnostics
 from traning.core.dataset_import import build_dataset, inspect_data_input
 from traning.core.spatial import (
     run_spatial_frame_inference,
@@ -1055,6 +1056,26 @@ def run_decision_job(
     )
 
 
+def run_oracle_diagnostics_job(
+    *,
+    config: Path = DEFAULT_TRAINING_CONFIG,
+    run_dir: Path,
+    output: Path | None = None,
+    fixed_seed: int = 2026,
+    max_fixed_frames: int = 128,
+    probe_limit: int = 12,
+):
+    settings = load_settings(config)
+    return run_oracle_diagnostics(
+        settings,
+        run_dir=run_dir,
+        output_dir=output,
+        fixed_seed=fixed_seed,
+        max_fixed_frames=max_fixed_frames,
+        probe_limit=probe_limit,
+    )
+
+
 def run_label_visualization(
     *,
     segment_index: int = 0,
@@ -1680,6 +1701,33 @@ def run_decision(
     except CliParameterError as error:
         _raise_cli_parameter(error)
     _render_dict_table("Temporal decision", result.as_dict())
+
+
+@app.command("diagnose-oracle")
+def diagnose_oracle(
+    run_dir: Path = typer.Option(
+        ...,
+        "--run-dir",
+        exists=True,
+        file_okay=False,
+        dir_okay=True,
+        readable=True,
+    ),
+    config: Path = typer.Option(DEFAULT_TRAINING_CONFIG, "--config"),
+    output: Path | None = typer.Option(None, "--output"),
+    fixed_seed: int = typer.Option(2026, "--fixed-seed"),
+    max_fixed_frames: int = typer.Option(128, "--max-fixed-frames", min=1),
+    probe_limit: int = typer.Option(12, "--probe-limit", min=1),
+) -> None:
+    result = run_oracle_diagnostics_job(
+        config=config,
+        run_dir=run_dir,
+        output=output,
+        fixed_seed=fixed_seed,
+        max_fixed_frames=max_fixed_frames,
+        probe_limit=probe_limit,
+    )
+    _render_dict_table("Oracle diagnostics", result.as_dict())
 
 
 @app.command("visualize-label")

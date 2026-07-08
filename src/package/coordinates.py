@@ -1,13 +1,21 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any, Literal, Mapping
 
 
 OSU_PLAYFIELD_WIDTH = 512.0
 OSU_PLAYFIELD_HEIGHT = 384.0
 COORDINATE_TRANSFORM_VERSION = "osu-playfield-rect-v1"
 COORDINATE_CHAIN_VERSION = "osu-playfield-chain-v2"
+CoordinateSpace = Literal[
+    "beatmap",
+    "source_video",
+    "cropped_video",
+    "model_input",
+    "model_output",
+    "screen",
+]
 
 
 @dataclass(frozen=True)
@@ -190,6 +198,15 @@ class CoordinateTransformChain:
         source_x, source_y = self.crop_to_source(crop_x, crop_y)
         return self.source_to_osu(source_x, source_y)
 
+    def model_output_to_osu(self, x: float, y: float) -> tuple[float, float]:
+        return self.training_frame_to_osu(x, y)
+
+    def osu_to_model_input(self, x: float, y: float) -> tuple[float, float]:
+        return self.osu_to_training_frame(x, y)
+
+    def model_input_to_osu(self, x: float, y: float) -> tuple[float, float]:
+        return self.training_frame_to_osu(x, y)
+
     def to_frame_transform(self) -> OsuVideoTransform:
         return OsuVideoTransform.from_rect(self.playfield_frame_rect)
 
@@ -199,15 +216,21 @@ class CoordinateTransformChain:
             "source": self.source,
             "status": self.status,
             "steps": (
-                "osu_to_source",
+                "beatmap_to_source_video",
                 "source_to_crop",
-                "crop_to_training_frame",
+                "crop_to_model_input",
             ),
             "reverse_steps": (
-                "training_frame_to_crop",
+                "model_input_to_crop",
                 "crop_to_source",
-                "source_to_osu",
+                "source_video_to_beatmap",
             ),
+            "spaces": {
+                "authority": "beatmap",
+                "source_video": self.source_size.as_dict(),
+                "crop": self.crop_rect.as_dict(),
+                "model_input": self.resized_size.as_dict(),
+            },
             "scale": {"x": self.scale_x, "y": self.scale_y},
         }
         if include_rects:
@@ -331,6 +354,46 @@ class OsuVideoTransform:
 
 
 @dataclass(frozen=True)
+class ScreenTransform:
+    """Map authoritative osu! playfield coordinates to desktop screen pixels."""
+
+    playfield_rect: PlayfieldRect
+
+    @classmethod
+    def from_rect(cls, rect: PlayfieldRect | Mapping[str, Any]) -> ScreenTransform:
+        selected = rect if isinstance(rect, PlayfieldRect) else PlayfieldRect.from_mapping(rect)
+        return cls(playfield_rect=selected)
+
+    @property
+    def scale_x(self) -> float:
+        return self.playfield_rect.width / OSU_PLAYFIELD_WIDTH
+
+    @property
+    def scale_y(self) -> float:
+        return self.playfield_rect.height / OSU_PLAYFIELD_HEIGHT
+
+    def osu_to_screen(self, x: float, y: float) -> tuple[float, float]:
+        return (
+            self.playfield_rect.left + x * self.scale_x,
+            self.playfield_rect.top + y * self.scale_y,
+        )
+
+    def screen_to_osu(self, x: float, y: float) -> tuple[float, float]:
+        return (
+            (x - self.playfield_rect.left) / self.scale_x,
+            (y - self.playfield_rect.top) / self.scale_y,
+        )
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "source_space": "beatmap",
+            "target_space": "screen",
+            "playfield_rect": self.playfield_rect.as_dict(),
+            "scale": {"x": self.scale_x, "y": self.scale_y},
+        }
+
+
+@dataclass(frozen=True)
 class AffineOsuVideoTransform:
     """Map osu! playfield coordinates with a fitted 2x3 affine matrix."""
 
@@ -410,6 +473,7 @@ __all__ = [
     "AffineOsuVideoTransform",
     "COORDINATE_CHAIN_VERSION",
     "COORDINATE_TRANSFORM_VERSION",
+    "CoordinateSpace",
     "CoordinateTransformChain",
     "CoordinateTransformSpec",
     "ImageSize",
@@ -417,4 +481,5 @@ __all__ = [
     "OSU_PLAYFIELD_WIDTH",
     "OsuVideoTransform",
     "PlayfieldRect",
+    "ScreenTransform",
 ]

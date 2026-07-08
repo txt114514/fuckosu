@@ -189,9 +189,7 @@ def _target_objects(
     if target_xy is None:
         return ()
     timestamp_ms = _safe_float(row.get("timestamp_ms")) or 0.0
-    start_ms = _safe_float(target.get("object_start_ms"))
-    if start_ms is None:
-        start_ms = timestamp_ms + (_safe_float(target.get("time_offset_ms")) or 0.0)
+    start_ms = timestamp_ms - (_safe_float(target.get("time_offset_ms")) or 0.0)
     end_ms = _safe_float(target.get("object_end_ms"))
     if end_ms is None or end_ms < start_ms:
         end_ms = start_ms
@@ -224,7 +222,7 @@ def _predicted_clicks(
     timestamp_ms = _safe_float(decision.get("timestamp_ms"))
     if timestamp_ms is None:
         timestamp_ms = _safe_float(cache_row.get("timestamp_ms")) or 0.0
-    time_ms = timestamp_ms + (_safe_float(decision.get("time_offset_ms")) or 0.0)
+    time_ms = timestamp_ms - (_safe_float(decision.get("time_offset_ms")) or 0.0)
     point = (
         None
         if predicted_video_xy is None

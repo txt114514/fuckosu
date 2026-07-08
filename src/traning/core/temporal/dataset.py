@@ -247,7 +247,12 @@ def _encode_window(
         sample_keys.append(_optional_string(record.get("sample_key")))
         frame_indices.append(_optional_int(record.get("frame_index")))
         timestamps.append(_optional_float(record.get("timestamp_ms")))
-        encoded_candidates = _sorted_candidates(record)[: spec.candidate_slots]
+        temporal_target = record.get("temporal_target")
+        encoded_candidates = _temporal_slot_candidates(
+            record,
+            temporal_target=temporal_target,
+            candidate_slots=spec.candidate_slots,
+        )
         if encoded_candidates:
             action_target[frame_slot] = PRESS_ACTION_ID
             selected_candidate[frame_slot] = 0
@@ -269,7 +274,6 @@ def _encode_window(
             frame_height = max(_optional_float(record.get("frame_height")) or 1.0, 1.0)
             xy_target[frame_slot, 0] = float(top.get("x", 0.0)) / frame_width
             xy_target[frame_slot, 1] = float(top.get("y", 0.0)) / frame_height
-        temporal_target = record.get("temporal_target")
         if isinstance(temporal_target, Mapping):
             target_strategy = str(
                 temporal_target.get("target_strategy") or "beatmap_action_v1"
@@ -374,6 +378,40 @@ def _sorted_candidates(record: Mapping[str, Any]) -> tuple[Mapping[str, Any], ..
             reverse=True,
         )
     )
+
+
+def _temporal_slot_candidates(
+    record: Mapping[str, Any],
+    *,
+    temporal_target: object,
+    candidate_slots: int,
+) -> tuple[Mapping[str, Any], ...]:
+    sorted_candidates = _sorted_candidates(record)
+    selected_id = (
+        _optional_int(temporal_target.get("selected_candidate_id"))
+        if isinstance(temporal_target, Mapping)
+        else None
+    )
+    if selected_id is None:
+        return sorted_candidates[:candidate_slots]
+    selected = next(
+        (
+            candidate
+            for candidate in sorted_candidates
+            if _optional_int(candidate.get("candidate_id")) == selected_id
+        ),
+        None,
+    )
+    if selected is None:
+        return sorted_candidates[:candidate_slots]
+    top = list(sorted_candidates[:candidate_slots])
+    if any(_optional_int(candidate.get("candidate_id")) == selected_id for candidate in top):
+        return tuple(top)
+    if len(top) < candidate_slots:
+        top.append(selected)
+    else:
+        top[-1] = selected
+    return tuple(top)
 
 
 def _candidate_embedding(

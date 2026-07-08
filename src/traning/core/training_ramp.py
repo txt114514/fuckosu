@@ -502,9 +502,7 @@ def _run_preflight(
     report = inspect_data_input(settings, split="train")
     if not report.ok:
         raise RampGateError("data-check failed")
-    free_bytes = os.statvfs(output_dir).f_bavail * os.statvfs(output_dir).f_frsize
-    if free_bytes < 10 * 1024**3:
-        raise RampGateError("less than 10 GiB free space for ramp outputs")
+    free_bytes = _check_output_disk_space(output_dir, reporter=reporter)
     full_checks = None
     if run_full_checks:
         log_path = preflight_dir / "full_checks.log"
@@ -565,6 +563,16 @@ def _run_preflight(
     )
     reporter.update_pipeline_stage(
         PipelineStageState(
+            stage_id="output_disk",
+            name="输出空间检查",
+            status="passed",
+            processed=1,
+            total=1,
+            message=f"可用空间 {free_bytes / 1024**3:.2f} GiB",
+        )
+    )
+    reporter.update_pipeline_stage(
+        PipelineStageState(
             stage_id="readiness",
             name="训练 readiness",
             status="passed",
@@ -575,6 +583,52 @@ def _run_preflight(
     )
     _write_json(preflight_dir / "preflight.json", result)
     return result
+
+
+def _free_disk_bytes(path: Path) -> int:
+    stat = os.statvfs(path)
+    return stat.f_bavail * stat.f_frsize
+
+
+def _minimum_ramp_output_free_bytes() -> int:
+    raw = os.environ.get("OSU_AI_MIN_RAMP_OUTPUT_FREE_GIB")
+    minimum_gib = 10.0 if raw is None else float(raw)
+    return int(minimum_gib * 1024**3)
+
+
+def _check_output_disk_space(
+    output_dir: Path,
+    *,
+    reporter: TrainingReporter,
+) -> int:
+    reporter.update_pipeline_stage(
+        PipelineStageState(
+            stage_id="output_disk",
+            name="输出空间检查",
+            status="checking",
+        )
+    )
+    free_bytes = _free_disk_bytes(output_dir)
+    minimum_bytes = _minimum_ramp_output_free_bytes()
+    if free_bytes < minimum_bytes:
+        message = (
+            f"less than {minimum_bytes / 1024**3:.1f} GiB free space for ramp outputs; "
+            f"available {free_bytes / 1024**3:.2f} GiB"
+        )
+        reporter.update_pipeline_stage(
+            PipelineStageState(
+                stage_id="output_disk",
+                name="输出空间检查",
+                status="failed",
+                processed=0,
+                total=1,
+                blocks_training=True,
+                error_reason=message,
+                message=message,
+            )
+        )
+        raise RampGateError(message)
+    return free_bytes
 
 
 def _report_ramp_started(
@@ -1398,10 +1452,18 @@ def _gate_level(
             failures.append(f"{label} is not finite")
     quality_score = float(result.evaluation.quality_score)
     pass_threshold = float(result.evaluation.pass_threshold)
-    if not result.evaluation.passed or quality_score < pass_threshold:
+    if quality_score < pass_threshold:
         failures.append(
             "quality score "
             f"{quality_score:.6f} below pass threshold {pass_threshold:.6f}"
+        )
+    elif not result.evaluation.passed:
+        failures.append(
+            "evaluation report did not pass despite quality score "
+            f"{quality_score:.6f} >= pass threshold {pass_threshold:.6f}; "
+            f"hits={result.evaluation.hit_count} "
+            f"misses={result.evaluation.miss_count} "
+            f"unresolved={result.evaluation.unresolved_count}"
         )
     checkpoint_paths = (
         result.spatial.checkpoint_path,

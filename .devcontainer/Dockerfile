@@ -20,8 +20,11 @@ RUN apt-get update -qq && \
         libxkbcommon-x11-0 \
         libnss3 libatk1.0-0 libatk-bridge2.0-0 \
         libgbm1 libasound2 \
+        fontconfig fonts-noto-cjk \
         iputils-ping curl sudo util-linux \
         x11-utils mesa-utils && \
+    fc-cache -f && \
+    fc-match "Noto Sans CJK SC" && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # 创建用户 dev 并加入 sudo 组

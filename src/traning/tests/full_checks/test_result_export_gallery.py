@@ -71,6 +71,22 @@ class _FakeSegmentFrameDataset:
         }
 
 
+class _DiverseFakeSegmentFrameDataset(_FakeSegmentFrameDataset):
+    def __init__(self, size: int = 6) -> None:
+        self.records = tuple(
+            SimpleNamespace(
+                key=f"item_{index}/long_sequence_{index:04d}",
+                category="long_sequence",
+                dataset_dimension="long_sequence",
+            )
+            for index in range(size)
+        )
+        self.references = tuple(
+            SimpleNamespace(record_index=index, frame_index=1, timestamp_ms=100.0)
+            for index in range(size)
+        )
+
+
 def _request(frames: tuple[FrameEvaluation, ...]) -> BatchGalleryRequest:
     return BatchGalleryRequest(
         batch_id="gallery_test",
@@ -207,6 +223,50 @@ class ResultExportGalleryTests(unittest.TestCase):
         self.assertEqual(
             saved_count,
             manifest["sample_groups"][0]["frame_count"],
+        )
+
+    def test_gallery_samples_diverse_groups_by_seed_not_first_n(self) -> None:
+        dataset = _DiverseFakeSegmentFrameDataset(size=6)
+        request = BatchGalleryRequest(
+            batch_id="gallery_diversity",
+            random_seed=99,
+            trials=(
+                TrialGalleryEvaluation(
+                    trial_id="pg-diverse",
+                    score=0.9,
+                    parameters=TrialParameters(),
+                    frames=tuple(
+                        FrameEvaluation(
+                            sample_key=record.key,
+                            frame_index=1,
+                            passed=True,
+                            target_source_index=11,
+                            predicted_video_xy=(64.0, 48.0),
+                        )
+                        for record in dataset.records
+                    ),
+                ),
+            ),
+        )
+
+        with tempfile.TemporaryDirectory() as temporary:
+            output_dir, saved_count, issues = save_best_trial_gallery(
+                dataset,
+                request,
+                output_root=Path(temporary),
+                samples_per_group=2,
+            )
+            manifest = json.loads(
+                (output_dir / "manifest.json").read_text(encoding="utf-8")
+            )
+
+        selected = tuple(group["sample_key"] for group in manifest["sample_groups"])
+        self.assertEqual(issues, ())
+        self.assertEqual(saved_count, 2)
+        self.assertEqual(len(selected), 2)
+        self.assertNotEqual(
+            selected,
+            tuple(record.key for record in dataset.records[:2]),
         )
 
     def test_best_trial_exports_even_below_promotion_threshold(self) -> None:
