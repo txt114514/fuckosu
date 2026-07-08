@@ -43,4 +43,4 @@ class DashboardSettings:
         if self.compact_terminal_height <= 0:
             raise ValueError("紧凑终端高度阈值必须为正数")
         if self.auto_page_seconds <= 0:
-            raise ValueError("自动翻页间隔必须为正数")
+            raise ValueError("分页兼容间隔必须为正数")

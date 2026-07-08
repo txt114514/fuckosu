@@ -103,6 +103,43 @@ class VisualizationDashboardTests(unittest.TestCase):
             event_lines,
         )
 
+    def test_warning_stage_event_includes_diagnostic_detail(self) -> None:
+        output = Path("/tmp/visualization_test_stage_warning_detail")
+        with create_dashboard_reporter(
+            run_id="warning-detail-test",
+            output_dir=output,
+            progress_ui="plain",
+        ) as handle:
+            handle.reporter.update_pipeline_stage(
+                PipelineStageState(
+                    stage_id="evaluation",
+                    name="固定评估评分",
+                    status="warning",
+                    processed=500,
+                    total=500,
+                    warning_count=183,
+                    message="质量分 0.634000 低于通过阈值 0.800000；未解析目标 183/183",
+                    score=0.634,
+                    threshold=0.8,
+                )
+            )
+
+        events = [
+            json.loads(line)
+            for line in (output / "events.jsonl").read_text(encoding="utf-8").splitlines()
+        ]
+        warning_events = [
+            event
+            for event in events
+            if event["message_key"] == "stage_lifecycle_warning"
+        ]
+        self.assertEqual(len(warning_events), 1)
+        event = warning_events[0]
+        self.assertIn("质量分 0.634000 低于通过阈值 0.800000", event["raw_message"])
+        self.assertEqual(event["message_args"]["warnings"], 183)
+        self.assertEqual(event["message_args"]["score"], "0.634000")
+        self.assertEqual(event["message_args"]["threshold"], "0.800000")
+
     def test_dataset_exhausted_stop_state_is_persisted(self) -> None:
         output = Path("/tmp/visualization_test_stop")
         with create_dashboard_reporter(

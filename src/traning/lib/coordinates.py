@@ -41,6 +41,25 @@ def transform_from_settings_or_sample(
             source="settings.explicit_rect",
         )
         return OsuVideoTransform.from_rect(playfield), spec
+    if config is not None and getattr(config, "mode", None) == "explicit_source_rect":
+        rect = getattr(config, "playfield_rect", None)
+        crop = getattr(config, "crop_rect", None)
+        if rect is None:
+            raise ValueError("explicit source transform is missing playfield_rect")
+        if crop is None:
+            raise ValueError("explicit source transform is missing crop_rect")
+        playfield = PlayfieldRect(
+            left=float(rect.left) - float(crop.left),
+            top=float(rect.top) - float(crop.top),
+            width=float(rect.width),
+            height=float(rect.height),
+        )
+        spec = CoordinateTransformSpec(
+            version=COORDINATE_TRANSFORM_VERSION,
+            rect=playfield,
+            source="settings.explicit_source_rect",
+        )
+        return OsuVideoTransform.from_rect(playfield), spec
 
     if config is None:
         if frame_width is None or frame_height is None:

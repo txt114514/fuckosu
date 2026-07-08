@@ -68,10 +68,34 @@ class PlayfieldRectSettings(BaseModel):
         return value
 
 
+class CropRectSettings(BaseModel):
+    left: float
+    top: float
+    width: float
+    height: float
+
+    @field_validator("left", "top", "width", "height")
+    @classmethod
+    def _finite_number(cls, value: float) -> float:
+        if value != value or value in (float("inf"), float("-inf")):
+            raise ValueError("crop rect values must be finite")
+        return value
+
+    @field_validator("width", "height")
+    @classmethod
+    def _positive_dimension(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("crop rect dimensions must be positive")
+        return value
+
+
 class CoordinateTransformSettings(BaseModel):
     version: str = COORDINATE_TRANSFORM_VERSION
-    mode: Literal["explicit_rect", "legacy_centered"] = "legacy_centered"
+    mode: Literal["explicit_rect", "explicit_source_rect", "legacy_centered"] = (
+        "legacy_centered"
+    )
     playfield_rect: PlayfieldRectSettings | None = None
+    crop_rect: CropRectSettings | None = None
 
     @model_validator(mode="after")
     def validate_transform(self) -> CoordinateTransformSettings:
@@ -81,6 +105,11 @@ class CoordinateTransformSettings(BaseModel):
             )
         if self.mode == "explicit_rect" and self.playfield_rect is None:
             raise ValueError("explicit_rect mode requires playfield_rect")
+        if self.mode == "explicit_source_rect":
+            if self.playfield_rect is None:
+                raise ValueError("explicit_source_rect mode requires playfield_rect")
+            if self.crop_rect is None:
+                raise ValueError("explicit_source_rect mode requires crop_rect")
         return self
 
 

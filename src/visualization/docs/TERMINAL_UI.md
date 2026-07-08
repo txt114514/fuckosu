@@ -31,7 +31,8 @@
 
 Rich UI 会读取当前终端高度；高度小于等于 `DashboardSettings.compact_terminal_height`
 时自动进入紧凑分页模式，避免面板堆叠后下面的参数、测试或事件区不可见。
-紧凑模式默认每 `DashboardSettings.auto_page_seconds` 秒自动切到下一页，不要求手动翻页。
+紧凑模式固定停留在当前页，不自动切换页面；窄终端也会使用紧凑分页。屏幕底部会显示
+`dashboard_state.json` 路径，终端无法完整显示时可用 watcher 或普通文件查看完整结构化状态。
 
 紧凑模式仍保留可选按键：
 
@@ -105,6 +106,16 @@ from visualization.lib import create_dashboard_reporter
 
 full-flow 外层创建一个 dashboard reporter；ramp 必须复用同一个 reporter，不能在 full-flow 内部
 再用 `progress_ui="off"` 启动 `NullReporter`，否则 Level 状态不会显示在同一个 UI 上。
+
+## 显示覆写
+
+Rich 主视图和单面板 watcher 在最终打印前都会调用
+`visualization.core.display_overrides.apply_display_overrides(...)`。该函数递归处理常见 Rich
+对象（`Group`、`Panel`、`Table`、`Text` 和字符串），并通过
+`visualization.conf.messages` 中的对照表把状态、阶段、字段名和常见错误片段覆写为中文。
+
+因此训练模块和 panel 组件应优先上报稳定 key、状态值或原始错误文本；遗漏的英文显示由最终
+打印出口统一处理，不需要在每个模块里重复维护中文化逻辑。
 
 UI 视图由 `TrainingDashboardState.pipeline_phase` 驱动：
 

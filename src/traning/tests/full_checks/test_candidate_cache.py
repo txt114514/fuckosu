@@ -121,11 +121,13 @@ class CandidateCacheTests(unittest.TestCase):
             with patch(
                 "traning.core.decision.generator.run_spatial_frame_inference",
                 return_value=fake_result,
-            ):
+            ) as inference_mock:
+                checkpoint_path = output_dir / "spatial_model.pt"
                 result = generate_candidate_cache(
                     Settings(),
                     output_dir=output_dir,
                     device=torch.device("cpu"),
+                    spatial_checkpoint_path=checkpoint_path,
                     dataset=[sample],
                     max_frames=1,
                 )
@@ -134,8 +136,13 @@ class CandidateCacheTests(unittest.TestCase):
             records = result.records_path.read_text(encoding="utf-8").splitlines()
             self.assertEqual(manifest["version"], CANDIDATE_CACHE_VERSION)
             self.assertEqual(manifest["frames"], 1)
+            self.assertEqual(manifest["spatial_checkpoint_path"], str(checkpoint_path))
             self.assertEqual(len(records), 1)
             self.assertEqual(json.loads(records[0])["sample_key"], "sample-a")
+            self.assertEqual(
+                inference_mock.call_args.kwargs["checkpoint_path"],
+                checkpoint_path,
+            )
 
     def test_local_consistency_review_resolves_supported_ambiguity(self) -> None:
         settings = Settings()

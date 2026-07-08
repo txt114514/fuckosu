@@ -18,7 +18,7 @@ from traning.state.gallery_schema import (
     FrameEvaluation,
 )
 from visualization.conf.messages import display_text
-from visualization.core.gallery.manifest import allocate_output_identity
+from visualization.core.gallery.manifest import reserve_output_identity_for_commit
 from visualization.core.gallery.renderer import (
     render_annotated_frame,
     save_annotated_frame,
@@ -130,17 +130,48 @@ def save_best_trial_gallery(
         raise ValueError("每组样本数必须为正数")
 
     best_trial = request.best_trial
-    output_identity = allocate_output_identity(output_root)
-    gallery_dir = (
-        output_root
-        / (
-            f"{output_identity.prefix}__{_safe_name(request.batch_id)}"
-            f"__{_safe_name(best_trial.trial_id)}"
+    with reserve_output_identity_for_commit(output_root) as reservation:
+        output_identity = reservation.identity
+        gallery_dir = (
+            output_root
+            / (
+                f"{output_identity.prefix}__{_safe_name(request.batch_id)}"
+                f"__{_safe_name(best_trial.trial_id)}"
+            )
         )
-    )
-    working_dir = gallery_dir.with_name(f".{gallery_dir.name}.tmp")
-    if working_dir.exists():
-        shutil.rmtree(working_dir)
+        working_dir = gallery_dir.with_name(f".{gallery_dir.name}.tmp")
+        if working_dir.exists():
+            shutil.rmtree(working_dir)
+        if gallery_dir.exists():
+            raise FileExistsError(f"gallery output already exists: {gallery_dir}")
+        try:
+            saved_count, issues = _write_gallery_artifact(
+                dataset=dataset,
+                request=request,
+                output_identity=output_identity,
+                gallery_dir=gallery_dir,
+                working_dir=working_dir,
+                samples_per_group=samples_per_group,
+            )
+            working_dir.replace(gallery_dir)
+            reservation.commit()
+        except Exception:
+            if working_dir.exists():
+                shutil.rmtree(working_dir)
+            raise
+    return gallery_dir, saved_count, tuple(issues)
+
+
+def _write_gallery_artifact(
+    *,
+    dataset: SegmentFrameDataset,
+    request: BatchGalleryRequest,
+    output_identity,
+    gallery_dir: Path,
+    working_dir: Path,
+    samples_per_group: int,
+) -> tuple[int, list[str]]:
+    best_trial = request.best_trial
     lookup = _frame_lookup(dataset)
     grouped_by_sample: dict[tuple[str, str], _SampleFrameGroup] = {}
     seen_frame_records: set[tuple[str, str, tuple[Any, ...]]] = set()
@@ -277,8 +308,11 @@ def save_best_trial_gallery(
                 "trial_id": best_trial.trial_id,
                 "score": best_trial.score,
                 "score_version": best_trial.score_version,
+                "curriculum_stage": request.metadata.get("curriculum_stage"),
+                "batch_identifier": request.metadata.get("batch_id", request.batch_id),
                 "metrics": best_trial.metrics,
                 "parameters": best_trial.parameters.model_dump(mode="json"),
+                "metadata": request.metadata,
             },
             ensure_ascii=False,
             indent=2,
@@ -354,6 +388,17 @@ def save_best_trial_gallery(
                 "selected_trial_score": best_trial.score,
                 "score_version": best_trial.score_version,
                 "metadata": request.metadata,
+                "gallery_request": request.model_dump(mode="json"),
+                "score_report_path": request.metadata.get("score_report_path"),
+                "candidate_cache_manifest_path": request.metadata.get(
+                    "candidate_cache_manifest_path"
+                ),
+                "spatial_checkpoint_path": request.metadata.get(
+                    "spatial_checkpoint_path"
+                ),
+                "temporal_checkpoint_path": request.metadata.get(
+                    "temporal_checkpoint_path"
+                ),
                 "index_csv": str(index_path.relative_to(working_dir)),
                 "random_seed": request.random_seed,
                 "samples_per_group": samples_per_group,
@@ -375,10 +420,7 @@ def save_best_trial_gallery(
         + "\n",
         encoding="utf-8",
     )
-    if gallery_dir.exists():
-        shutil.rmtree(gallery_dir)
-    working_dir.replace(gallery_dir)
-    return gallery_dir, len(saved_frames), tuple(issues)
+    return len(saved_frames), issues
 
 
 __all__ = [

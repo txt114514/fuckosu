@@ -15,6 +15,7 @@ from traning.core.training_ramp import (
     _gate_level,
     _report_level_finished,
     _report_level_started,
+    _run_level,
     _run_preflight,
     _report_ramp_failed,
     _report_ramp_started,
@@ -282,6 +283,96 @@ class TrainingRampTests(unittest.TestCase):
                         artifact_smoke={"finite": True},
                         dry_run={"returncode": 0},
                     )
+
+    def test_level_training_uses_configured_gallery_output_root(self) -> None:
+        level = RampLevelSpec("a", "level_a", 1, 1, 1, 1, 1, 1, 1)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            gallery_root = root / "traning_example"
+            config_path = root / "config.yaml"
+            config_path.write_text("visualization: {}\n", encoding="utf-8")
+            reporter = DashboardReporter(
+                run_id="ramp-gallery-root",
+                output_dir=root / "dashboard",
+            )
+            checkpoint = root / "checkpoint.pt"
+            checkpoint.write_bytes(b"checkpoint")
+            score_report = root / "score.json"
+            score_report.write_text('{"samples": []}\n', encoding="utf-8")
+            next_job = root / "next_job.json"
+            next_job.write_text("{}\n", encoding="utf-8")
+            result = SimpleNamespace(
+                spatial=SimpleNamespace(
+                    steps=1,
+                    last_loss=1.0,
+                    checkpoint_path=checkpoint,
+                    cuda_max_reserved_gib=0.1,
+                    as_dict=lambda: {},
+                ),
+                temporal=SimpleNamespace(
+                    steps=1,
+                    final_loss=1.0,
+                    checkpoint_path=checkpoint,
+                    cuda_max_reserved_gib=0.1,
+                    as_dict=lambda: {},
+                ),
+                evaluation=SimpleNamespace(
+                    quality_score=1.0,
+                    pass_threshold=0.8,
+                    passed=True,
+                    gallery_status="saved",
+                    gallery_saved_frame_count=1,
+                    gallery_output_dir=gallery_root / "output_000001__batch__trial",
+                    report_path=score_report,
+                    next_job_path=next_job,
+                    gallery_request_path=root / "gallery_request.json",
+                    as_dict=lambda: {
+                        "quality_score": 1.0,
+                        "pass_threshold": 0.8,
+                        "passed": True,
+                        "gallery_output_dir": str(gallery_root),
+                        "gallery_status": "saved",
+                        "report_path": str(score_report),
+                        "asha_action": None,
+                        "asha_reasons": (),
+                    },
+                ),
+                candidate_cache=SimpleNamespace(
+                    frames=1,
+                    manifest_path=root / "candidate_manifest.json",
+                    as_dict=lambda: {},
+                ),
+                decision=SimpleNamespace(as_dict=lambda: {}),
+                summary_path=root / "summary.json",
+                as_summary=lambda: {"quality_score": 1.0},
+            )
+            (root / "candidate_manifest.json").write_text("{}\n", encoding="utf-8")
+            (root / "summary.json").write_text("{}\n", encoding="utf-8")
+
+            with (
+                patch("traning.core.training_ramp._write_level_config", return_value=config_path),
+                patch("traning.core.training_ramp.load_settings", return_value=object()),
+                patch("traning.core.training_ramp.run_full_training_pipeline", return_value=result) as pipeline_mock,
+                patch("traning.core.training_ramp.export_model_artifact", return_value=SimpleNamespace(manifest_path=root / "artifact.json")),
+                patch("traning.core.training_ramp.validate_model_artifact", return_value=()),
+                patch("traning.core.training_ramp.smoke_test_model_artifact", return_value={"finite": True}),
+                patch("traning.core.training_ramp._run_job_dry_run", return_value={"returncode": 0}),
+                patch("traning.core.training_ramp.torch.load", return_value={}),
+            ):
+                _run_level(
+                    level=level,
+                    base_config=config_path,
+                    level_dir=root / "level",
+                    device="cpu",
+                    reporter=reporter,
+                    resume_policy="none",
+                    resume_stage_checkpoints={},
+                    gallery_output_root=gallery_root,
+                    gallery_samples_per_group=1,
+                )
+
+        full_config = pipeline_mock.call_args.kwargs["config"]
+        self.assertEqual(full_config.gallery_output_root, gallery_root)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Mapping
 
 import torch
@@ -26,6 +27,10 @@ from traning.lib.training.spatial_decode import (
     decode_spatial_candidates,
 )
 from traning.conf import Settings
+from traning.core.training_inheritance import (
+    load_training_checkpoint,
+    restore_module_state,
+)
 
 
 SPATIAL_GPU_TASKS: tuple[str, ...] = (
@@ -85,6 +90,7 @@ def run_spatial_frame_inference(
     sample: Mapping[str, Any],
     *,
     device: torch.device,
+    checkpoint_path: Path | None = None,
     max_candidates: int = 16,
     score_threshold: float = 0.0,
     nms_radius_px: float = 32.0,
@@ -124,6 +130,8 @@ def run_spatial_frame_inference(
         ),
     )
     modules = build_model_stack(settings)
+    if checkpoint_path is not None:
+        _load_spatial_checkpoint(modules, checkpoint_path)
     for name, module in tuple(modules.items()):
         moved = module_to_device(
             module,
@@ -237,6 +245,35 @@ def _model_frame(image: torch.Tensor, *, settings: Settings) -> torch.Tensor:
     if not torch.is_floating_point(frame):
         frame = frame.float().div(255.0)
     return append_color_cues(frame.contiguous(), mode=settings.input.color_cues)
+
+
+def _load_spatial_checkpoint(
+    modules: Mapping[str, torch.nn.Module],
+    checkpoint_path: Path,
+) -> None:
+    raw = load_training_checkpoint(checkpoint_path)
+    model_state = raw.get("models") or raw.get("model_state")
+    if not isinstance(model_state, Mapping):
+        raise ValueError("spatial inference checkpoint missing model state")
+    restored: list[str] = []
+    for name, module in modules.items():
+        state = model_state.get(name)
+        if not isinstance(state, Mapping):
+            raise ValueError(f"spatial inference checkpoint missing module: {name}")
+        loaded, skipped = restore_module_state(module, state, strict=True)
+        if skipped:
+            raise ValueError(
+                f"spatial inference checkpoint has incompatible keys for {name}: "
+                f"{', '.join(skipped)}"
+            )
+        if loaded:
+            restored.append(name)
+    if len(restored) != len(modules):
+        missing = sorted(set(modules) - set(restored))
+        raise ValueError(
+            "spatial inference checkpoint did not restore modules: "
+            + ", ".join(missing)
+        )
 
 
 __all__ = [

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+import tempfile
 import unittest
 
 import torch
@@ -11,6 +13,7 @@ from traning.core.spatial import (
     run_spatial_frame_inference,
     spatial_candidate_to_dict,
 )
+from traning.lib.models import build_model_stack
 
 
 def _tiny_settings() -> Settings:
@@ -89,6 +92,31 @@ class SpatialInferenceTests(unittest.TestCase):
             row = spatial_candidate_to_dict(result.candidates[0])
             self.assertNotIn("embedding", row)
             self.assertIn("score", row)
+
+    def test_inference_loads_spatial_checkpoint(self) -> None:
+        settings = _tiny_settings()
+        modules = build_model_stack(settings)
+        with tempfile.TemporaryDirectory() as temporary:
+            checkpoint_path = Path(temporary) / "spatial_model.pt"
+            torch.save(
+                {
+                    "models": {
+                        name: module.state_dict()
+                        for name, module in modules.items()
+                    }
+                },
+                checkpoint_path,
+            )
+            result = run_spatial_frame_inference(
+                settings,
+                {"image": torch.rand(3, 96, 128)},
+                device=torch.device("cpu"),
+                checkpoint_path=checkpoint_path,
+                max_candidates=2,
+                patch_limit=1,
+            )
+
+        self.assertEqual(result.patches_processed, 1)
 
 
 if __name__ == "__main__":

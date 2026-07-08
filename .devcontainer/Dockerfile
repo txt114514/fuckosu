@@ -11,6 +11,7 @@ RUN apt-get update -qq && \
         git wget curl vim nano htop \
         build-essential pkg-config \
         ffmpeg \
+        tmux \
         libevdev-dev \
         libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 \
         libx11-6 libxrandr2 libxi6 libxtst6 libxfixes3 \

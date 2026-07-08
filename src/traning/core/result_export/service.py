@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import traceback
 from pathlib import Path
 from typing import Any
 
@@ -151,12 +152,13 @@ class OptionalTrainingVisualizer:
             )
         except Exception as error:
             self._render_disabled = True
+            detail = traceback.format_exc()
             return GalleryResult(
                 status="failed",
                 selected_trial_id=request.best_trial.trial_id,
                 warning=self._warning_once(
                     "training annotation gallery disabled after save failure: "
-                    f"{type(error).__name__}: {error}"
+                    f"{type(error).__name__}: {error}\n{detail}"
                 ),
             )
 

@@ -15,7 +15,7 @@
 
 ```text
 视频帧
-  -> 空间单帧推理
+  -> 加载 spatial checkpoint 的空间单帧推理
   -> CPU 全图融合
   -> 候选和 slider path 解码
   -> frames.jsonl + manifest.json
@@ -28,6 +28,8 @@
 - 候选与 slider path 的关联；
 - 低置信、近分、路径异常等 `ambiguity_reasons`。
 - `coordinate_transform`、dataset/config/code/score/cache/transform 版本信息。
+- manifest 记录 `spatial_checkpoint_path`，完整训练流水线必须传入刚完成训练的
+  spatial checkpoint，不能用随机初始化模型生成候选。
 - 可选 `local_refinement` 和 `ambiguity_review`，记录复查策略、触发原因和前后变化。
 
 这些记录是 temporal 训练和后续在线决策的共同输入。缓存记录还包含可选

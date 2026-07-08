@@ -342,6 +342,7 @@ def run_full_training_pipeline(
         settings,
         output_dir=config.run_dir / "candidate_cache",
         device=config.device,
+        spatial_checkpoint_path=spatial.checkpoint_path,
         split=config.split,
         max_frames=config.cache_max_frames,
         patch_limit=config.patch_limit,
@@ -487,6 +488,7 @@ def run_full_training_pipeline(
         warnings=evaluation.unresolved_count,
         score=evaluation.quality_score,
         threshold=evaluation.pass_threshold,
+        message=_evaluation_stage_message(evaluation),
     )
     summary_path = config.run_dir / "full_training_summary.json"
     result = FullTrainingRunResult(
@@ -527,6 +529,7 @@ def _evaluate_training_outputs(
 ) -> FullTrainingEvaluationResult:
     output_dir = config.run_dir / "evaluation"
     output_dir.mkdir(parents=True, exist_ok=True)
+    reporter = config.reporter
     score_result = score_decision_outputs(
         parameter_group_id=config.parameter_group_id,
         candidate_cache_path=candidate_cache.records_path,
@@ -569,10 +572,41 @@ def _evaluate_training_outputs(
         batch_id=f"{config.run_dir.name}__{config.parameter_group_id}",
         metadata=versions
         | {
+            "batch_id": f"{config.run_dir.name}__{config.parameter_group_id}",
+            "curriculum_stage": config.curriculum_level or "full_training",
             "min_click_interval_ms": settings.evaluation.min_click_interval_ms,
             "candidate_cache_path": str(candidate_cache.records_path),
+            "candidate_cache_manifest_path": str(candidate_cache.manifest_path),
             "decision_path": str(decision.decisions_path),
+            "score_report_path": str(report_path),
+            "spatial_checkpoint_path": str(spatial.checkpoint_path),
+            "temporal_checkpoint_path": str(temporal.checkpoint_path),
         },
+    )
+    reporter.emit_event(
+        TrainingEvent.create(
+            event_type="gallery.start",
+            severity="info",
+            message_key="dashboard_started",
+            message_args={"run_id": gallery_request.batch_id},
+            raw_message=(
+                "[GALLERY][START] "
+                f"batch={gallery_request.batch_id} selecting best evaluated trial"
+            ),
+        )
+    )
+    reporter.emit_event(
+        TrainingEvent.create(
+            event_type="gallery.select",
+            severity="info",
+            message_key="score_updated",
+            message_args={"score": f"{gallery_request.best_trial.score:.6f}"},
+            raw_message=(
+                "[GALLERY][SELECT] "
+                f"trial={gallery_request.best_trial.trial_id} "
+                f"score={gallery_request.best_trial.score:.6f}"
+            ),
+        )
     )
     gallery_request_path = output_dir / "gallery_request.json"
     gallery_request_path.write_text(
@@ -586,12 +620,55 @@ def _evaluate_training_outputs(
     )
     gallery_result = None
     if config.render_gallery:
+        reporter.emit_event(
+            TrainingEvent.create(
+                event_type="gallery.export",
+                severity="info",
+                message_key="stage_started",
+                message_args={"stage": "gallery export"},
+                raw_message="[GALLERY][EXPORT] rendering evaluated frames",
+            )
+        )
         gallery_result = save_annotation_gallery(
             settings,
             gallery_request,
             output_root=config.gallery_output_root,
             samples_per_group=config.gallery_samples_per_group,
         )
+        if gallery_result.status == "saved":
+            reporter.emit_event(
+                TrainingEvent.create(
+                    event_type="gallery.done",
+                    severity="success",
+                    message_key="gallery_saved",
+                    message_args={"path": str(gallery_result.output_dir)},
+                    raw_message=(
+                        "[GALLERY][DONE] "
+                        f"output={gallery_result.output_dir} "
+                        f"frames={gallery_result.saved_frame_count}"
+                    ),
+                )
+            )
+        elif gallery_result.status == "failed":
+            reporter.emit_event(
+                TrainingEvent.create(
+                    event_type="gallery.fail",
+                    severity="error",
+                    message_key="fatal_error",
+                    message_args={"error": gallery_result.warning or "unknown"},
+                    raw_message=f"[GALLERY][FAIL] {gallery_result.warning or 'unknown'}",
+                )
+            )
+        elif gallery_result.warning:
+            reporter.emit_event(
+                TrainingEvent.create(
+                    event_type="gallery.warning",
+                    severity="warning",
+                    message_key="fatal_error",
+                    message_args={"error": gallery_result.warning},
+                    raw_message=f"[GALLERY][FAIL] {gallery_result.warning}",
+                )
+            )
     attribution_path = None
     plan_path = None
     next_job_path = None
@@ -899,6 +976,7 @@ def _report_stage(
     error_reason: str | None = None,
     score: float | None = None,
     threshold: float | None = None,
+    message: str | None = None,
 ) -> None:
     reporter.update_pipeline_stage(
         PipelineStageState(
@@ -913,8 +991,23 @@ def _report_stage(
             error_reason=error_reason,
             score=score,
             threshold=threshold,
+            message=message,
         )
     )
+
+
+def _evaluation_stage_message(evaluation: FullTrainingEvaluationResult) -> str | None:
+    if evaluation.passed:
+        return None
+    details = [
+        f"质量分 {evaluation.quality_score:.6f} 低于通过阈值 {evaluation.pass_threshold:.6f}",
+        f"未解析目标 {evaluation.unresolved_count}/{evaluation.target_count}",
+    ]
+    if evaluation.action_frame_count <= 0 and evaluation.target_count > 0:
+        details.append("决策输出没有点击动作")
+    if evaluation.gallery_warning:
+        details.append(f"图集警告：{evaluation.gallery_warning}")
+    return "；".join(details)
 
 
 def _report_resource(reporter: TrainingReporter) -> None:

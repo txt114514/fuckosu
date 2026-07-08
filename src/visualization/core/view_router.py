@@ -5,6 +5,11 @@ from typing import Literal
 from rich.console import Console, Group
 from rich.panel import Panel
 
+from visualization.conf.defaults import (
+    DEFAULT_COMPACT_TERMINAL_HEIGHT,
+    NARROW_TERMINAL_WIDTH,
+)
+from visualization.core.display_overrides import apply_display_overrides
 from visualization.lib.models import PipelinePhase, TrainingDashboardState
 from visualization.core.startup_view import (
     STARTUP_PAGES,
@@ -52,24 +57,69 @@ def render_dashboard_page(
     page_index: int,
     terminal_height: int,
     terminal_width: int,
+    state_path: str | None = None,
 ) -> tuple[Group, int]:
-    panels = dashboard_panel_items(state)
-    pages = _paginate_panels(
-        panels,
-        terminal_height=max(terminal_height, 6),
-        terminal_width=max(terminal_width, 40),
+    terminal_height = max(terminal_height, 6)
+    terminal_width = max(terminal_width, 40)
+    if _should_use_compact_pages(
+        terminal_height=terminal_height,
+        terminal_width=terminal_width,
+    ):
+        page_names = dashboard_pages(state)
+        page_count = max(len(page_names), 1)
+        selected_index = min(max(page_index, 0), page_count - 1)
+        selected = (
+            render_dashboard_view(
+                state,
+                compact=True,
+                page=page_names[selected_index],
+            ),
+        )
+    else:
+        panels = dashboard_panel_items(state)
+        pages = _paginate_panels(
+            panels,
+            terminal_height=terminal_height,
+            terminal_width=terminal_width,
+        )
+        page_count = max(len(pages), 1)
+        selected_index = min(max(page_index, 0), page_count - 1)
+        selected = pages[selected_index] if pages else panels
+    footer = _render_footer(
+        selected_index=selected_index,
+        page_count=page_count,
+        state_path=state_path,
     )
-    page_count = max(len(pages), 1)
-    selected_index = min(max(page_index, 0), page_count - 1)
-    selected = pages[selected_index] if pages else panels
-    footer = Panel(
+    return apply_display_overrides(Group(*selected, footer)), page_count
+
+
+def _render_footer(
+    *,
+    selected_index: int,
+    page_count: int,
+    state_path: str | None,
+) -> Panel:
+    state_text = f"；完整状态：{state_path}" if state_path else ""
+    keyboard_text = "；键盘可用时 Tab/空格下一页，b上一页，数字切页，Ctrl+C中断"
+    return Panel(
         (
             f"页面：{selected_index + 1}/{page_count}；"
-            "上方向键上一页，下方向键下一页，Tab/空格下一页，b上一页，Ctrl+C中断"
+            "固定页，不自动切换"
+            f"{keyboard_text}{state_text}"
         ),
-        title="翻页",
+        title="视图",
     )
-    return Group(*selected, footer), page_count
+
+
+def _should_use_compact_pages(
+    *,
+    terminal_height: int,
+    terminal_width: int,
+) -> bool:
+    return (
+        terminal_height <= DEFAULT_COMPACT_TERMINAL_HEIGHT
+        or terminal_width <= NARROW_TERMINAL_WIDTH
+    )
 
 
 def render_dashboard_view(

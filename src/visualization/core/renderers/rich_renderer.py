@@ -30,6 +30,7 @@ class RichDashboardRenderer:
         self._refresh_lock = threading.Lock()
 
     def start(self) -> None:
+        self._stop_keyboard.clear()
         self.live = Live(
             self._render(),
             console=self.console,
@@ -61,6 +62,7 @@ class RichDashboardRenderer:
             page_index=self._page_index,
             terminal_height=self.console.size.height,
             terminal_width=self.console.size.width,
+            state_path=str(self.reporter.store.state_path),
         )
         self._page_count = page_count
         if self._page_index >= page_count:
@@ -70,6 +72,7 @@ class RichDashboardRenderer:
                 page_index=self._page_index,
                 terminal_height=self.console.size.height,
                 terminal_width=self.console.size.width,
+                state_path=str(self.reporter.store.state_path),
             )
         return renderable
 

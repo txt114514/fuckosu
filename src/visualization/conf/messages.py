@@ -71,6 +71,22 @@ PAGE_NAMES: dict[str, str] = {
 }
 
 DISPLAY_TEXT_NAMES: dict[str, str] = {
+    "stage": "阶段",
+    "status": "状态",
+    "score": "评分",
+    "loss": "损失",
+    "trial": "试验",
+    "trial_id": "试验",
+    "level": "等级",
+    "phase": "流程阶段",
+    "progress": "进度",
+    "warning": "警告",
+    "warnings": "警告",
+    "device": "设备",
+    "split": "数据划分",
+    "path": "路径",
+    "checkpoint_path": "检查点",
+    "N/A": "不适用",
     "GPU bridge": "GPU 桥接检查",
     "NVML": "NVML 监控",
     "nvidia-smi": "nvidia-smi 监控",

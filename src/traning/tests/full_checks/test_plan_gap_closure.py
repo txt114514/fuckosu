@@ -8,14 +8,38 @@ from pathlib import Path
 import torch
 
 from package.coordinates import COORDINATE_TRANSFORM_VERSION, OsuVideoTransform, PlayfieldRect
-from traning.conf import Settings
+from traning.conf import Settings, load_settings
 from traning.core.decision.generator import build_candidate_cache_record
 from traning.core.model_export import migrate_settings_file
 from traning.core.temporal.trainer import _compute_temporal_loss
+from traning.lib.coordinates import transform_from_settings_or_sample
 from traning.state.versioning import ensure_compatible_versions
 
 
 class PlanGapClosureTests(unittest.TestCase):
+    def test_training_configs_use_explicit_cropped_playfield_rect(self) -> None:
+        for config_path in (
+            Path("configs/model_full_small_vram.yaml"),
+            Path("configs/model_small_vram.yaml"),
+        ):
+            with self.subTest(config=str(config_path)):
+                settings = load_settings(config_path)
+                self.assertEqual(settings.coordinate_transform.mode, "explicit_source_rect")
+                rect = settings.coordinate_transform.playfield_rect
+                crop = settings.coordinate_transform.crop_rect
+                self.assertIsNotNone(rect)
+                self.assertIsNotNone(crop)
+                transform = OsuVideoTransform.from_rect(
+                    PlayfieldRect(
+                        left=rect.left - crop.left,
+                        top=rect.top - crop.top,
+                        width=rect.width,
+                        height=rect.height,
+                    )
+                )
+                self.assertEqual(transform.osu_to_video(0, 0), (178.0, 0.0))
+                self.assertEqual(transform.osu_to_video(512, 384), (1306.0, 846.0))
+
     def test_explicit_non_centered_playfield_round_trip(self) -> None:
         transform = OsuVideoTransform.from_rect(
             PlayfieldRect(left=111, top=27, width=1024, height=768)
@@ -25,6 +49,33 @@ class PlanGapClosureTests(unittest.TestCase):
             restored = transform.video_to_osu(*video)
             self.assertAlmostEqual(restored[0], point[0], places=6)
             self.assertAlmostEqual(restored[1], point[1], places=6)
+
+    def test_source_rect_applies_crop_offset_before_video_mapping(self) -> None:
+        settings = Settings(
+            coordinate_transform={
+                "mode": "explicit_source_rect",
+                "playfield_rect": {
+                    "left": 352,
+                    "top": 167,
+                    "width": 1128,
+                    "height": 846,
+                },
+                "crop_rect": {
+                    "left": 174,
+                    "top": 167,
+                    "width": 1484,
+                    "height": 846,
+                },
+            }
+        )
+        transform, spec = transform_from_settings_or_sample(
+            settings,
+            frame_width=1484,
+            frame_height=846,
+        )
+        self.assertEqual(spec.source, "settings.explicit_source_rect")
+        self.assertEqual(transform.osu_to_video(0, 0), (178.0, 0.0))
+        self.assertEqual(transform.osu_to_video(512, 384), (1306.0, 846.0))
 
     def test_action_targets_include_circle_release_slider_repeat_and_spinner(self) -> None:
         settings = Settings(

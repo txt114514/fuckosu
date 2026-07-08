@@ -6,7 +6,17 @@ input:
 
 coordinate_transform:
   version: osu-playfield-rect-v1
-  mode: legacy_centered
+  mode: explicit_source_rect
+  playfield_rect:
+    left: 352
+    top: 167
+    width: 1128
+    height: 846
+  crop_rect:
+    left: 174
+    top: 167
+    width: 1484
+    height: 846
 
 data_input:
   dataset_root: ../training_package/video_segments

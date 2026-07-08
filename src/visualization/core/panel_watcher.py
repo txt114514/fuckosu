@@ -8,6 +8,7 @@ import typer
 from rich.console import Console
 from rich.live import Live
 
+from visualization.core.display_overrides import apply_display_overrides
 from visualization.core.panels.best_parameters_panel import render_best_parameters_panel
 from visualization.core.panels.current_learning_panel import render_current_learning_panel
 from visualization.core.panels.events_panel import render_events_panel
@@ -69,8 +70,8 @@ def _render_panel(state_path: Path, panel: str):
     }
     render = renderers.get(panel)
     if render is None:
-        return f"未知面板：{panel}"
-    return render(state)
+        return apply_display_overrides(f"未知面板：{panel}")
+    return apply_display_overrides(render(state))
 
 
 def _load_state(path: Path) -> TrainingDashboardState:

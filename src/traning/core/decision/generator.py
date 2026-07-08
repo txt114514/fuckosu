@@ -57,6 +57,7 @@ def generate_candidate_cache(
     *,
     output_dir: Path,
     device: torch.device,
+    spatial_checkpoint_path: Path | None = None,
     split: DataSplit = "train",
     max_frames: int | None = None,
     patch_limit: int | None = None,
@@ -102,6 +103,7 @@ def generate_candidate_cache(
                 settings,
                 sample,
                 device=device,
+                checkpoint_path=spatial_checkpoint_path,
                 max_candidates=selected_max_candidates,
                 score_threshold=selected_score_threshold,
                 nms_radius_px=selected_nms_radius,
@@ -143,6 +145,9 @@ def generate_candidate_cache(
         | {"candidate_cache_version": CANDIDATE_CACHE_VERSION},
         "split": split,
         "device": str(device),
+        "spatial_checkpoint_path": (
+            str(spatial_checkpoint_path) if spatial_checkpoint_path is not None else None
+        ),
         "frames": frame_total,
         "records": str(records_path.name),
         "max_candidates_per_frame": selected_max_candidates,

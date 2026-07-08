@@ -391,9 +391,52 @@ def _stage_lifecycle_event(
         event_type="stage_lifecycle",
         severity=severity,
         message_key=message_key,
-        message_args={"stage": stage.name, "status": stage.status},
+        message_args=_stage_lifecycle_message_args(stage),
         phase=stage.name,
+        raw_message=_stage_lifecycle_raw_message(message_key, stage),
     )
+
+
+def _stage_lifecycle_message_args(stage: PipelineStageState) -> dict[str, object]:
+    args: dict[str, object] = {"stage": stage.name, "status": stage.status}
+    if stage.message:
+        args["message"] = stage.message
+    elif stage.error_reason:
+        args["message"] = stage.error_reason
+    if stage.warning_count:
+        args["warnings"] = stage.warning_count
+    if stage.score is not None:
+        args["score"] = f"{stage.score:.6f}"
+    if stage.threshold is not None:
+        args["threshold"] = f"{stage.threshold:.6f}"
+    return args
+
+
+def _stage_lifecycle_raw_message(
+    message_key: str,
+    stage: PipelineStageState,
+) -> str | None:
+    detail = stage.message or stage.error_reason
+    if not detail and stage.score is None and stage.warning_count <= 0:
+        return None
+    label = {
+        "stage_lifecycle_started": "阶段开始",
+        "stage_lifecycle_passed": "阶段完成",
+        "stage_lifecycle_warning": "阶段警告",
+        "stage_lifecycle_skipped": "阶段跳过",
+        "stage_lifecycle_failed": "阶段失败",
+    }.get(message_key, "阶段")
+    parts = [f"{label}：{stage.name}（{stage.status}）"]
+    if detail:
+        parts.append(str(detail))
+    if stage.score is not None:
+        score = f"评分 {stage.score:.6f}"
+        if stage.threshold is not None:
+            score += f" / 阈值 {stage.threshold:.6f}"
+        parts.append(score)
+    if stage.warning_count:
+        parts.append(f"警告/未解析 {stage.warning_count}")
+    return "；".join(parts)
 
 
 def _protects_terminal_global_state(state: TrainingDashboardState) -> bool:

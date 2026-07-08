@@ -95,6 +95,7 @@ Approach circle 半径使用 difficulty 派生的 `approach_preempt_ms` 和
 
 ```text
 RGB 归一化和 cue
+  -> 加载 spatial checkpoint（训练流水线/候选缓存路径必须传入）
   -> PatchStream
   -> global/local/fusion/head 前向
   -> detach 到 CPU
@@ -110,6 +111,8 @@ GPU 侧只保留必要的模型前向和 tensor copy。
 
 - `train-spatial` 已接入首版单帧空间训练。
 - `spatial-decode-smoke` 复用单帧推理入口并输出候选 JSON。
+- 完整训练流水线生成候选缓存时会把刚训练出的 `spatial_model.pt` 传给
+  `run_spatial_frame_inference`，避免候选缓存使用随机初始化空间模型。
 - `decode_spatial_candidates` 已提供 Top-K、局部最大值和半径 NMS。
 - `decode_slider_paths` 已提供连通域、端点、歧义标记和固定长度 polyline。
 - `build-candidate-cache` 已复用空间推理逐帧生成候选缓存。

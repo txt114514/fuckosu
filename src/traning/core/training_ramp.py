@@ -1016,8 +1016,10 @@ def _run_level(
             parameter_group_id=f"ramp-{level.key}",
             curriculum_level=level.key,
             render_gallery=True,
-            gallery_output_root=level_dir / "galleries",
-            gallery_samples_per_group=level.gallery_samples_per_group,
+            gallery_output_root=gallery_output_root,
+            gallery_samples_per_group=(
+                gallery_samples_per_group or level.gallery_samples_per_group
+            ),
             reporter=reporter,
             resume_policy=resume_policy,
             resume_stage_checkpoints=resume_stage_checkpoints,
