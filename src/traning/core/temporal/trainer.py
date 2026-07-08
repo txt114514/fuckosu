@@ -67,6 +67,9 @@ class TemporalTrainingResult:
     target_strategy: str
     cuda_max_allocated_gib: float | None
     cuda_max_reserved_gib: float | None
+    target_frame_count: int = 0
+    matched_candidate_frame_count: int = 0
+    unmatched_target_frame_count: int = 0
     loss_weights: Mapping[str, float] = field(
         default_factory=lambda: {
             "action": 1.0,
@@ -95,6 +98,9 @@ class TemporalTrainingResult:
             "target_strategy": self.target_strategy,
             "cuda_max_allocated_gib": self.cuda_max_allocated_gib,
             "cuda_max_reserved_gib": self.cuda_max_reserved_gib,
+            "target_frame_count": self.target_frame_count,
+            "matched_candidate_frame_count": self.matched_candidate_frame_count,
+            "unmatched_target_frame_count": self.unmatched_target_frame_count,
         }
 
 
@@ -130,6 +136,24 @@ def run_temporal_training(
     )
     if len(source) <= 0:
         raise ValueError("temporal training dataset must not be empty")
+    target_diagnostics = _temporal_target_diagnostics(source)
+    if (
+        target_diagnostics["target_frame_count"] > 0
+        and target_diagnostics["matched_candidate_frame_count"] == 0
+    ):
+        reporter.emit_event(
+            TrainingEvent.create(
+                event_type="temporal.warn",
+                severity="warning",
+                message_key="stage_warning",
+                message_args={"stage": "temporal"},
+                raw_message=(
+                    "[TEMPORAL][WARN] "
+                    f"{target_diagnostics['target_frame_count']} target frames but "
+                    "0 matched target candidates; xy/time/candidate losses are fully masked."
+                ),
+            )
+        )
     torch.manual_seed(settings.runtime.seed)
     first = source[0]
     input_size = int(first.features.shape[-1])
@@ -250,6 +274,13 @@ def run_temporal_training(
             target_strategy=first.target_strategy,
             cuda_max_allocated_gib=None,
             cuda_max_reserved_gib=None,
+            target_frame_count=target_diagnostics["target_frame_count"],
+            matched_candidate_frame_count=target_diagnostics[
+                "matched_candidate_frame_count"
+            ],
+            unmatched_target_frame_count=target_diagnostics[
+                "unmatched_target_frame_count"
+            ],
         )
         _write_checkpoint(
             emergency,
@@ -286,6 +317,13 @@ def run_temporal_training(
         target_strategy=first.target_strategy,
         cuda_max_allocated_gib=snapshot.max_allocated_gib,
         cuda_max_reserved_gib=snapshot.max_reserved_gib,
+        target_frame_count=target_diagnostics["target_frame_count"],
+        matched_candidate_frame_count=target_diagnostics[
+            "matched_candidate_frame_count"
+        ],
+        unmatched_target_frame_count=target_diagnostics[
+            "unmatched_target_frame_count"
+        ],
     )
     _write_summary(result)
     _write_checkpoint(
@@ -325,6 +363,28 @@ def _window_to_device(
         "xy_target": window.xy_target.to(device=device),
         "time_offset_target": window.time_offset_target.to(device=device),
         "frame_mask": window.frame_mask.to(device=device),
+    }
+
+
+def _temporal_target_diagnostics(
+    source: Sequence[TemporalWindow],
+) -> dict[str, int]:
+    target_frame_count = 0
+    matched_candidate_frame_count = 0
+    for window in source:
+        valid = window.frame_mask.bool()
+        action_frames = valid & (window.action_target != NO_OP_ACTION_ID)
+        matched = action_frames & (
+            window.selected_candidate_target != IGNORE_CANDIDATE_ID
+        )
+        target_frame_count += int(action_frames.sum().item())
+        matched_candidate_frame_count += int(matched.sum().item())
+    return {
+        "target_frame_count": target_frame_count,
+        "matched_candidate_frame_count": matched_candidate_frame_count,
+        "unmatched_target_frame_count": (
+            target_frame_count - matched_candidate_frame_count
+        ),
     }
 
 

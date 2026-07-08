@@ -15,7 +15,7 @@ from visualization.conf.defaults import (
     NARROW_TERMINAL_WIDTH,
 )
 
-ProgressUIMode = Literal["auto", "rich", "plain", "off"]
+ProgressUIMode = Literal["auto", "gui", "rich", "plain", "off"]
 
 
 @dataclass(frozen=True)
@@ -32,8 +32,8 @@ class DashboardSettings:
     narrow_terminal_width: int = NARROW_TERMINAL_WIDTH
 
     def __post_init__(self) -> None:
-        if self.mode not in {"auto", "rich", "plain", "off"}:
-            raise ValueError("界面模式必须是 auto、rich、plain 或 off")
+        if self.mode not in {"auto", "gui", "rich", "plain", "off"}:
+            raise ValueError("界面模式必须是 auto、gui、rich、plain 或 off")
         if self.refresh_per_second <= 0:
             raise ValueError("刷新频率必须为正数")
         if self.plain_interval_seconds <= 0:

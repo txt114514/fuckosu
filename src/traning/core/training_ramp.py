@@ -24,6 +24,7 @@ from traning.core.model_export import (
     smoke_test_model_artifact,
     validate_model_artifact,
 )
+from traning.core.training_inheritance import TrainingPosition
 from traning.state.versioning import collect_code_version
 from visualization.lib import (
     DatasetUsageState,
@@ -1002,65 +1003,63 @@ def _run_level(
         )
     )
     settings = load_settings(config_path)
-    result = run_full_training_pipeline(
-        settings,
-        config=FullTrainingRunConfig(
-            run_dir=level_dir / "training",
-            device=torch.device(device),
-            spatial_max_steps=level.spatial_steps,
-            temporal_max_steps=level.temporal_steps,
-            patch_limit=level.patch_limit,
-            cache_max_frames=level.cache_frames,
-            sequence_length=level.sequence_length,
-            candidate_slots=level.candidate_slots,
-            parameter_group_id=f"ramp-{level.key}",
-            curriculum_level=level.key,
-            render_gallery=True,
-            gallery_output_root=gallery_output_root,
-            gallery_samples_per_group=(
-                gallery_samples_per_group or level.gallery_samples_per_group
-            ),
-            reporter=reporter,
-            resume_policy=resume_policy,
-            resume_stage_checkpoints=resume_stage_checkpoints,
-        ),
-    )
-    elapsed = time.monotonic() - started
-    artifact = export_model_artifact(
-        ModelArtifactSpec(
-            artifact_id=f"artifact-{level.key}",
-            output_dir=level_dir / "artifacts",
-            settings_path=config_path,
-            spatial_checkpoint_path=result.spatial.checkpoint_path,
-            temporal_checkpoint_path=result.temporal.checkpoint_path,
-            score_version="point-slider-v2+click-sequence-v1+aggregate-v1",
-            candidate_cache_version="spatial-candidate-cache-v1",
-            code_version=collect_code_version().commit,
-            extra_files={
-                "score_report": result.evaluation.report_path,
-                "gallery_request": result.evaluation.gallery_request_path,
-                "summary": result.summary_path,
-                "candidate_cache_manifest": result.candidate_cache.manifest_path,
-            },
-        )
-    )
-    artifact_issues = validate_model_artifact(artifact.manifest_path)
-    artifact_smoke = smoke_test_model_artifact(artifact.manifest_path, device="cpu")
-    dry_run = _run_job_dry_run(
-        job_path=result.evaluation.next_job_path,
-        config_path=config_path,
-        level_dir=level_dir,
-        device=device,
-    )
-    record = _gate_level(
-        level=level,
-        result=result,
-        elapsed=elapsed,
-        artifact_path=artifact.manifest_path,
-        artifact_issues=artifact_issues,
-        artifact_smoke=artifact_smoke,
-        dry_run=dry_run,
-    )
+    max_trials = max(1, int(getattr(getattr(settings, "optimization", None), "max_trials", 1)))
+    trial_job: Mapping[str, Any] | None = None
+    trial_failures: list[str] = []
+    record: dict[str, Any] | None = None
+    for trial_index in range(max_trials):
+        try:
+            record = _run_level_trial(
+                level=level,
+                settings=settings,
+                config_path=config_path,
+                level_dir=level_dir,
+                device=device,
+                reporter=reporter,
+                resume_policy=resume_policy,
+                resume_stage_checkpoints=resume_stage_checkpoints,
+                gallery_output_root=gallery_output_root,
+                gallery_samples_per_group=gallery_samples_per_group,
+                started=started,
+                trial_index=trial_index,
+                trial_job=trial_job,
+            )
+            break
+        except RampGateError as error:
+            trial_failures.append(str(error))
+            next_job_path = _trial_next_job_path(level_dir, trial_index)
+            next_job = _load_next_job(next_job_path)
+            if next_job is None or trial_index + 1 >= max_trials:
+                reporter.emit_event(
+                    TrainingEvent.create(
+                        event_type="ramp.failed",
+                        severity="error",
+                        message_key="fatal_error",
+                        message_args={"error": str(error)},
+                        raw_message=(
+                            "[RAMP][FAILED] "
+                            f"level={level.key} trials={trial_index + 1}/{max_trials} "
+                            f"reason={error}"
+                        ),
+                    )
+                )
+                raise RampGateError("; ".join(trial_failures)) from error
+            reporter.emit_event(
+                TrainingEvent.create(
+                    event_type="ramp.continue",
+                    severity="warning",
+                    message_key="stage_warning",
+                    message_args={"stage": _level_title(level)},
+                    raw_message=(
+                        "[RAMP][CONTINUE] "
+                        f"level={level.key} trial={trial_index + 1}/{max_trials} "
+                        f"next_trial={next_job.get('trial_id')} reason={error}"
+                    ),
+                )
+            )
+            trial_job = next_job
+    if record is None:
+        raise RampGateError("; ".join(trial_failures) or "level produced no trial record")
     reporter.update_metrics(
         pipeline_phase=PipelinePhase.TRAINING.value,
         phase=_level_title(level),
@@ -1101,6 +1100,275 @@ def _run_level(
     return record
 
 
+def _run_level_trial(
+    *,
+    level: RampLevelSpec,
+    settings,
+    config_path: Path,
+    level_dir: Path,
+    device: str,
+    reporter: TrainingReporter,
+    resume_policy: str,
+    resume_stage_checkpoints: Mapping[str, Path],
+    gallery_output_root: Path | None,
+    gallery_samples_per_group: int | None,
+    started: float,
+    trial_index: int,
+    trial_job: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    trial_id = str(
+        (trial_job or {}).get("trial_id") or f"ramp-{level.key}"
+    )
+    budget_steps = int((trial_job or {}).get("budget_steps") or level.temporal_steps)
+    run_dir = level_dir / ("training" if trial_index == 0 else f"training_trial_{trial_index + 1:02d}")
+    stage_checkpoints = dict(resume_stage_checkpoints)
+    parent_checkpoint = (trial_job or {}).get("parent_checkpoint_path")
+    if isinstance(parent_checkpoint, str) and parent_checkpoint:
+        stage_checkpoints["temporal"] = Path(parent_checkpoint)
+    runtime = _trial_runtime_overrides(
+        settings=settings,
+        level=level,
+        trial_index=trial_index,
+        budget_steps=budget_steps,
+        trial_job=trial_job,
+        parent_checkpoint_path=stage_checkpoints.get("temporal"),
+    )
+    reporter.emit_event(
+        TrainingEvent.create(
+            event_type="optimizer.select",
+            severity="info",
+            message_key="stage_started",
+            message_args={"stage": "optimizer trial"},
+            raw_message=(
+                "[OPTIMIZER][SELECT] "
+                f"trial={trial_id} budget_steps={budget_steps} "
+                f"spatial_steps={runtime['spatial_max_steps']} "
+                f"temporal_steps={runtime['temporal_max_steps']} "
+                f"score_threshold={runtime['score_threshold']} "
+                f"max_candidates={runtime['max_candidates']} "
+                f"parent={parent_checkpoint or 'none'}"
+            ),
+        )
+    )
+    result = run_full_training_pipeline(
+        settings,
+        config=FullTrainingRunConfig(
+            run_dir=run_dir,
+            device=torch.device(device),
+            spatial_max_steps=int(runtime["spatial_max_steps"]),
+            temporal_max_steps=int(runtime["temporal_max_steps"]),
+            patch_limit=level.patch_limit,
+            cache_max_frames=level.cache_frames,
+            max_candidates=runtime["max_candidates"],
+            score_threshold=runtime["score_threshold"],
+            nms_radius_px=runtime["nms_radius_px"],
+            slider_threshold=runtime["slider_threshold"],
+            max_slider_paths=runtime["max_slider_paths"],
+            sequence_length=int(runtime["sequence_length"]),
+            candidate_slots=int(runtime["candidate_slots"]),
+            parameter_group_id=trial_id,
+            curriculum_level=level.key,
+            render_gallery=True,
+            gallery_output_root=gallery_output_root,
+            gallery_samples_per_group=(
+                gallery_samples_per_group or level.gallery_samples_per_group
+            ),
+            reporter=reporter,
+            resume_policy=resume_policy,
+            resume_stage_checkpoints=stage_checkpoints,
+        ),
+    )
+    elapsed = time.monotonic() - started
+    artifact = export_model_artifact(
+        ModelArtifactSpec(
+            artifact_id=f"artifact-{level.key}-{trial_index + 1:02d}",
+            output_dir=level_dir / "artifacts",
+            settings_path=config_path,
+            spatial_checkpoint_path=result.spatial.checkpoint_path,
+            temporal_checkpoint_path=result.temporal.checkpoint_path,
+            score_version="point-slider-v2+click-sequence-v1+aggregate-v1",
+            candidate_cache_version="spatial-candidate-cache-v1",
+            code_version=collect_code_version().commit,
+            extra_files={
+                "score_report": result.evaluation.report_path,
+                "gallery_request": result.evaluation.gallery_request_path,
+                "summary": result.summary_path,
+                "candidate_cache_manifest": result.candidate_cache.manifest_path,
+            },
+        )
+    )
+    artifact_issues = validate_model_artifact(artifact.manifest_path)
+    artifact_smoke = smoke_test_model_artifact(artifact.manifest_path, device="cpu")
+    dry_run = _run_job_dry_run(
+        job_path=result.evaluation.next_job_path,
+        config_path=config_path,
+        level_dir=level_dir,
+        device=device,
+    )
+    return _gate_level(
+        level=level,
+        result=result,
+        expected_spatial_steps=int(runtime["spatial_max_steps"]),
+        expected_temporal_steps=int(runtime["temporal_max_steps"]),
+        runtime=runtime,
+        elapsed=elapsed,
+        artifact_path=artifact.manifest_path,
+        artifact_issues=artifact_issues,
+        artifact_smoke=artifact_smoke,
+        dry_run=dry_run,
+    )
+
+
+def _trial_next_job_path(level_dir: Path, trial_index: int) -> Path:
+    run_dir = level_dir / ("training" if trial_index == 0 else f"training_trial_{trial_index + 1:02d}")
+    return run_dir / "evaluation" / "next_training_job.json"
+
+
+def _load_next_job(path: Path) -> dict[str, Any] | None:
+    if not path.is_file():
+        return None
+    raw = _read_json(path)
+    return raw if raw.get("trial_id") else None
+
+
+def _trial_runtime_overrides(
+    *,
+    settings,
+    level: RampLevelSpec,
+    trial_index: int,
+    budget_steps: int,
+    trial_job: Mapping[str, Any] | None,
+    parent_checkpoint_path: Path | None,
+) -> dict[str, Any]:
+    parameters = _mapping((trial_job or {}).get("parameters"))
+    training = _mapping(parameters.get("training"))
+    inference = _mapping(parameters.get("inference"))
+    parent_temporal_step = (
+        _checkpoint_temporal_step(parent_checkpoint_path)
+        if trial_index > 0 and parent_checkpoint_path is not None
+        else 0
+    )
+    sequence_length = _scaled_positive_int(
+        level.sequence_length,
+        explicit=training.get("sequence_length"),
+        multiplier=training.get("sequence_length_multiplier"),
+    )
+    candidate_slots = _scaled_positive_int(
+        level.candidate_slots,
+        explicit=training.get("candidate_slots"),
+        multiplier=training.get("candidate_slots_multiplier"),
+    )
+    spatial_steps = level.spatial_steps if trial_index == 0 else budget_steps
+    temporal_budget = level.temporal_steps if trial_index == 0 else budget_steps
+    return {
+        "spatial_max_steps": spatial_steps,
+        "temporal_max_steps": max(1, parent_temporal_step + temporal_budget),
+        "temporal_budget_steps": temporal_budget,
+        "parent_temporal_step": parent_temporal_step,
+        "sequence_length": sequence_length,
+        "candidate_slots": candidate_slots,
+        "score_threshold": _score_threshold_override(
+            _candidate_cache_default(settings, "score_threshold", 0.05),
+            inference.get("score_threshold"),
+            inference.get("score_threshold_delta"),
+        ),
+        "max_candidates": _max_candidates_override(
+            _candidate_cache_default(settings, "max_candidates_per_frame", 32),
+            inference.get("max_candidates"),
+            inference.get("max_candidates_delta"),
+        ),
+        "nms_radius_px": _float_override(
+            _candidate_cache_default(settings, "nms_radius_px", 24.0),
+            inference.get("nms_radius_px"),
+        ),
+        "slider_threshold": _float_override(
+            _candidate_cache_default(settings, "slider_threshold", 0.35),
+            inference.get("slider_threshold"),
+        ),
+        "max_slider_paths": _positive_int_override(
+            _candidate_cache_default(settings, "max_slider_paths", 16),
+            inference.get("max_slider_paths"),
+        ),
+        "parameters": parameters,
+    }
+
+
+def _mapping(value: Any) -> Mapping[str, Any]:
+    return value if isinstance(value, Mapping) else {}
+
+
+def _candidate_cache_default(settings: Any, field_name: str, fallback: Any) -> Any:
+    candidate_cache = getattr(settings, "candidate_cache", None)
+    return getattr(candidate_cache, field_name, fallback)
+
+
+def _score_threshold_override(
+    default: float,
+    explicit: Any,
+    delta: Any,
+) -> float:
+    if isinstance(delta, (int, float)):
+        return _clamp(float(default) + float(delta), 0.0, 1.0)
+    if isinstance(explicit, (int, float)):
+        value = float(explicit)
+        if value < 0.0:
+            value = float(default) + value
+        return _clamp(value, 0.0, 1.0)
+    return float(default)
+
+
+def _max_candidates_override(
+    default: int,
+    explicit: Any,
+    delta: Any,
+) -> int:
+    if isinstance(delta, (int, float)):
+        return max(1, int(round(float(default) + float(delta))))
+    if isinstance(explicit, (int, float)):
+        value = int(round(float(explicit)))
+        if 0 < value <= 8 and int(default) > 8:
+            return max(1, int(default) + value)
+        return max(1, value)
+    return max(1, int(default))
+
+
+def _scaled_positive_int(
+    default: int,
+    *,
+    explicit: Any,
+    multiplier: Any,
+) -> int:
+    if isinstance(explicit, (int, float)):
+        return max(1, int(round(float(explicit))))
+    if isinstance(multiplier, (int, float)):
+        return max(1, int(round(float(default) * float(multiplier))))
+    return max(1, int(default))
+
+
+def _float_override(default: float, explicit: Any) -> float:
+    return float(explicit) if isinstance(explicit, (int, float)) else float(default)
+
+
+def _positive_int_override(default: int, explicit: Any) -> int:
+    if isinstance(explicit, (int, float)):
+        return max(1, int(round(float(explicit))))
+    return max(1, int(default))
+
+
+def _clamp(value: float, lower: float, upper: float) -> float:
+    return min(upper, max(lower, value))
+
+
+def _checkpoint_temporal_step(path: Path | None) -> int:
+    if path is None or not path.is_file():
+        return 0
+    payload = torch.load(path, map_location="cpu", weights_only=False)
+    if not isinstance(payload, Mapping):
+        return 0
+    position = TrainingPosition.from_mapping(payload.get("training_position"))
+    return max(position.temporal_step, position.global_step, position.last_committed_step)
+
+
 def _gate_level(
     *,
     level: RampLevelSpec,
@@ -1110,11 +1378,16 @@ def _gate_level(
     artifact_issues: tuple[str, ...],
     artifact_smoke: dict[str, Any],
     dry_run: dict[str, Any],
+    expected_spatial_steps: int | None = None,
+    expected_temporal_steps: int | None = None,
+    runtime: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     failures: list[str] = []
-    if result.spatial.steps != level.spatial_steps:
+    expected_spatial_steps = expected_spatial_steps or level.spatial_steps
+    expected_temporal_steps = expected_temporal_steps or level.temporal_steps
+    if result.spatial.steps != expected_spatial_steps:
         failures.append("spatial steps did not reach requested level")
-    if result.temporal.steps != level.temporal_steps:
+    if result.temporal.steps != expected_temporal_steps:
         failures.append("temporal steps did not reach requested level")
     for label, value in {
         "spatial_loss": result.spatial.last_loss,
@@ -1170,6 +1443,7 @@ def _gate_level(
     return {
         "status": "passed",
         "level": level.as_dict(),
+        "runtime": _json_ready(dict(runtime or {})),
         "elapsed_seconds": elapsed,
         "steps_per_second": steps_per_second,
         "frames_per_second": frames_per_second,

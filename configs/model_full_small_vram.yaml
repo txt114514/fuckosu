@@ -6,17 +6,10 @@ input:
 
 coordinate_transform:
   version: osu-playfield-rect-v1
-  mode: explicit_source_rect
-  playfield_rect:
-    left: 352
-    top: 167
-    width: 1128
-    height: 846
-  crop_rect:
-    left: 174
-    top: 167
-    width: 1484
-    height: 846
+  mode: affine_matrix
+  matrix:
+    - [2.2735733213463347, 0.027859135193225793, 167.78820336213877]
+    - [-0.06447297355444913, 2.1274820737035793, 42.093480414518524]
 
 data_input:
   dataset_root: ../training_package/video_segments
@@ -162,7 +155,7 @@ optimization:
   execute_generated_jobs: true
   dry_run: false
   job_only: true
-  max_trials: 1
+  max_trials: 2
   max_stage: basic
   trial_store_path: ../runs/optimization/trials.jsonl
   trial_store_backend: sqlite

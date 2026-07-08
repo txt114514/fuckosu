@@ -94,6 +94,7 @@ def run_temporal_decision(
     output_dir.mkdir(parents=True, exist_ok=True)
     decisions_path = output_dir / "decisions.jsonl"
     frames = 0
+    diagnostics_rows: list[dict[str, Any]] = []
     with decisions_path.open("w", encoding="utf-8") as handle:
         with torch.no_grad(), autocast_context(device, runtime_state.amp_dtype):
             for window in dataset:
@@ -108,6 +109,7 @@ def run_temporal_decision(
                     if not bool(window.frame_mask[frame_index]):
                         continue
                     row = _decision_row(window, frame_index, output)
+                    diagnostics_rows.append(row["diagnostics"])
                     handle.write(json.dumps(row, ensure_ascii=False) + "\n")
                     frames += 1
     manifest_path = output_dir / "manifest.json"
@@ -120,6 +122,7 @@ def run_temporal_decision(
         "device": str(device),
         "sequence_length": sequence_length,
         "candidate_slots": candidate_slots,
+        "diagnostics": _decision_diagnostics(diagnostics_rows),
     }
     manifest_path.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
@@ -162,6 +165,7 @@ def _decision_row(
     output,
 ) -> dict[str, Any]:
     action_probs = F.softmax(output.action_logits[0], dim=0).detach().cpu()
+    top_probs, _ = torch.topk(action_probs, k=min(2, action_probs.numel()))
     action_id = int(action_probs.argmax().item())
     candidate_logits = output.selected_candidate_logits[0].detach().cpu().clone()
     mask = window.candidate_mask[frame_index]
@@ -179,6 +183,7 @@ def _decision_row(
         selected_score = None
         selected_candidate_id = None
         selected_candidate_xy = None
+    entropy = float((-(action_probs * action_probs.clamp_min(1e-9).log()).sum()).item())
     return {
         "version": DECISION_OUTPUT_VERSION,
         "sample_key": window.sample_keys[frame_index],
@@ -196,6 +201,47 @@ def _decision_row(
             float(output.y[0, 0].detach().cpu().item()),
         ],
         "time_offset_ms": float(output.time_offset_ms[0, 0].detach().cpu().item()),
+        "diagnostics": {
+            "action_probabilities": {
+                name: float(action_probs[index].item())
+                for index, name in enumerate(ACTION_NAMES)
+            },
+            "action_entropy": entropy,
+            "action_margin": (
+                float((top_probs[0] - top_probs[1]).item())
+                if top_probs.numel() >= 2
+                else 0.0
+            ),
+            "candidate_mask_count": int(mask.sum().item()),
+            "has_candidate": bool(mask.any()),
+        },
+    }
+
+
+def _decision_diagnostics(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    if not rows:
+        return {
+            "frame_count": 0,
+            "action_probability_means": {},
+            "entropy_mean": 0.0,
+            "margin_mean": 0.0,
+            "frames_with_candidate": 0,
+        }
+    probability_means = {}
+    for name in ACTION_NAMES:
+        probability_means[name] = sum(
+            float(row["action_probabilities"].get(name, 0.0)) for row in rows
+        ) / len(rows)
+    return {
+        "frame_count": len(rows),
+        "action_probability_means": probability_means,
+        "entropy_mean": sum(float(row["action_entropy"]) for row in rows) / len(rows),
+        "margin_mean": sum(float(row["action_margin"]) for row in rows) / len(rows),
+        "frames_with_candidate": sum(1 for row in rows if row["has_candidate"]),
+        "candidate_mask_count_mean": sum(
+            int(row["candidate_mask_count"]) for row in rows
+        )
+        / len(rows),
     }
 
 

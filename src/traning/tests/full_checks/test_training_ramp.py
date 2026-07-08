@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+import torch
 import yaml
 
 from traning.core.training_ramp import (
@@ -19,6 +20,7 @@ from traning.core.training_ramp import (
     _run_preflight,
     _report_ramp_failed,
     _report_ramp_started,
+    _trial_runtime_overrides,
     build_ramp_levels,
     ensure_full_target_config,
 )
@@ -373,6 +375,51 @@ class TrainingRampTests(unittest.TestCase):
 
         full_config = pipeline_mock.call_args.kwargs["config"]
         self.assertEqual(full_config.gallery_output_root, gallery_root)
+
+    def test_trial_runtime_consumes_optimizer_parameters_and_resume_budget(self) -> None:
+        level = RampLevelSpec("a", "level_a", 100, 100, 2, 500, 32, 16, 2)
+        settings = SimpleNamespace(
+            candidate_cache=SimpleNamespace(
+                score_threshold=0.05,
+                max_candidates_per_frame=32,
+                nms_radius_px=24.0,
+                slider_threshold=0.35,
+                max_slider_paths=16,
+            )
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            checkpoint = Path(temp_dir) / "temporal.pt"
+            torch.save(
+                {
+                    "training_position": {
+                        "global_step": 100,
+                        "temporal_step": 100,
+                        "last_committed_step": 100,
+                    }
+                },
+                checkpoint,
+            )
+
+            runtime = _trial_runtime_overrides(
+                settings=settings,
+                level=level,
+                trial_index=1,
+                budget_steps=100,
+                trial_job={
+                    "parameters": {
+                        "inference": {
+                            "score_threshold": -0.03,
+                            "max_candidates": 4,
+                        }
+                    }
+                },
+                parent_checkpoint_path=checkpoint,
+            )
+
+        self.assertAlmostEqual(runtime["score_threshold"], 0.02)
+        self.assertEqual(runtime["max_candidates"], 36)
+        self.assertEqual(runtime["parent_temporal_step"], 100)
+        self.assertEqual(runtime["temporal_max_steps"], 200)
 
 
 if __name__ == "__main__":

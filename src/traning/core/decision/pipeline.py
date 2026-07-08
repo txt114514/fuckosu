@@ -31,6 +31,7 @@ from traning.core.optimization import (
     score_decision_outputs,
 )
 from traning.lib.metrics import SequenceScoreSpec
+from traning.state import TrialParameters
 from traning.state.versioning import version_manifest
 from traning.core.result_export import save_annotation_gallery
 from traning.core.spatial import SpatialTrainingResult, run_spatial_training
@@ -689,6 +690,7 @@ def _evaluate_training_outputs(
             score_result.report,
             attribution,
             plan,
+            base_parameters=_optimization_base_parameters(settings, config=config),
             parent_checkpoint_path=temporal.checkpoint_path,
             config=OptimizationExecutorConfig(
                 output_dir=settings.optimization.trial_store_path.parent,
@@ -943,6 +945,45 @@ def _training_parameter_config_snapshot(
                 "objective_weights": settings.optimization.objective_weights,
             },
         }
+    )
+
+
+def _optimization_base_parameters(
+    settings: Settings,
+    *,
+    config: FullTrainingRunConfig,
+) -> TrialParameters:
+    return TrialParameters(
+        training={
+            "parameter_group_id": config.parameter_group_id,
+        },
+        inference={
+            "score_threshold": (
+                config.score_threshold
+                if config.score_threshold is not None
+                else settings.candidate_cache.score_threshold
+            ),
+            "max_candidates": (
+                config.max_candidates
+                if config.max_candidates is not None
+                else settings.candidate_cache.max_candidates_per_frame
+            ),
+            "nms_radius_px": (
+                config.nms_radius_px
+                if config.nms_radius_px is not None
+                else settings.candidate_cache.nms_radius_px
+            ),
+            "slider_threshold": (
+                config.slider_threshold
+                if config.slider_threshold is not None
+                else settings.candidate_cache.slider_threshold
+            ),
+            "max_slider_paths": (
+                config.max_slider_paths
+                if config.max_slider_paths is not None
+                else settings.candidate_cache.max_slider_paths
+            ),
+        },
     )
 
 

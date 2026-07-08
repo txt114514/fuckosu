@@ -36,9 +36,10 @@ class CandidateCacheBuildResult:
     slider_paths: int
     ambiguous_candidates: int
     ambiguous_slider_paths: int
+    diagnostics: Mapping[str, Any] | None = None
 
     def as_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "output_dir": self.output_dir,
             "manifest_path": self.manifest_path,
             "records_path": self.records_path,
@@ -50,6 +51,9 @@ class CandidateCacheBuildResult:
             "ambiguous_candidates": self.ambiguous_candidates,
             "ambiguous_slider_paths": self.ambiguous_slider_paths,
         }
+        if self.diagnostics is not None:
+            payload["diagnostics"] = dict(self.diagnostics)
+        return payload
 
 
 def generate_candidate_cache(
@@ -96,6 +100,14 @@ def generate_candidate_cache(
     total_slider_paths = 0
     ambiguous_candidates = 0
     ambiguous_slider_paths = 0
+    frame_candidate_counts: list[int] = []
+    candidate_scores: list[float] = []
+    decode_threshold_counts: list[int] = []
+    decode_nms_counts: list[int] = []
+    target_frame_count = 0
+    target_frames_with_any_candidate = 0
+    target_frames_with_matched_candidate = 0
+    recall_hits = {16: 0, 32: 0, 64: 0}
     with records_path.open("w", encoding="utf-8") as handle:
         for index in range(frame_total):
             sample = source[index]
@@ -129,7 +141,46 @@ def generate_candidate_cache(
                 action_window_ms=max(1000.0 / settings.data_input.sample_fps / 2, 1.0),
                 settings=settings,
             )
+            diagnostics = getattr(result, "diagnostics", None)
+            record["spatial_diagnostics"] = (
+                diagnostics.as_dict()
+                if diagnostics is not None
+                else {
+                    "threshold_candidate_count": len(record["candidates"]),
+                    "nms_candidate_count": len(record["candidates"]),
+                }
+            )
             total_candidates += len(record["candidates"])
+            frame_candidate_counts.append(len(record["candidates"]))
+            candidate_scores.extend(
+                float(candidate.get("score") or 0.0)
+                for candidate in record["candidates"]
+            )
+            decode_threshold_counts.append(
+                int(record["spatial_diagnostics"]["threshold_candidate_count"])
+            )
+            decode_nms_counts.append(
+                int(record["spatial_diagnostics"]["nms_candidate_count"])
+            )
+            temporal_target = record.get("temporal_target")
+            if isinstance(temporal_target, Mapping) and str(temporal_target.get("action")) != "no_op":
+                target_frame_count += 1
+                if record["candidates"]:
+                    target_frames_with_any_candidate += 1
+                if temporal_target.get("selected_candidate_id") is not None:
+                    target_frames_with_matched_candidate += 1
+                distances = temporal_target.get("candidate_distances_px")
+                if isinstance(distances, Sequence) and not isinstance(distances, (str, bytes)):
+                    valid_distances = [
+                        float(value)
+                        for value in distances
+                        if isinstance(value, int | float)
+                    ]
+                    if valid_distances:
+                        nearest = min(valid_distances)
+                        for radius in recall_hits:
+                            if nearest <= radius:
+                                recall_hits[radius] += 1
             total_slider_paths += len(record["slider_paths"])
             ambiguous_candidates += sum(
                 1 for candidate in record["candidates"] if candidate["ambiguous"]
@@ -139,6 +190,26 @@ def generate_candidate_cache(
             )
             handle.write(json.dumps(record, ensure_ascii=False) + "\n")
 
+    diagnostics = {
+        "frame_count": frame_total,
+        "frames_with_candidate": sum(1 for count in frame_candidate_counts if count > 0),
+        "candidate_total": total_candidates,
+        "candidate_per_frame_mean": _mean(frame_candidate_counts),
+        "candidate_per_frame_p50": _percentile(frame_candidate_counts, 50),
+        "candidate_per_frame_p95": _percentile(frame_candidate_counts, 95),
+        "candidate_score_min": min(candidate_scores) if candidate_scores else None,
+        "candidate_score_mean": _mean(candidate_scores),
+        "candidate_score_max": max(candidate_scores) if candidate_scores else None,
+        "raw_peaks_after_threshold_total": sum(decode_threshold_counts),
+        "after_nms_total": sum(decode_nms_counts),
+        "after_cache_serialization_total": total_candidates,
+        "target_frame_count": target_frame_count,
+        "target_frames_with_any_candidate": target_frames_with_any_candidate,
+        "target_frames_with_candidate_near_target": target_frames_with_matched_candidate,
+        "target_candidate_recall@16px": _rate(recall_hits[16], target_frame_count),
+        "target_candidate_recall@32px": _rate(recall_hits[32], target_frame_count),
+        "target_candidate_recall@64px": _rate(recall_hits[64], target_frame_count),
+    }
     manifest = {
         "version": CANDIDATE_CACHE_VERSION,
         "versions": version_manifest(settings)
@@ -160,6 +231,7 @@ def generate_candidate_cache(
         "slider_path_count": total_slider_paths,
         "ambiguous_candidate_count": ambiguous_candidates,
         "ambiguous_slider_path_count": ambiguous_slider_paths,
+        "diagnostics": diagnostics,
     }
     manifest_path.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
@@ -176,6 +248,7 @@ def generate_candidate_cache(
         slider_paths=total_slider_paths,
         ambiguous_candidates=ambiguous_candidates,
         ambiguous_slider_paths=ambiguous_slider_paths,
+        diagnostics=diagnostics,
     )
 
 
@@ -313,8 +386,35 @@ def _build_temporal_target(
         frame_width=frame_width,
         frame_height=frame_height,
     )
+    if transform_spec.transform_status == "unresolved":
+        return {
+            "target_strategy": "beatmap_action_v1",
+            "target_strategy_version": "beatmap-action-v2",
+            "coordinate_transform_version": transform_spec.version,
+            "transform_status": transform_spec.transform_status,
+            "action": target["action"],
+            "action_id": target["action_id"],
+            "selected_candidate_id": None,
+            "candidate_match_radius_px": 64.0,
+            "candidate_match_status": "unmatched",
+            "candidate_match_unmatched_reason": "coordinate_transform_unresolved",
+            "candidate_count": len(candidates),
+            "target_osu_xy": [float(target["x"]), float(target["y"])],
+            "time_offset_ms": float(target["time_offset_ms"]),
+            "object_type": target["object_type"],
+            "source_index": target["source_index"],
+            "object_start_ms": target["start_ms"],
+            "object_end_ms": target["end_ms"],
+        }
     video_xy = transform.osu_to_video(target["x"], target["y"])
-    candidate = _nearest_candidate(candidates, video_xy)
+    candidate, distances = _nearest_candidate(
+        candidates,
+        video_xy,
+        max_distance_px=64.0,
+    )
+    unmatched_reason = None
+    if candidate is None:
+        unmatched_reason = "no_candidates" if not candidates else "nearest_candidate_outside_radius"
     return {
         "target_strategy": "beatmap_action_v1",
         "target_strategy_version": "beatmap-action-v2",
@@ -324,6 +424,11 @@ def _build_temporal_target(
         "selected_candidate_id": (
             None if candidate is None else candidate.get("candidate_id")
         ),
+        "candidate_match_radius_px": 64.0,
+        "candidate_match_status": "matched" if candidate is not None else "unmatched",
+        "candidate_match_unmatched_reason": unmatched_reason,
+        "candidate_count": len(candidates),
+        "candidate_distances_px": distances,
         "target_video_xy": [float(video_xy[0]), float(video_xy[1])],
         "target_osu_xy": [float(target["x"]), float(target["y"])],
         "time_offset_ms": float(target["time_offset_ms"]),
@@ -501,19 +606,29 @@ def _object_kind(item: Mapping[str, Any]) -> str:
 def _nearest_candidate(
     candidates: Sequence[Mapping[str, Any]],
     point: tuple[float, float],
-) -> Mapping[str, Any] | None:
+    *,
+    max_distance_px: float,
+) -> tuple[Mapping[str, Any] | None, list[float]]:
     if not candidates:
-        return None
-    return min(
-        candidates,
-        key=lambda candidate: _point_distance(
-            point,
-            (
+        return None, []
+    points = torch.tensor(
+        [
+            [
                 _optional_float(candidate.get("x")) or 0.0,
                 _optional_float(candidate.get("y")) or 0.0,
-            ),
-        ),
+            ]
+            for candidate in candidates
+        ],
+        dtype=torch.float32,
+        device="cuda" if torch.cuda.is_available() else "cpu",
     )
+    target = torch.tensor([point], dtype=torch.float32, device=points.device)
+    distances_tensor = torch.cdist(target, points)[0]
+    nearest_distance, nearest_index = torch.min(distances_tensor, dim=0)
+    distances = [float(value) for value in distances_tensor.detach().cpu().tolist()]
+    if float(nearest_distance.detach().cpu()) > float(max_distance_px):
+        return None, distances
+    return candidates[int(nearest_index.detach().cpu())], distances
 
 
 def _candidate_ambiguity_reasons(
@@ -857,6 +972,22 @@ def _point_distance(
     second: tuple[float, float],
 ) -> float:
     return ((first[0] - second[0]) ** 2 + (first[1] - second[1]) ** 2) ** 0.5
+
+
+def _mean(values: Sequence[float | int]) -> float | None:
+    return sum(float(value) for value in values) / len(values) if values else None
+
+
+def _percentile(values: Sequence[float | int], percentile: float) -> float | None:
+    if not values:
+        return None
+    ordered = sorted(float(value) for value in values)
+    index = round((len(ordered) - 1) * percentile / 100.0)
+    return ordered[min(max(index, 0), len(ordered) - 1)]
+
+
+def _rate(count: int, total: int) -> float:
+    return float(count) / float(total) if total > 0 else 0.0
 
 
 def _cast_embedding(values: Sequence[float], save_dtype: str) -> list[float]:

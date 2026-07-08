@@ -7,7 +7,12 @@ from pathlib import Path
 
 import torch
 
-from package.coordinates import COORDINATE_TRANSFORM_VERSION, OsuVideoTransform, PlayfieldRect
+from package.coordinates import (
+    AffineOsuVideoTransform,
+    COORDINATE_TRANSFORM_VERSION,
+    OsuVideoTransform,
+    PlayfieldRect,
+)
 from traning.conf import Settings, load_settings
 from traning.core.decision.generator import build_candidate_cache_record
 from traning.core.model_export import migrate_settings_file
@@ -17,32 +22,41 @@ from traning.state.versioning import ensure_compatible_versions
 
 
 class PlanGapClosureTests(unittest.TestCase):
-    def test_training_configs_use_explicit_cropped_playfield_rect(self) -> None:
+    def test_training_configs_use_calibrated_affine_matrix(self) -> None:
         for config_path in (
             Path("configs/model_full_small_vram.yaml"),
             Path("configs/model_small_vram.yaml"),
         ):
             with self.subTest(config=str(config_path)):
                 settings = load_settings(config_path)
-                self.assertEqual(settings.coordinate_transform.mode, "explicit_source_rect")
-                rect = settings.coordinate_transform.playfield_rect
-                crop = settings.coordinate_transform.crop_rect
-                self.assertIsNotNone(rect)
-                self.assertIsNotNone(crop)
-                transform = OsuVideoTransform.from_rect(
-                    PlayfieldRect(
-                        left=rect.left - crop.left,
-                        top=rect.top - crop.top,
-                        width=rect.width,
-                        height=rect.height,
-                    )
+                self.assertEqual(settings.coordinate_transform.mode, "affine_matrix")
+                self.assertIsNotNone(settings.coordinate_transform.matrix)
+                transform, spec = transform_from_settings_or_sample(
+                    settings,
+                    frame_width=1484,
+                    frame_height=846,
                 )
-                self.assertEqual(transform.osu_to_video(0, 0), (178.0, 0.0))
-                self.assertEqual(transform.osu_to_video(512, 384), (1306.0, 846.0))
+                self.assertEqual(spec.source, "settings.affine_matrix")
+                self.assertEqual(spec.transform_status, "calibrated")
+                self.assertIsNotNone(spec.matrix)
+                point = transform.osu_to_video(425.0, 98.0)
+                restored = transform.video_to_osu(*point)
+                self.assertAlmostEqual(restored[0], 425.0, places=6)
+                self.assertAlmostEqual(restored[1], 98.0, places=6)
 
     def test_explicit_non_centered_playfield_round_trip(self) -> None:
         transform = OsuVideoTransform.from_rect(
             PlayfieldRect(left=111, top=27, width=1024, height=768)
+        )
+        for point in ((0.0, 0.0), (512.0, 384.0), (128.5, 240.25)):
+            video = transform.osu_to_video(*point)
+            restored = transform.video_to_osu(*video)
+            self.assertAlmostEqual(restored[0], point[0], places=6)
+            self.assertAlmostEqual(restored[1], point[1], places=6)
+
+    def test_affine_playfield_round_trip(self) -> None:
+        transform = AffineOsuVideoTransform.from_rows(
+            ((2.25, 0.05, 160.0), (-0.03, 2.2, 7.0))
         )
         for point in ((0.0, 0.0), (512.0, 384.0), (128.5, 240.25)):
             video = transform.osu_to_video(*point)

@@ -7,6 +7,7 @@ from typing import Any, Mapping
 OSU_PLAYFIELD_WIDTH = 512.0
 OSU_PLAYFIELD_HEIGHT = 384.0
 COORDINATE_TRANSFORM_VERSION = "osu-playfield-rect-v1"
+COORDINATE_CHAIN_VERSION = "osu-playfield-chain-v2"
 
 
 @dataclass(frozen=True)
@@ -47,17 +48,45 @@ class PlayfieldRect:
 
 
 @dataclass(frozen=True)
+class ImageSize:
+    width: float
+    height: float
+
+    def __post_init__(self) -> None:
+        if self.width <= 0 or self.height <= 0:
+            raise ValueError("image dimensions must be positive")
+
+    def as_dict(self) -> dict[str, float]:
+        return {"width": float(self.width), "height": float(self.height)}
+
+    @classmethod
+    def from_mapping(cls, value: Mapping[str, Any]) -> ImageSize:
+        missing = {"width", "height"} - set(value)
+        if missing:
+            raise ValueError(f"image size is missing: {', '.join(sorted(missing))}")
+        return cls(width=float(value["width"]), height=float(value["height"]))
+
+
+@dataclass(frozen=True)
 class CoordinateTransformSpec:
     """Stable metadata for osu/video coordinate conversion."""
 
     version: str
     rect: PlayfieldRect
     source: str = "explicit"
+    transform_status: str = "configured"
+    source_size: ImageSize | None = None
+    crop_rect: PlayfieldRect | None = None
+    resized_size: ImageSize | None = None
+    playfield_source_rect: PlayfieldRect | None = None
+    chain: Mapping[str, Any] | None = None
+    matrix: tuple[tuple[float, float, float], tuple[float, float, float]] | None = None
 
     def as_dict(self) -> dict[str, Any]:
-        return {
+        payload: dict[str, Any] = {
             "version": self.version,
             "source": self.source,
+            "transform_status": self.transform_status,
             "video_pixel_format": {
                 "left": "x coordinate in original frame pixels before crop/resize",
                 "top": "y coordinate in original frame pixels before crop/resize",
@@ -70,6 +99,149 @@ class CoordinateTransformSpec:
             },
             "rect": self.rect.as_dict(),
         }
+        if self.source_size is not None:
+            payload["source_size"] = self.source_size.as_dict()
+        if self.crop_rect is not None:
+            payload["crop_rect"] = self.crop_rect.as_dict()
+        if self.resized_size is not None:
+            payload["resized_size"] = self.resized_size.as_dict()
+        if self.playfield_source_rect is not None:
+            payload["playfield_source_rect"] = self.playfield_source_rect.as_dict()
+        if self.chain is not None:
+            payload["chain"] = dict(self.chain)
+        if self.matrix is not None:
+            payload["matrix"] = [list(row) for row in self.matrix]
+        return payload
+
+
+@dataclass(frozen=True)
+class CoordinateTransformChain:
+    """Traceable osu -> source -> crop -> training-frame transform."""
+
+    source_size: ImageSize
+    crop_rect: PlayfieldRect
+    resized_size: ImageSize
+    playfield_source_rect: PlayfieldRect | None
+    source: str
+    status: str = "configured"
+    version: str = COORDINATE_CHAIN_VERSION
+
+    @property
+    def resolved(self) -> bool:
+        return self.status != "unresolved" and self.playfield_source_rect is not None
+
+    @property
+    def scale_x(self) -> float:
+        return self.resized_size.width / self.crop_rect.width
+
+    @property
+    def scale_y(self) -> float:
+        return self.resized_size.height / self.crop_rect.height
+
+    @property
+    def playfield_frame_rect(self) -> PlayfieldRect:
+        if self.playfield_source_rect is None:
+            raise ValueError("coordinate transform is unresolved")
+        cropped = self.source_to_crop_rect(self.playfield_source_rect)
+        return PlayfieldRect(
+            left=cropped.left * self.scale_x,
+            top=cropped.top * self.scale_y,
+            width=cropped.width * self.scale_x,
+            height=cropped.height * self.scale_y,
+        )
+
+    def source_to_crop(self, x: float, y: float) -> tuple[float, float]:
+        return x - self.crop_rect.left, y - self.crop_rect.top
+
+    def crop_to_source(self, x: float, y: float) -> tuple[float, float]:
+        return x + self.crop_rect.left, y + self.crop_rect.top
+
+    def crop_to_training_frame(self, x: float, y: float) -> tuple[float, float]:
+        return x * self.scale_x, y * self.scale_y
+
+    def training_frame_to_crop(self, x: float, y: float) -> tuple[float, float]:
+        return x / self.scale_x, y / self.scale_y
+
+    def source_to_crop_rect(self, rect: PlayfieldRect) -> PlayfieldRect:
+        return PlayfieldRect(
+            left=rect.left - self.crop_rect.left,
+            top=rect.top - self.crop_rect.top,
+            width=rect.width,
+            height=rect.height,
+        )
+
+    def osu_to_source(self, x: float, y: float) -> tuple[float, float]:
+        if self.playfield_source_rect is None:
+            raise ValueError("coordinate transform is unresolved")
+        return OsuVideoTransform.from_rect(self.playfield_source_rect).osu_to_video(x, y)
+
+    def source_to_osu(self, x: float, y: float) -> tuple[float, float]:
+        if self.playfield_source_rect is None:
+            raise ValueError("coordinate transform is unresolved")
+        return OsuVideoTransform.from_rect(self.playfield_source_rect).video_to_osu(x, y)
+
+    def osu_to_training_frame(self, x: float, y: float) -> tuple[float, float]:
+        source_x, source_y = self.osu_to_source(x, y)
+        crop_x, crop_y = self.source_to_crop(source_x, source_y)
+        return self.crop_to_training_frame(crop_x, crop_y)
+
+    def training_frame_to_osu(self, x: float, y: float) -> tuple[float, float]:
+        crop_x, crop_y = self.training_frame_to_crop(x, y)
+        source_x, source_y = self.crop_to_source(crop_x, crop_y)
+        return self.source_to_osu(source_x, source_y)
+
+    def to_frame_transform(self) -> OsuVideoTransform:
+        return OsuVideoTransform.from_rect(self.playfield_frame_rect)
+
+    def as_dict(self, *, include_rects: bool = True) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "version": self.version,
+            "source": self.source,
+            "status": self.status,
+            "steps": (
+                "osu_to_source",
+                "source_to_crop",
+                "crop_to_training_frame",
+            ),
+            "reverse_steps": (
+                "training_frame_to_crop",
+                "crop_to_source",
+                "source_to_osu",
+            ),
+            "scale": {"x": self.scale_x, "y": self.scale_y},
+        }
+        if include_rects:
+            payload.update(
+                {
+                    "source_size": self.source_size.as_dict(),
+                    "crop_rect": self.crop_rect.as_dict(),
+                    "resized_size": self.resized_size.as_dict(),
+                    "playfield_source_rect": (
+                        None
+                        if self.playfield_source_rect is None
+                        else self.playfield_source_rect.as_dict()
+                    ),
+                }
+            )
+        return payload
+
+    def spec(self) -> CoordinateTransformSpec:
+        rect = (
+            self.playfield_frame_rect
+            if self.playfield_source_rect is not None
+            else PlayfieldRect(0.0, 0.0, self.resized_size.width, self.resized_size.height)
+        )
+        return CoordinateTransformSpec(
+            version=COORDINATE_TRANSFORM_VERSION,
+            rect=rect,
+            source=self.source,
+            transform_status=self.status,
+            source_size=self.source_size,
+            crop_rect=self.crop_rect,
+            resized_size=self.resized_size,
+            playfield_source_rect=self.playfield_source_rect,
+            chain=self.as_dict(include_rects=False),
+        )
 
 
 @dataclass(frozen=True)
@@ -158,9 +330,89 @@ class OsuVideoTransform:
         return radius * self.scale_x
 
 
+@dataclass(frozen=True)
+class AffineOsuVideoTransform:
+    """Map osu! playfield coordinates with a fitted 2x3 affine matrix."""
+
+    matrix: tuple[tuple[float, float, float], tuple[float, float, float]]
+
+    def __post_init__(self) -> None:
+        if len(self.matrix) != 2 or any(len(row) != 3 for row in self.matrix):
+            raise ValueError("affine coordinate transform requires a 2x3 matrix")
+        determinant = self.matrix[0][0] * self.matrix[1][1] - self.matrix[0][1] * self.matrix[1][0]
+        if abs(determinant) <= 1e-9:
+            raise ValueError("affine coordinate transform must be invertible")
+
+    @classmethod
+    def from_rows(
+        cls,
+        rows: Any,
+    ) -> AffineOsuVideoTransform:
+        if not isinstance(rows, (list, tuple)) or len(rows) != 2:
+            raise ValueError("affine matrix must contain two rows")
+        return cls(
+            matrix=(
+                (float(rows[0][0]), float(rows[0][1]), float(rows[0][2])),
+                (float(rows[1][0]), float(rows[1][1]), float(rows[1][2])),
+            )
+        )
+
+    @property
+    def rect(self) -> PlayfieldRect:
+        corners = (
+            self.osu_to_video(0.0, 0.0),
+            self.osu_to_video(OSU_PLAYFIELD_WIDTH, 0.0),
+            self.osu_to_video(0.0, OSU_PLAYFIELD_HEIGHT),
+            self.osu_to_video(OSU_PLAYFIELD_WIDTH, OSU_PLAYFIELD_HEIGHT),
+        )
+        xs = [point[0] for point in corners]
+        ys = [point[1] for point in corners]
+        return PlayfieldRect(
+            left=min(xs),
+            top=min(ys),
+            width=max(xs) - min(xs),
+            height=max(ys) - min(ys),
+        )
+
+    def spec(self, *, source: str = "affine_matrix", status: str = "calibrated") -> CoordinateTransformSpec:
+        return CoordinateTransformSpec(
+            version=COORDINATE_TRANSFORM_VERSION,
+            rect=self.rect,
+            source=source,
+            transform_status=status,
+            matrix=self.matrix,
+        )
+
+    def osu_to_video(self, x: float, y: float) -> tuple[float, float]:
+        return (
+            self.matrix[0][0] * x + self.matrix[0][1] * y + self.matrix[0][2],
+            self.matrix[1][0] * x + self.matrix[1][1] * y + self.matrix[1][2],
+        )
+
+    def video_to_osu(self, x: float, y: float) -> tuple[float, float]:
+        a, b, c = self.matrix[0]
+        d, e, f = self.matrix[1]
+        determinant = a * e - b * d
+        tx = x - c
+        ty = y - f
+        return (
+            (e * tx - b * ty) / determinant,
+            (-d * tx + a * ty) / determinant,
+        )
+
+    def osu_radius_to_video(self, radius: float) -> float:
+        scale_x = (self.matrix[0][0] ** 2 + self.matrix[1][0] ** 2) ** 0.5
+        scale_y = (self.matrix[0][1] ** 2 + self.matrix[1][1] ** 2) ** 0.5
+        return radius * (scale_x + scale_y) / 2.0
+
+
 __all__ = [
+    "AffineOsuVideoTransform",
+    "COORDINATE_CHAIN_VERSION",
     "COORDINATE_TRANSFORM_VERSION",
+    "CoordinateTransformChain",
     "CoordinateTransformSpec",
+    "ImageSize",
     "OSU_PLAYFIELD_HEIGHT",
     "OSU_PLAYFIELD_WIDTH",
     "OsuVideoTransform",

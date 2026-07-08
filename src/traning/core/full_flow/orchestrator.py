@@ -395,7 +395,9 @@ def _run_resume_section(_runtime: _FlowRuntime, *, reporter):
             "missing_fields": inheritance.missing_fields,
         },
         warnings=tuple(inheritance.missing_fields),
-        artifacts=tuple(str(path) for path in inheritance.stage_checkpoint_paths.values()),
+        artifacts=tuple(
+            str(path) for path in inheritance.stage_checkpoint_paths.values()
+        ),
         restored=bool(restored),
     )
     _persist(_runtime, status="resume-checked")
@@ -652,7 +654,10 @@ def _persist(
         "report_json_path": _runtime.report_json_path,
         "report_markdown_path": _runtime.report_markdown_path,
         "started_at": _runtime.started_at,
-        "ended_at": utc_now() if status not in {"running", "startup-passed", "resume-checked", "training-passed"} else None,
+        "ended_at": utc_now()
+        if status
+        not in {"running", "startup-passed", "resume-checked", "training-passed"}
+        else None,
         "stages": tuple(stage.as_dict() for stage in _runtime.stages.values()),
         "resume_report_path": (
             _runtime.output_dir / "resume_report.json"
@@ -729,7 +734,9 @@ def _base_manifest(config: FullFlowConfig, _runtime: _FlowRuntime) -> dict[str, 
         "gallery_samples_per_group": config.gallery_samples_per_group,
         "stage_specs": tuple(stage.as_dict() for stage in FULL_FLOW_STAGES),
         "selected_stages": _selected_stage_ids(config),
-        "force_stages": tuple(validate_stage_id(stage) for stage in config.force_stages),
+        "force_stages": tuple(
+            validate_stage_id(stage) for stage in config.force_stages
+        ),
         "skip_stages": tuple(validate_stage_id(stage) for stage in config.skip_stages),
         "config_fingerprint": _file_sha256(config.config_path),
         "dataset_fingerprint": _dataset_fingerprint(settings),
@@ -825,7 +832,10 @@ def _report_full_flow_stage(_runtime: _FlowRuntime, stage_id: str) -> None:
     pipeline_phase = _phase_for_full_flow_stage(stage_id)
     if stage.status in {"FAILED", "INTERRUPTED"}:
         pipeline_phase = PipelinePhase.FAILED
-    elif stage.stage_id == "REPORT_GENERATION" and stage.status in {"PASSED", "COMPLETED"}:
+    elif stage.stage_id == "REPORT_GENERATION" and stage.status in {
+        "PASSED",
+        "COMPLETED",
+    }:
         pipeline_phase = PipelinePhase.COMPLETED
     reporter.update_metrics(
         pipeline_phase=pipeline_phase.value,
@@ -916,12 +926,18 @@ def _stage_forced(config: FullFlowConfig, stage_id: str) -> bool:
 def _selected_stage_ids(config: FullFlowConfig) -> tuple[str, ...]:
     ids = tuple(stage.stage_id for stage in FULL_FLOW_STAGES)
     start = ids.index(validate_stage_id(config.from_stage)) if config.from_stage else 0
-    end = ids.index(validate_stage_id(config.until_stage)) + 1 if config.until_stage else len(ids)
+    end = (
+        ids.index(validate_stage_id(config.until_stage)) + 1
+        if config.until_stage
+        else len(ids)
+    )
     selected = list(ids[start:end])
     skipped = {validate_stage_id(stage) for stage in config.skip_stages}
     blocked = skipped & CRITICAL_STAGE_IDS
     if blocked:
-        raise ValueError("cannot skip critical full-flow stages: " + ", ".join(sorted(blocked)))
+        raise ValueError(
+            "cannot skip critical full-flow stages: " + ", ".join(sorted(blocked))
+        )
     return tuple(stage for stage in selected if stage not in skipped)
 
 
@@ -930,17 +946,23 @@ def _validate_config(config: FullFlowConfig) -> None:
         raise ValueError("full-flow mode must be execute, plan, dry-run, or status")
     if config.resume_policy not in {"strict", "auto", "weights-only", "none"}:
         raise ValueError("resume-policy must be strict, auto, weights-only, or none")
-    if config.progress_ui not in {"auto", "rich", "plain", "off"}:
-        raise ValueError("progress-ui must be auto, rich, plain, or off")
+    if config.progress_ui not in {"auto", "gui", "rich", "plain", "off"}:
+        raise ValueError("progress-ui must be auto, gui, rich, plain, or off")
     selected = set(_selected_stage_ids(config))
     forced = {validate_stage_id(stage) for stage in config.force_stages}
     skipped = {validate_stage_id(stage) for stage in config.skip_stages}
     conflicting = forced & skipped
     if conflicting:
-        raise ValueError("cannot force and skip the same full-flow stages: " + ", ".join(sorted(conflicting)))
+        raise ValueError(
+            "cannot force and skip the same full-flow stages: "
+            + ", ".join(sorted(conflicting))
+        )
     outside = forced - selected
     if outside:
-        raise ValueError("forced full-flow stages must be inside the selected stage range: " + ", ".join(sorted(outside)))
+        raise ValueError(
+            "forced full-flow stages must be inside the selected stage range: "
+            + ", ".join(sorted(outside))
+        )
 
 
 def _init_layout(output_dir: Path) -> None:
@@ -1001,16 +1023,22 @@ def _last_training_record(ramp_manifest_path: Path | None) -> Mapping[str, Any] 
         run_dir = Path(str((manifest["full_training"] or {}).get("run_dir")))
         return {
             "run_dir": str(run_dir),
-            "spatial": {"checkpoint_path": str(run_dir / "spatial" / "spatial_model.pt")},
+            "spatial": {
+                "checkpoint_path": str(run_dir / "spatial" / "spatial_model.pt")
+            },
             "temporal": {"checkpoint_path": summary.get("temporal_checkpoint")},
             "evaluation": {
                 "report_path": str(run_dir / "evaluation" / "trial_score_report.json"),
-                "gallery_request_path": str(run_dir / "evaluation" / "gallery_request.json"),
+                "gallery_request_path": str(
+                    run_dir / "evaluation" / "gallery_request.json"
+                ),
                 "next_job_path": str(run_dir / "evaluation" / "next_training_job.json"),
             },
             "summary": summary,
         }
-    levels = [level for level in manifest.get("levels", ()) if level.get("status") == "passed"]
+    levels = [
+        level for level in manifest.get("levels", ()) if level.get("status") == "passed"
+    ]
     return levels[-1] if levels else None
 
 
@@ -1031,7 +1059,9 @@ def _record_extra_files(record: Mapping[str, Any]) -> dict[str, Path]:
         "score_report": _record_path(record, ("evaluation", "report_path")),
         "gallery_request": _record_path(record, ("evaluation", "gallery_request_path")),
         "summary": _record_path(record, ("summary_path",)),
-        "candidate_cache_manifest": _record_path(record, ("candidate_cache", "manifest_path")),
+        "candidate_cache_manifest": _record_path(
+            record, ("candidate_cache", "manifest_path")
+        ),
     }
     return {key: path for key, path in candidates.items() if path is not None}
 

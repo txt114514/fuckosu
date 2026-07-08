@@ -25,7 +25,26 @@ def build_dashboard_handle(
     )
     mode = choose_ui_mode(settings.mode)
     renderer = None
-    if mode == "rich":
+    if mode == "gui":
+        try:
+            from visualization.core.gui import GuiDashboardRenderer
+
+            renderer = GuiDashboardRenderer(reporter)
+        except Exception as error:
+            reporter.emit_event(
+                TrainingEvent.create(
+                    event_type="ui",
+                    severity="warning",
+                    message_key="fatal_error",
+                    message_args={"error": f"GUI 初始化失败，切换纯文本模式：{error}"},
+                )
+            )
+            from visualization.core.renderers.plain_renderer import (
+                PlainDashboardRenderer,
+            )
+
+            renderer = PlainDashboardRenderer(reporter, settings=settings)
+    elif mode == "rich":
         try:
             from visualization.core.renderers.rich_renderer import RichDashboardRenderer
 
@@ -44,7 +63,9 @@ def build_dashboard_handle(
                     message_args={"error": f"Rich 初始化失败，切换纯文本模式：{error}"},
                 )
             )
-            from visualization.core.renderers.plain_renderer import PlainDashboardRenderer
+            from visualization.core.renderers.plain_renderer import (
+                PlainDashboardRenderer,
+            )
 
             renderer = PlainDashboardRenderer(reporter, settings=settings)
     elif mode == "plain":
@@ -89,7 +110,10 @@ def _launch_multi_terminal_panels(
             message_key="fatal_error"
             if result.status != "launched"
             else "dashboard_started",
-            message_args={"error": result.message, "run_id": result.session_name or run_id},
+            message_args={
+                "error": result.message,
+                "run_id": result.session_name or run_id,
+            },
             raw_message=result.message,
         )
     )

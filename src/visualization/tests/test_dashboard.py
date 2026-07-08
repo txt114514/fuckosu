@@ -6,6 +6,7 @@ import pty
 import select
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 import unittest
@@ -104,30 +105,33 @@ class VisualizationDashboardTests(unittest.TestCase):
         )
 
     def test_warning_stage_event_includes_diagnostic_detail(self) -> None:
-        output = Path("/tmp/visualization_test_stage_warning_detail")
-        with create_dashboard_reporter(
-            run_id="warning-detail-test",
-            output_dir=output,
-            progress_ui="plain",
-        ) as handle:
-            handle.reporter.update_pipeline_stage(
-                PipelineStageState(
-                    stage_id="evaluation",
-                    name="固定评估评分",
-                    status="warning",
-                    processed=500,
-                    total=500,
-                    warning_count=183,
-                    message="质量分 0.634000 低于通过阈值 0.800000；未解析目标 183/183",
-                    score=0.634,
-                    threshold=0.8,
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary)
+            with create_dashboard_reporter(
+                run_id="warning-detail-test",
+                output_dir=output,
+                progress_ui="plain",
+            ) as handle:
+                handle.reporter.update_pipeline_stage(
+                    PipelineStageState(
+                        stage_id="evaluation",
+                        name="固定评估评分",
+                        status="warning",
+                        processed=500,
+                        total=500,
+                        warning_count=183,
+                        message="质量分 0.634000 低于通过阈值 0.800000；未解析目标 183/183",
+                        score=0.634,
+                        threshold=0.8,
+                    )
                 )
-            )
 
-        events = [
-            json.loads(line)
-            for line in (output / "events.jsonl").read_text(encoding="utf-8").splitlines()
-        ]
+            events = [
+                json.loads(line)
+                for line in (output / "events.jsonl")
+                .read_text(encoding="utf-8")
+                .splitlines()
+            ]
         warning_events = [
             event
             for event in events
@@ -165,7 +169,9 @@ class VisualizationDashboardTests(unittest.TestCase):
             (output / "stop_state.json").read_text(encoding="utf-8"),
         )
 
-    def test_stop_state_keeps_global_status_failed_after_report_stage_passes(self) -> None:
+    def test_stop_state_keeps_global_status_failed_after_report_stage_passes(
+        self,
+    ) -> None:
         output = Path("/tmp/visualization_test_failed_status")
         with create_dashboard_reporter(
             run_id="failed-status-test",
@@ -193,10 +199,14 @@ class VisualizationDashboardTests(unittest.TestCase):
                 phase="运行报告",
             )
 
-        state = json.loads((output / "dashboard_state.json").read_text(encoding="utf-8"))
+        state = json.loads(
+            (output / "dashboard_state.json").read_text(encoding="utf-8")
+        )
         self.assertEqual(state["status"], "failed")
         self.assertEqual(state["pipeline_phase"], "failed")
-        self.assertEqual(state["pipeline_stages"]["report_generation"]["status"], "passed")
+        self.assertEqual(
+            state["pipeline_stages"]["report_generation"]["status"], "passed"
+        )
 
     def test_stop_summary_exits_for_tty_keys(self) -> None:
         for label, key in {

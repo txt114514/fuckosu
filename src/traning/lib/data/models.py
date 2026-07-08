@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from traning.lib.data.annotation import SegmentAnnotation
 
@@ -16,6 +17,7 @@ class SegmentRecord:
     video_path: Path
     annotation_path: Path
     annotation: SegmentAnnotation
+    preprocessing_metadata: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)

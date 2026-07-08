@@ -468,10 +468,12 @@ def run_training(
     inherit_from: Path | str | None = None,
     resume_policy: str = "none",
 ):
-    if progress_ui not in {"auto", "rich", "plain", "off"}:
-        raise CliParameterError("progress-ui must be auto, rich, plain, or off")
+    if progress_ui not in {"auto", "gui", "rich", "plain", "off"}:
+        raise CliParameterError("progress-ui must be auto, gui, rich, plain, or off")
     if resume_policy not in {"strict", "auto", "weights-only", "none"}:
-        raise CliParameterError("resume-policy must be strict, auto, weights-only, or none")
+        raise CliParameterError(
+            "resume-policy must be strict, auto, weights-only, or none"
+        )
     settings = load_settings(config)
     selected = _select_device(device)
     run_dir = _run_dir("full_training")
@@ -487,7 +489,9 @@ def run_training(
             current_settings=settings,
             policy=resume_policy,  # type: ignore[arg-type]
         )
-        _write_json_report(run_dir / "dashboard" / "resume_report.json", inheritance.as_dict())
+        _write_json_report(
+            run_dir / "dashboard" / "resume_report.json", inheritance.as_dict()
+        )
         if inheritance.status not in {"skipped", "missing"}:
             reporter.emit_event(
                 TrainingEvent.create(
@@ -515,9 +519,7 @@ def run_training(
                 spatial_learning_rate=spatial_learning_rate,
                 temporal_learning_rate=temporal_learning_rate,
                 patch_limit=None if patch_limit == 0 else patch_limit,
-                cache_max_frames=(
-                    None if cache_max_frames == 0 else cache_max_frames
-                ),
+                cache_max_frames=(None if cache_max_frames == 0 else cache_max_frames),
                 sequence_length=sequence_length,
                 candidate_slots=candidate_slots,
                 parameter_group_id=parameter_group_id,
@@ -640,10 +642,12 @@ def run_training_ramp_job(
     inherit_from: Path | str | None = None,
     resume_policy: str = "none",
 ):
-    if progress_ui not in {"auto", "rich", "plain", "off"}:
-        raise CliParameterError("progress-ui must be auto, rich, plain, or off")
+    if progress_ui not in {"auto", "gui", "rich", "plain", "off"}:
+        raise CliParameterError("progress-ui must be auto, gui, rich, plain, or off")
     if resume_policy not in {"strict", "auto", "weights-only", "none"}:
-        raise CliParameterError("resume-policy must be strict, auto, weights-only, or none")
+        raise CliParameterError(
+            "resume-policy must be strict, auto, weights-only, or none"
+        )
     selected = _select_device(device)
     settings = load_settings(config)
     inheritance = load_inheritance_package(
@@ -694,9 +698,11 @@ def run_full_flow_job(
         raise CliParameterError("mode must be execute, plan, dry-run, or status")
     selected_policy = "auto" if resume and resume_policy == "none" else resume_policy
     if selected_policy not in {"strict", "auto", "weights-only", "none"}:
-        raise CliParameterError("resume-policy must be strict, auto, weights-only, or none")
-    if progress_ui not in {"auto", "rich", "plain", "off"}:
-        raise CliParameterError("progress-ui must be auto, rich, plain, or off")
+        raise CliParameterError(
+            "resume-policy must be strict, auto, weights-only, or none"
+        )
+    if progress_ui not in {"auto", "gui", "rich", "plain", "off"}:
+        raise CliParameterError("progress-ui must be auto, gui, rich, plain, or off")
     selected_inherit_from: Path | str | None = (
         "latest" if resume and inherit_from is None else inherit_from
     )
@@ -1193,7 +1199,9 @@ def run(
         selected_inherit_from: str | None = (
             "latest" if resume and inherit_from is None else inherit_from
         )
-        selected_policy = "auto" if resume and resume_policy == "none" else resume_policy
+        selected_policy = (
+            "auto" if resume and resume_policy == "none" else resume_policy
+        )
         result = run_training(
             config=config,
             split=split,
@@ -1375,7 +1383,9 @@ def ramp_to_full(
         selected_inherit_from: str | None = (
             "latest" if resume and inherit_from is None else inherit_from
         )
-        selected_policy = "auto" if resume and resume_policy == "none" else resume_policy
+        selected_policy = (
+            "auto" if resume and resume_policy == "none" else resume_policy
+        )
         result = run_training_ramp_job(
             config=config,
             device=device,

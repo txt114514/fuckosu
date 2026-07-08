@@ -91,11 +91,12 @@ class CropRectSettings(BaseModel):
 
 class CoordinateTransformSettings(BaseModel):
     version: str = COORDINATE_TRANSFORM_VERSION
-    mode: Literal["explicit_rect", "explicit_source_rect", "legacy_centered"] = (
+    mode: Literal["explicit_rect", "explicit_source_rect", "affine_matrix", "legacy_centered"] = (
         "legacy_centered"
     )
     playfield_rect: PlayfieldRectSettings | None = None
     crop_rect: CropRectSettings | None = None
+    matrix: tuple[tuple[float, float, float], tuple[float, float, float]] | None = None
 
     @model_validator(mode="after")
     def validate_transform(self) -> CoordinateTransformSettings:
@@ -110,6 +111,8 @@ class CoordinateTransformSettings(BaseModel):
                 raise ValueError("explicit_source_rect mode requires playfield_rect")
             if self.crop_rect is None:
                 raise ValueError("explicit_source_rect mode requires crop_rect")
+        if self.mode == "affine_matrix" and self.matrix is None:
+            raise ValueError("affine_matrix mode requires matrix")
         return self
 
 

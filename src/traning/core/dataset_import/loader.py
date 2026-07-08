@@ -26,7 +26,7 @@ def build_dataset(
     config = settings.data_input
     transform_config = settings.coordinate_transform
     coordinate_transform = None
-    if transform_config.mode in {"explicit_rect", "explicit_source_rect"}:
+    if transform_config.mode == "explicit_rect":
         transform, spec = transform_from_settings_or_sample(
             settings,
             frame_width=settings.input.width,

@@ -1,8 +1,12 @@
 """Stable APIs shared by multiple top-level modules under src."""
 
 from package.coordinates import (
+    AffineOsuVideoTransform,
+    COORDINATE_CHAIN_VERSION,
     COORDINATE_TRANSFORM_VERSION,
+    CoordinateTransformChain,
     CoordinateTransformSpec,
+    ImageSize,
     OSU_PLAYFIELD_HEIGHT,
     OSU_PLAYFIELD_WIDTH,
     OsuVideoTransform,
@@ -65,12 +69,15 @@ from package.slider_path import sample_slider_path
 
 __all__ = [
     "ArtifactFileRef",
+    "AffineOsuVideoTransform",
     "CandidateCacheFrameRef",
     "CheckStatus",
     "CheckpointRef",
+    "COORDINATE_CHAIN_VERSION",
     "COORDINATE_TRANSFORM_VERSION",
     "ContractMixin",
     "CoordinateSpace",
+    "CoordinateTransformChain",
     "CoordinateTransformSpec",
     "CurriculumStage",
     "DataSplit",
@@ -82,6 +89,7 @@ __all__ = [
     "ErrorDomain",
     "EvaluationOutcome",
     "FrameSampleRef",
+    "ImageSize",
     "FrameRef",
     "OSU_PLAYFIELD_HEIGHT",
     "OSU_PLAYFIELD_WIDTH",

@@ -135,6 +135,8 @@ def _sample_from_rows(
         predicted_video_xy=predicted_video_xy,
         settings=settings,
     )
+    temporal_target = cache_row.get("temporal_target")
+    target_metadata = temporal_target if isinstance(temporal_target, Mapping) else {}
     return SampleScoringInput(
         sample_key=sample_key,
         subproject=_subproject_from_sample_key(sample_key),
@@ -153,6 +155,16 @@ def _sample_from_rows(
             ),
             "predicted_video_xy": predicted_video_xy,
             "time_offset_ms": decision.get("time_offset_ms"),
+            "candidate_count": len(cache_row.get("candidates") or ()),
+            "candidate_match_status": target_metadata.get("candidate_match_status"),
+            "candidate_match_unmatched_reason": target_metadata.get(
+                "candidate_match_unmatched_reason"
+            ),
+            "transform_status": (
+                (cache_row.get("coordinate_transform") or {}).get("transform_status")
+                if isinstance(cache_row.get("coordinate_transform"), Mapping)
+                else None
+            ),
         },
     )
 

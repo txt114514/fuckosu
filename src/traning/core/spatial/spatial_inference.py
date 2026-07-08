@@ -20,9 +20,11 @@ from traning.lib.runtime import (
 )
 from traning.lib.training.spatial_decode import (
     SpatialCandidate,
+    SpatialDecodeDiagnostics,
     SpatialPredictionCanvas,
     SpatialPredictionMaps,
     SliderPathCandidate,
+    diagnose_spatial_candidate_decode,
     decode_slider_paths,
     decode_spatial_candidates,
 )
@@ -38,13 +40,14 @@ SPATIAL_GPU_TASKS: tuple[str, ...] = (
     "local_encoder_forward_per_patch",
     "global_local_fusion_per_patch",
     "spatial_prediction_head_per_patch",
+    "heatmap_score_localmax_threshold_topk",
 )
 
 SPATIAL_CPU_TASKS: tuple[str, ...] = (
     "rgb_normalization_and_color_cues",
     "patch_stream_and_padding",
     "prediction_detach_and_canvas_fusion",
-    "topk_localmax_nms_candidate_decode",
+    "nms_candidate_finalize",
     "slider_connected_component_path_decode",
     "json_summary_or_candidate_cache_io",
 )
@@ -55,6 +58,7 @@ class SpatialFrameInferenceResult:
     candidates: tuple[SpatialCandidate, ...]
     slider_paths: tuple[SliderPathCandidate, ...]
     maps: SpatialPredictionMaps
+    diagnostics: SpatialDecodeDiagnostics
     memory_budget: RuntimeMemoryBudget
     device: str
     patches_processed: int
@@ -82,6 +86,7 @@ class SpatialFrameInferenceResult:
             ),
             "gpu_tasks": self.gpu_tasks,
             "cpu_tasks": self.cpu_tasks,
+            "diagnostics": self.diagnostics.as_dict(),
         }
 
 
@@ -186,6 +191,13 @@ def run_spatial_frame_inference(
         score_threshold=score_threshold,
         nms_radius_px=nms_radius_px,
     )
+    diagnostics = diagnose_spatial_candidate_decode(
+        maps,
+        selected_count=len(candidates),
+        max_candidates=max_candidates,
+        score_threshold=score_threshold,
+        nms_radius_px=nms_radius_px,
+    )
     slider_paths = decode_slider_paths(
         maps,
         threshold=slider_threshold,
@@ -197,6 +209,7 @@ def run_spatial_frame_inference(
         candidates=candidates,
         slider_paths=slider_paths,
         maps=maps,
+        diagnostics=diagnostics,
         memory_budget=memory_budget,
         device=str(device),
         patches_processed=processed,

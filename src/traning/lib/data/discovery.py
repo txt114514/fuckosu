@@ -4,6 +4,7 @@ from pathlib import Path
 
 from traning.lib.data.annotation import load_annotation
 from traning.lib.data.models import DatasetIssue, DiscoveryResult, SegmentRecord
+from traning.lib.data.preprocessing_metadata import load_preprocessing_metadata
 
 
 def discover_segments(
@@ -61,6 +62,10 @@ def discover_segments(
                 video_path=video_path,
                 annotation_path=annotation_path,
                 annotation=annotation,
+                preprocessing_metadata=load_preprocessing_metadata(
+                    dataset_root,
+                    item_name,
+                ),
             )
         )
         if max_segments is not None and len(records) >= max_segments:

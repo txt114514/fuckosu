@@ -72,5 +72,5 @@ def _compact_hint(page: str, pages: tuple[str, ...]) -> str:
     current = pages.index(page) + 1 if page in pages else 1
     return (
         f"\n紧凑页：{current}/{len(pages)}；"
-        "Tab/空格下一页，b上一页，f完整视图，Ctrl+C中断"
+        "Rich 非交互预览；正式训练 UI 使用 --progress-ui gui"
     )

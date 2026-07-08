@@ -81,6 +81,7 @@ class SegmentFrameDataset(Dataset[dict[str, Any]]):
                 record.annotation.difficulty.circle_radius_osu_pixels
             ),
             "approach_preempt_ms": record.annotation.difficulty.approach_preempt_ms,
+            "preprocessing_metadata": record.preprocessing_metadata,
             "coordinate_transform": self.coordinate_transform,
         }
 

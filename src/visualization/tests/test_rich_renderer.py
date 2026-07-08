@@ -12,11 +12,15 @@ from visualization.conf import DashboardSettings
 from visualization.core.display_overrides import apply_display_overrides
 from visualization.core.renderers.rich_renderer import RichDashboardRenderer
 from visualization.core.view_router import render_dashboard_page
-from visualization.lib import DashboardReporter, PipelineStageState, TrainingDashboardState
+from visualization.lib import (
+    DashboardReporter,
+    PipelineStageState,
+    TrainingDashboardState,
+)
 
 
 class RichRendererPaginationTests(unittest.TestCase):
-    def test_arrow_keys_change_pages_without_wrapping(self) -> None:
+    def test_rich_renderer_does_not_start_keyboard_listener(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             reporter = DashboardReporter(
                 run_id="keyboard",
@@ -26,16 +30,9 @@ class RichRendererPaginationTests(unittest.TestCase):
                 reporter,
                 settings=DashboardSettings(),
             )
-            renderer._page_count = 3
 
-            self.assertTrue(renderer._handle_key("\x1b[B"))
-            self.assertEqual(renderer._page_index, 1)
-            self.assertTrue(renderer._handle_key("\x1b[B"))
-            self.assertEqual(renderer._page_index, 2)
-            self.assertFalse(renderer._handle_key("\x1b[B"))
-            self.assertEqual(renderer._page_index, 2)
-            self.assertTrue(renderer._handle_key("\x1b[A"))
-            self.assertEqual(renderer._page_index, 1)
+            self.assertFalse(hasattr(renderer, "_handle_key"))
+            self.assertFalse(hasattr(renderer, "_keyboard_thread"))
 
     def test_dashboard_page_splits_complete_panels(self) -> None:
         state = TrainingDashboardState(
@@ -64,7 +61,8 @@ class RichRendererPaginationTests(unittest.TestCase):
 
         self.assertGreater(page_count, 1)
         self.assertIn("页面：1/", output)
-        self.assertIn("固定页，不自动切换", output)
+        self.assertIn("Rich 仅保留非交互状态输出", output)
+        self.assertNotIn("数字切页", output)
         self.assertNotIn("自动轮播", output)
 
     def test_compact_dashboard_uses_semantic_pages_on_small_terminal(self) -> None:

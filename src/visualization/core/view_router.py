@@ -100,12 +100,11 @@ def _render_footer(
     state_path: str | None,
 ) -> Panel:
     state_text = f"；完整状态：{state_path}" if state_path else ""
-    keyboard_text = "；键盘可用时 Tab/空格下一页，b上一页，数字切页，Ctrl+C中断"
     return Panel(
         (
             f"页面：{selected_index + 1}/{page_count}；"
-            "固定页，不自动切换"
-            f"{keyboard_text}{state_text}"
+            "Rich 仅保留非交互状态输出，正式训练 UI 请使用 --progress-ui gui"
+            f"{state_text}"
         ),
         title="视图",
     )

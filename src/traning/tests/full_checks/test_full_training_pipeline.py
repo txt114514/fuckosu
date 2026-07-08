@@ -17,6 +17,7 @@ from traning.core.decision import (
     TemporalDecisionRunResult,
     run_full_training_pipeline,
 )
+from traning.core.decision.pipeline import _optimization_base_parameters
 from traning.core.spatial import SpatialTrainingResult
 from traning.core.temporal import TemporalTrainingResult
 from traning.lib.visualization import GalleryResult
@@ -24,6 +25,27 @@ from visualization.lib import NullReporter, PipelinePhase, PipelineStageState
 
 
 class FullTrainingPipelineTests(unittest.TestCase):
+    def test_optimization_base_parameters_include_candidate_cache_defaults(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            settings = Settings()
+            config = FullTrainingRunConfig(
+                run_dir=Path(temporary),
+                device=torch.device("cpu"),
+                parameter_group_id="ramp-a",
+            )
+
+            parameters = _optimization_base_parameters(settings, config=config)
+
+        self.assertEqual(parameters.training["parameter_group_id"], "ramp-a")
+        self.assertEqual(
+            parameters.inference["score_threshold"],
+            settings.candidate_cache.score_threshold,
+        )
+        self.assertEqual(
+            parameters.inference["max_candidates"],
+            settings.candidate_cache.max_candidates_per_frame,
+        )
+
     def test_pipeline_runs_all_training_steps_and_writes_summary(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             run_dir = Path(temporary)

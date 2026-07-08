@@ -74,15 +74,46 @@ def _unresolved_example(
     sample: SampleScoreReport,
     target_id: str,
 ) -> HardExample:
+    primary_error, tags, reason = _unresolved_error_domain(sample)
     return HardExample(
         sample_key=sample.sample_key,
         subproject=sample.subproject,
-        primary_error="decision",
-        error_tags=("unresolved_target",),
+        primary_error=primary_error,
+        error_tags=tags,
         severity=2.0,
         frame_index=sample.frame_index,
         target_id=target_id,
-        reason="target remained active after all predicted clicks",
+        reason=reason,
+    )
+
+
+def _unresolved_error_domain(
+    sample: SampleScoreReport,
+) -> tuple[str, tuple[str, ...], str]:
+    metadata = sample.metadata
+    if metadata.get("transform_status") == "unresolved":
+        return (
+            "spatial",
+            ("unresolved_target", "coordinate_transform_unresolved"),
+            "coordinate transform unresolved before target-candidate matching",
+        )
+    if "candidate_count" in metadata and int(metadata.get("candidate_count") or 0) <= 0:
+        return (
+            "spatial",
+            ("unresolved_target", "candidate_recall_empty"),
+            "target frame had no spatial candidates",
+        )
+    reason = str(metadata.get("candidate_match_unmatched_reason") or "")
+    if reason:
+        return (
+            "spatial",
+            ("unresolved_target", "candidate_match_failed", reason),
+            f"target-candidate matching failed: {reason}",
+        )
+    return (
+        "decision",
+        ("unresolved_target",),
+        "target remained active after all predicted clicks",
     )
 
 
@@ -120,9 +151,10 @@ def analyze_trial_attribution(
                 )
             )
         for target_id in sample.sequence.unresolved_target_ids:
-            domain_counts["decision"] += 1
-            tag_counts["unresolved_target"] += 1
-            hard_examples.append(_unresolved_example(sample, target_id))
+            example = _unresolved_example(sample, target_id)
+            domain_counts[example.primary_error] += 1
+            tag_counts.update(example.error_tags)
+            hard_examples.append(example)
 
     total_errors = sum(domain_counts.values())
     domain_rates = {

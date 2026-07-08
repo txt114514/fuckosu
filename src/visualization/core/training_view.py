@@ -14,9 +14,13 @@ from visualization.conf.messages import (
     display_text,
 )
 from visualization.core.panels.best_parameters_panel import render_best_parameters_panel
-from visualization.core.panels.current_learning_panel import render_current_learning_panel
+from visualization.core.panels.current_learning_panel import (
+    render_current_learning_panel,
+)
 from visualization.core.panels.events_panel import render_events_panel
-from visualization.core.panels.overall_progress_panel import render_overall_progress_panel
+from visualization.core.panels.overall_progress_panel import (
+    render_overall_progress_panel,
+)
 from visualization.core.panels.resources_panel import render_resources_panel
 from visualization.lib.models import TrainingDashboardState
 
@@ -205,7 +209,7 @@ def _page_hint(page: str, pages: tuple[str, ...]) -> str:
     index = pages.index(page) + 1 if page in pages else 1
     return (
         f"{index}/{len(pages)} {display_page(page)}；"
-        "1-6切页，Tab/空格下一页，b上一页，f完整视图，Ctrl+C中断"
+        "Rich 非交互预览；正式训练 UI 使用 --progress-ui gui"
     )
 
 

@@ -16,6 +16,8 @@ RUN apt-get update -qq && \
         libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 \
         libx11-6 libxrandr2 libxi6 libxtst6 libxfixes3 \
         libxcursor1 libxinerama1 libxxf86vm1 \
+        libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-xkb1 \
+        libxkbcommon-x11-0 \
         libnss3 libatk1.0-0 libatk-bridge2.0-0 \
         libgbm1 libasound2 \
         iputils-ping curl sudo util-linux \
@@ -43,31 +45,6 @@ USER ${USERNAME}
 WORKDIR /home/${USERNAME}
 
 # pip 全局安装
-RUN pip install --no-cache-dir \
-    numpy scipy pandas matplotlib openpyxl pillow \
-    opencv-python-headless \
-    tqdm mss dxcam \
-    pyautogui python-xlib evdev \
-    torchvision torchaudio \
-    stable-baselines3 gymnasium \
-    tensorboard slider \
-    rich loguru \
-    typer \
-    prefect \
-    pydantic \
-    pydantic-settings \
-    pyyaml \
-    sqlmodel \
-    alembic \
-    av \
-    einops \
-    safetensors \
-    psutil \
-    optuna \
-    pytest \
-    pytest-cov \
-    mypy \
-    types-PyYAML \
-    pathspec \
-    ruff
+COPY requirements.txt /tmp/osu-ai-requirements.txt
+RUN pip install --no-cache-dir -r /tmp/osu-ai-requirements.txt
 CMD ["/bin/bash"]

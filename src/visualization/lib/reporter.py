@@ -226,7 +226,9 @@ class DashboardReporter:
     def report_resource(self, resource: ResourceState) -> None:
         self._state.resources = resource
         self._touch()
-        self.store.write_named("resource_history.jsonl.current.json", resource.as_dict())
+        self.store.write_named(
+            "resource_history.jsonl.current.json", resource.as_dict()
+        )
         monitor_error = resource.gpu_monitor_error
         if monitor_error and monitor_error != self._last_resource_monitor_error:
             self._record_event(
@@ -274,7 +276,9 @@ class DashboardReporter:
             if stop.reason != "USER_INTERRUPTED"
             else self._state.pipeline_phase
         )
-        self._state.status = "interrupted" if stop.reason == "USER_INTERRUPTED" else "failed"
+        self._state.status = (
+            "interrupted" if stop.reason == "USER_INTERRUPTED" else "failed"
+        )
         self.store.write_named("stop_state.json", stop.as_dict())
         self.emit_event(
             TrainingEvent.create(
@@ -462,10 +466,7 @@ def _should_skip_terminal_global_metric(
 
 
 def _parameter_status_payload(state: TrainingDashboardState) -> dict[str, object]:
-    stages = [
-        _stage_status_payload(stage)
-        for stage in state.pipeline_stages.values()
-    ]
+    stages = [_stage_status_payload(stage) for stage in state.pipeline_stages.values()]
     stage_counts: dict[str, int] = {}
     passed_tests: list[str] = []
     warning_tests: list[str] = []
@@ -542,8 +543,12 @@ def _parameter_status_payload(state: TrainingDashboardState) -> dict[str, object
         "budget_used": state.global_step,
         "budget_total": stage_budget,
         "budget_used_ratio": _ratio(state.global_step, stage_budget),
-        "stop_reason": state.stop_state.reason if state.stop_state is not None else None,
-        "stop_message": state.stop_state.message if state.stop_state is not None else None,
+        "stop_reason": state.stop_state.reason
+        if state.stop_state is not None
+        else None,
+        "stop_message": state.stop_state.message
+        if state.stop_state is not None
+        else None,
         "updated_at": state.updated_at,
     }
 
@@ -607,7 +612,9 @@ def _derive_trial_status(state: TrainingDashboardState) -> str | None:
 
 
 class ManagedDashboardHandle:
-    def __init__(self, reporter: DashboardReporter, renderer: object | None = None) -> None:
+    def __init__(
+        self, reporter: DashboardReporter, renderer: object | None = None
+    ) -> None:
         self.reporter = reporter
         self.renderer = renderer
 
@@ -631,6 +638,13 @@ class ManagedDashboardHandle:
 def choose_ui_mode(mode: str) -> str:
     if mode != "auto":
         return mode
+    try:
+        from visualization.core.gui import is_gui_environment_available
+
+        if is_gui_environment_available():
+            return "gui"
+    except Exception:
+        pass
     if sys.stdout.isatty() and sys.stdin.isatty():
         return "rich"
     return "plain"

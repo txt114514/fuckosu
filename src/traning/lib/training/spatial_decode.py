@@ -62,6 +62,48 @@ class SliderPathCandidate:
     endpoint_count: int
 
 
+@dataclass(frozen=True)
+class SpatialDecodeDiagnostics:
+    score_min: float
+    score_mean: float
+    score_max: float
+    feature_variance: float
+    center_min: float
+    center_max: float
+    visible_min: float
+    visible_max: float
+    type_score_min: float
+    type_score_max: float
+    raw_cell_count: int
+    local_max_count: int
+    threshold_candidate_count: int
+    nms_candidate_count: int
+    max_candidates: int
+    score_threshold: float
+    nms_radius_px: float
+
+    def as_dict(self) -> dict[str, float | int]:
+        return {
+            "score_min": self.score_min,
+            "score_mean": self.score_mean,
+            "score_max": self.score_max,
+            "feature_variance": self.feature_variance,
+            "center_min": self.center_min,
+            "center_max": self.center_max,
+            "visible_min": self.visible_min,
+            "visible_max": self.visible_max,
+            "type_score_min": self.type_score_min,
+            "type_score_max": self.type_score_max,
+            "raw_cell_count": self.raw_cell_count,
+            "local_max_count": self.local_max_count,
+            "threshold_candidate_count": self.threshold_candidate_count,
+            "nms_candidate_count": self.nms_candidate_count,
+            "max_candidates": self.max_candidates,
+            "score_threshold": self.score_threshold,
+            "nms_radius_px": self.nms_radius_px,
+        }
+
+
 class SpatialPredictionCanvas:
     """CPU canvas for fusing detached dense spatial predictions across patches."""
 
@@ -229,6 +271,58 @@ def decode_spatial_candidates(
         if len(selected) >= max_candidates:
             break
     return tuple(selected)
+
+
+def diagnose_spatial_candidate_decode(
+    maps: SpatialPredictionMaps,
+    *,
+    selected_count: int,
+    max_candidates: int,
+    score_threshold: float,
+    nms_radius_px: float,
+) -> SpatialDecodeDiagnostics:
+    non_background = maps.object_type_probs[1:]
+    if non_background.shape[0] == 0:
+        empty = maps.center.new_zeros(())
+        type_score = empty
+        score_map = maps.center[0] * 0.0
+    else:
+        type_score, _ = non_background.max(dim=0)
+        score_map = maps.center[0] * maps.visible[0].clamp_min(0.05) * type_score
+        score_map = score_map * (maps.weights[0] > 0).to(score_map.dtype)
+    local_max = score_map == F.max_pool2d(
+        score_map.view(1, 1, *score_map.shape),
+        kernel_size=3,
+        stride=1,
+        padding=1,
+    )[0, 0]
+    valid = maps.weights[0] > 0
+    threshold_mask = local_max & valid & (score_map >= score_threshold)
+    return SpatialDecodeDiagnostics(
+        score_min=float(score_map[valid].min().item()) if bool(valid.any()) else 0.0,
+        score_mean=float(score_map[valid].mean().item()) if bool(valid.any()) else 0.0,
+        score_max=float(score_map[valid].max().item()) if bool(valid.any()) else 0.0,
+        feature_variance=float(maps.embedding[:, valid].var().item())
+        if bool(valid.any())
+        else 0.0,
+        center_min=float(maps.center[0, valid].min().item()) if bool(valid.any()) else 0.0,
+        center_max=float(maps.center[0, valid].max().item()) if bool(valid.any()) else 0.0,
+        visible_min=float(maps.visible[0, valid].min().item()) if bool(valid.any()) else 0.0,
+        visible_max=float(maps.visible[0, valid].max().item()) if bool(valid.any()) else 0.0,
+        type_score_min=float(type_score[valid].min().item())
+        if bool(valid.any()) and type_score.ndim
+        else 0.0,
+        type_score_max=float(type_score[valid].max().item())
+        if bool(valid.any()) and type_score.ndim
+        else 0.0,
+        raw_cell_count=int(valid.sum().item()),
+        local_max_count=int((local_max & valid).sum().item()),
+        threshold_candidate_count=int(threshold_mask.sum().item()),
+        nms_candidate_count=int(selected_count),
+        max_candidates=int(max_candidates),
+        score_threshold=float(score_threshold),
+        nms_radius_px=float(nms_radius_px),
+    )
 
 
 def decode_slider_paths(
@@ -645,9 +739,11 @@ def _slider_ambiguity_reasons(
 
 __all__ = [
     "SpatialCandidate",
+    "SpatialDecodeDiagnostics",
     "SpatialPredictionCanvas",
     "SpatialPredictionMaps",
     "SliderPathCandidate",
+    "diagnose_spatial_candidate_decode",
     "decode_spatial_candidates",
     "decode_slider_paths",
 ]

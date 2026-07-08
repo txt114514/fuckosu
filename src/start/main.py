@@ -194,10 +194,12 @@ def run_training_ui_flow(
     gallery_output_root: Path | None = Path("traning_example"),
     gallery_samples_per_group: int | None = None,
 ) -> FullFlowResult:
-    if progress_ui not in {"auto", "rich", "plain", "off"}:
-        raise CliParameterError("progress-ui must be auto, rich, plain, or off")
+    if progress_ui not in {"auto", "gui", "rich", "plain", "off"}:
+        raise CliParameterError("progress-ui must be auto, gui, rich, plain, or off")
     if resume_policy not in {"strict", "auto", "weights-only", "none"}:
-        raise CliParameterError("resume-policy must be strict, auto, weights-only, or none")
+        raise CliParameterError(
+            "resume-policy must be strict, auto, weights-only, or none"
+        )
     run_id = run_id or _new_cli_run_id()
     _maybe_attach_tmux_ui(
         training_config=training_config,
@@ -272,7 +274,7 @@ def _new_cli_run_id() -> str:
 
 def _maybe_attach_tmux_ui(**kwargs: object) -> None:
     progress_ui = str(kwargs["progress_ui"])
-    if progress_ui in {"off", "plain"}:
+    if progress_ui != "rich":
         return
     if os.environ.get(TMUX_UI_ENV) == "1":
         return
@@ -461,11 +463,7 @@ def _render_flow_table(result) -> None:
     table.add_column("状态")
     table.add_column("详情")
     raw_data = _raw_data_details(result.before_startup)
-    before_status = (
-        "run"
-        if raw_data.get("should_run_before_traning")
-        else "skip"
-    )
+    before_status = "run" if raw_data.get("should_run_before_traning") else "skip"
     table.add_row(
         "训练前扫描",
         _status_text(before_status),
@@ -553,8 +551,7 @@ def _render_full_flow_table(result: FullFlowResult) -> None:
 def _write_full_flow_report(result: FullFlowResult, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        json.dumps(result.as_dict(), ensure_ascii=False, indent=2, default=str)
-        + "\n",
+        json.dumps(result.as_dict(), ensure_ascii=False, indent=2, default=str) + "\n",
         encoding="utf-8",
     )
 
@@ -752,6 +749,7 @@ def run(
         console.print(f"[green]saved[/green]: {json_output}")
     if result.status not in {"passed", "dry-run-passed", "planned"}:
         raise typer.Exit(1)
+
 
 if __name__ == "__main__":
     app()
