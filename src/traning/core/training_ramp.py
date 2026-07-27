@@ -1,3 +1,5 @@
+"""按递增预算运行训练课程门禁，并在达标后衔接完整训练。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -17,7 +19,11 @@ import yaml
 from environment import collect_environment_report
 from traning.conf import load_settings
 from traning.core.dataset_import import inspect_data_input
-from traning.core.decision import FullTrainingRunConfig, run_full_training_pipeline
+from traning.core.decision import (
+    CANDIDATE_CACHE_VERSION,
+    FullTrainingRunConfig,
+    run_full_training_pipeline,
+)
 from traning.core.model_export import (
     ModelArtifactSpec,
     export_model_artifact,
@@ -25,6 +31,8 @@ from traning.core.model_export import (
     validate_model_artifact,
 )
 from traning.core.training_inheritance import TrainingPosition
+from traning.core.optimization import AGGREGATE_SCORE_VERSION, training_job_from_dict
+from traning.state import CurriculumStage
 from traning.state.versioning import collect_code_version
 from visualization.lib import (
     DatasetUsageState,
@@ -116,6 +124,14 @@ class RampRunResult:
 
 class RampGateError(RuntimeError):
     pass
+
+
+class RampEvaluationGateError(RampGateError):
+    """表示训练产物有效，但当前参数尚未通过严格评估。"""
+
+
+class RampSearchExhausted(RampGateError):
+    """表示仍有下一轮参数，但自动执行被关闭或试验预算已耗尽。"""
 
 
 def run_training_ramp(
@@ -232,6 +248,9 @@ def _run_training_ramp_with_reporter(
 
     active_level: RampLevelSpec | None = None
     active_index = 0
+    levels = build_ramp_levels(target)
+    if max_levels is not None:
+        levels = levels[:max_levels]
     try:
         preflight = _run_preflight(
             config_path=config_path,
@@ -240,6 +259,17 @@ def _run_training_ramp_with_reporter(
             run_full_checks=run_full_checks,
             reporter=reporter,
         )
+    except KeyboardInterrupt:
+        _record_ramp_interrupted(
+            manifest=manifest,
+            output_dir=output_dir,
+            target=target,
+            levels=levels,
+            auto_launch_full=auto_launch_full,
+            reporter=reporter,
+            active_index=0,
+        )
+        raise
     except Exception as error:
         manifest["status"] = "failed"
         manifest["failed_at_utc"] = datetime.now(UTC).isoformat()
@@ -257,9 +287,6 @@ def _run_training_ramp_with_reporter(
     manifest["preflight"] = preflight
     _write_json(output_dir / "manifest.json", manifest)
 
-    levels = build_ramp_levels(target)
-    if max_levels is not None:
-        levels = levels[:max_levels]
     _report_ramp_started(
         reporter,
         levels=levels,
@@ -284,6 +311,7 @@ def _run_training_ramp_with_reporter(
                 and state_path.exists()
                 and _read_json(state_path).get("status") == "passed"
             ):
+                # 渐进训练只在完整通过的 level 边界恢复，避免复用半完成预算或不完整评估。
                 record = _read_json(state_path)
                 manifest["levels"].append(record)
                 _report_level_finished(
@@ -308,6 +336,7 @@ def _run_training_ramp_with_reporter(
                 gallery_samples_per_group=full_gallery_samples_per_group,
             )
             manifest["levels"].append(record)
+            # 每级结束立即持久化，下一次运行可从最后一个已通过门禁继续。
             _write_json(output_dir / "manifest.json", manifest)
             _report_level_finished(
                 reporter,
@@ -361,6 +390,17 @@ def _run_training_ramp_with_reporter(
             full_training_run_dir=full_run_dir,
             status="passed",
         )
+    except KeyboardInterrupt:
+        _record_ramp_interrupted(
+            manifest=manifest,
+            output_dir=output_dir,
+            target=target,
+            levels=levels,
+            auto_launch_full=auto_launch_full,
+            reporter=reporter,
+            active_index=active_index,
+        )
+        raise
     except Exception as error:
         manifest["status"] = "failed"
         manifest["failed_at_utc"] = datetime.now(UTC).isoformat()
@@ -380,7 +420,11 @@ def _run_training_ramp_with_reporter(
             active_level=active_level,
             active_index=active_index,
             completed_levels=len(
-                [item for item in manifest.get("levels", ()) if item.get("status") == "passed"]
+                [
+                    item
+                    for item in manifest.get("levels", ())
+                    if item.get("status") == "passed"
+                ]
             ),
             total_levels=len(levels),
         )
@@ -407,6 +451,8 @@ def ensure_full_target_config(
 
 
 def build_ramp_levels(target: RampTarget) -> list[RampLevelSpec]:
+    """生成单调递增且每个维度都不超过最终目标的预算序列。"""
+
     base = [
         RampLevelSpec("a", "level_a", 100, 100, 2, 500, 32, 16, 2),
         RampLevelSpec("b", "level_b", 300, 300, 4, 1500, 64, 16, 4),
@@ -424,13 +470,41 @@ def build_ramp_levels(target: RampTarget) -> list[RampLevelSpec]:
         next_level = RampLevelSpec(
             key=f"c{index - 2}",
             label=f"level_c{index - 2}",
-            spatial_steps=min(target.spatial_steps, max(current.spatial_steps + 1, round(current.spatial_steps * 1.6))),
-            temporal_steps=min(target.temporal_steps, max(current.temporal_steps + 1, round(current.temporal_steps * 1.6))),
-            patch_limit=min(target.patch_limit, max(current.patch_limit, current.patch_limit + (1 if current.patch_limit < target.patch_limit else 0))),
-            cache_frames=min(target.cache_frames, max(current.cache_frames + 1, round(current.cache_frames * 1.6))),
-            sequence_length=min(target.sequence_length, max(current.sequence_length, round(current.sequence_length * 1.5))),
-            candidate_slots=min(target.candidate_slots, max(current.candidate_slots, current.candidate_slots + 8)),
-            gallery_samples_per_group=min(target.gallery_samples_per_group, max(current.gallery_samples_per_group, current.gallery_samples_per_group + 1)),
+            spatial_steps=min(
+                target.spatial_steps,
+                max(current.spatial_steps + 1, round(current.spatial_steps * 1.6)),
+            ),
+            temporal_steps=min(
+                target.temporal_steps,
+                max(current.temporal_steps + 1, round(current.temporal_steps * 1.6)),
+            ),
+            patch_limit=min(
+                target.patch_limit,
+                max(
+                    current.patch_limit,
+                    current.patch_limit
+                    + (1 if current.patch_limit < target.patch_limit else 0),
+                ),
+            ),
+            cache_frames=min(
+                target.cache_frames,
+                max(current.cache_frames + 1, round(current.cache_frames * 1.6)),
+            ),
+            sequence_length=min(
+                target.sequence_length,
+                max(current.sequence_length, round(current.sequence_length * 1.5)),
+            ),
+            candidate_slots=min(
+                target.candidate_slots,
+                max(current.candidate_slots, current.candidate_slots + 8),
+            ),
+            gallery_samples_per_group=min(
+                target.gallery_samples_per_group,
+                max(
+                    current.gallery_samples_per_group,
+                    current.gallery_samples_per_group + 1,
+                ),
+            ),
         )
         levels.append(next_level)
         current = next_level
@@ -446,6 +520,7 @@ def _run_preflight(
     run_full_checks: bool,
     reporter: TrainingReporter,
 ) -> dict[str, Any]:
+    # CUDA、磁盘和数据质量门禁先于任何昂贵训练，失败时不产生误导性的 level 产物。
     preflight_dir = output_dir / "level_00_preflight"
     preflight_dir.mkdir(parents=True, exist_ok=True)
     env = collect_environment_report()
@@ -796,7 +871,9 @@ def _report_level_finished(
         required_passes=total_levels,
     )
     if restored and score is not None:
-        reporter.report_score(score=score, trial_id=f"ramp-{level.key}", level=level.key)
+        reporter.report_score(
+            score=score, trial_id=f"ramp-{level.key}", level=level.key
+        )
     if gallery_path:
         reporter.emit_event(
             TrainingEvent.create(
@@ -968,7 +1045,9 @@ def _report_ramp_failed(
     )
     reporter.update_metrics(
         pipeline_phase=PipelinePhase.FAILED.value,
-        phase=_level_title(active_level) if active_level is not None else "受控渐进放大",
+        phase=_level_title(active_level)
+        if active_level is not None
+        else "受控渐进放大",
         status="failed",
         current_level=active_level.key if active_level is not None else None,
         trial_status="failed",
@@ -990,6 +1069,47 @@ def _report_ramp_failed(
             exit_code=1,
             step=active_index or None,
             target_step=total_levels or None,
+        )
+    )
+
+
+def _record_ramp_interrupted(
+    *,
+    manifest: dict[str, Any],
+    output_dir: Path,
+    target: RampTarget,
+    levels: list[RampLevelSpec],
+    auto_launch_full: bool,
+    reporter: TrainingReporter,
+    active_index: int,
+) -> None:
+    """在用户中断时落盘可恢复状态，而不是把 manifest 留在 running。"""
+
+    interrupted_at = datetime.now(UTC).isoformat()
+    manifest["status"] = "interrupted"
+    manifest["interrupted_at_utc"] = interrupted_at
+    manifest["failure"] = {
+        "type": "KeyboardInterrupt",
+        "message": "用户中断训练参数搜索",
+    }
+    _write_json(output_dir / "manifest.json", manifest)
+    _write_final_readiness(
+        output_dir=output_dir,
+        manifest=manifest,
+        target=target,
+        levels=levels,
+        auto_launch_full=auto_launch_full,
+        failure="用户中断训练参数搜索",
+        status="interrupted",
+        updated_at_utc=interrupted_at,
+    )
+    reporter.request_stop(
+        TrainingStopState(
+            reason="USER_INTERRUPTED",
+            message="用户中断训练参数搜索",
+            exit_code=2,
+            step=active_index or None,
+            target_step=len(levels) or None,
         )
     )
 
@@ -1057,11 +1177,52 @@ def _run_level(
         )
     )
     settings = load_settings(config_path)
-    max_trials = max(1, int(getattr(getattr(settings, "optimization", None), "max_trials", 1)))
+    optimization = getattr(settings, "optimization", None)
+    max_trials = getattr(optimization, "max_trials", 1)
+    execute_generated_jobs = bool(
+        getattr(optimization, "execute_generated_jobs", False)
+    )
+    resumed = _load_pending_search(level_dir)
     trial_job: Mapping[str, Any] | None = None
     trial_failures: list[str] = []
+    trial_index = 0
+    if resumed is not None:
+        state, pending_path = resumed
+        attempted_trials = int(state["attempted_trials"])
+        exhausted = max_trials is not None and attempted_trials >= max_trials
+        if not execute_generated_jobs or exhausted:
+            budget_text = "unbounded" if max_trials is None else str(max_trials)
+            reason = (
+                "automatic generated-job execution is disabled"
+                if not execute_generated_jobs
+                else f"trial budget exhausted ({attempted_trials}/{budget_text})"
+            )
+            raise RampSearchExhausted(
+                f"{reason}; pending next job: {pending_path}; "
+                f"last evaluation: {state.get('last_error') or 'unknown'}"
+            )
+        pending_job = _load_next_job(pending_path)
+        if pending_job is None:
+            raise RampGateError(f"pending next job is unavailable: {pending_path}")
+        trial_job = pending_job
+        trial_index = attempted_trials
+        if state.get("last_error"):
+            trial_failures.append(str(state["last_error"]))
+        reporter.emit_event(
+            TrainingEvent.create(
+                event_type="ramp.resume",
+                severity="info",
+                message_key="stage_started",
+                message_args={"stage": _level_title(level)},
+                raw_message=(
+                    "[RAMP][RESUME_SEARCH] "
+                    f"level={level.key} attempted={attempted_trials} "
+                    f"next_trial={pending_job.get('trial_id')}"
+                ),
+            )
+        )
     record: dict[str, Any] | None = None
-    for trial_index in range(max_trials):
+    while True:
         try:
             record = _run_level_trial(
                 level=level,
@@ -1079,25 +1240,61 @@ def _run_level(
                 trial_job=trial_job,
             )
             break
-        except RampGateError as error:
+        except RampEvaluationGateError as error:
             trial_failures.append(str(error))
             next_job_path = _trial_next_job_path(level_dir, trial_index)
             next_job = _load_next_job(next_job_path)
-            if next_job is None or trial_index + 1 >= max_trials:
+            attempted_trials = trial_index + 1
+            if next_job is None:
+                raise RampGateError(
+                    f"evaluation did not pass and next job is unavailable: {next_job_path}"
+                ) from error
+            exhausted = max_trials is not None and attempted_trials >= max_trials
+            search_status = (
+                "execution_disabled"
+                if not execute_generated_jobs
+                else "search_exhausted"
+                if exhausted
+                else "pending"
+            )
+            _write_json(
+                level_dir / "search_state.json",
+                {
+                    "status": search_status,
+                    "level": level.key,
+                    "attempted_trials": attempted_trials,
+                    "max_trials": max_trials,
+                    "execute_generated_jobs": execute_generated_jobs,
+                    "last_error": str(error),
+                    "pending_next_job": str(next_job_path.resolve()),
+                    "pending_trial_id": next_job.get("trial_id"),
+                    "updated_at_utc": datetime.now(UTC).isoformat(),
+                },
+            )
+            if not execute_generated_jobs or exhausted:
+                budget_text = "unbounded" if max_trials is None else str(max_trials)
+                reason = (
+                    "automatic generated-job execution is disabled"
+                    if not execute_generated_jobs
+                    else f"trial budget exhausted ({attempted_trials}/{budget_text})"
+                )
                 reporter.emit_event(
                     TrainingEvent.create(
-                        event_type="ramp.failed",
+                        event_type="ramp.search_exhausted",
                         severity="error",
                         message_key="fatal_error",
-                        message_args={"error": str(error)},
+                        message_args={"error": reason},
                         raw_message=(
-                            "[RAMP][FAILED] "
-                            f"level={level.key} trials={trial_index + 1}/{max_trials} "
-                            f"reason={error}"
+                            "[RAMP][SEARCH_EXHAUSTED] "
+                            f"level={level.key} trials={attempted_trials}/{budget_text} "
+                            f"pending_job={next_job_path} reason={reason}"
                         ),
                     )
                 )
-                raise RampGateError("; ".join(trial_failures)) from error
+                raise RampSearchExhausted(
+                    f"{reason}; pending next job: {next_job_path}; "
+                    f"last evaluation: {error}"
+                ) from error
             reporter.emit_event(
                 TrainingEvent.create(
                     event_type="ramp.continue",
@@ -1106,14 +1303,18 @@ def _run_level(
                     message_args={"stage": _level_title(level)},
                     raw_message=(
                         "[RAMP][CONTINUE] "
-                        f"level={level.key} trial={trial_index + 1}/{max_trials} "
+                        f"level={level.key} trial={attempted_trials}/"
+                        f"{max_trials if max_trials is not None else 'unbounded'} "
                         f"next_trial={next_job.get('trial_id')} reason={error}"
                     ),
                 )
             )
             trial_job = next_job
+            trial_index += 1
     if record is None:
-        raise RampGateError("; ".join(trial_failures) or "level produced no trial record")
+        raise RampGateError(
+            "; ".join(trial_failures) or "level produced no trial record"
+        )
     reporter.update_metrics(
         pipeline_phase=PipelinePhase.TRAINING.value,
         phase=_level_title(level),
@@ -1127,7 +1328,7 @@ def _run_level(
             device=device,
             resume_policy=resume_policy,
             resume_stage_checkpoints=resume_stage_checkpoints,
-        )
+        ),
     )
     reporter.report_score(
         score=float(record["evaluation"]["quality_score"]),
@@ -1151,6 +1352,18 @@ def _run_level(
         )
     )
     _write_json(level_dir / "level_state.json", record)
+    _write_json(
+        level_dir / "search_state.json",
+        {
+            "status": "passed",
+            "level": level.key,
+            "attempted_trials": trial_index + 1,
+            "max_trials": max_trials,
+            "execute_generated_jobs": execute_generated_jobs,
+            "selected_trial_id": record["evaluation"].get("parameter_group_id"),
+            "updated_at_utc": datetime.now(UTC).isoformat(),
+        },
+    )
     return record
 
 
@@ -1170,15 +1383,20 @@ def _run_level_trial(
     trial_index: int,
     trial_job: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
-    trial_id = str(
-        (trial_job or {}).get("trial_id") or f"ramp-{level.key}"
-    )
+    trial_id = str((trial_job or {}).get("trial_id") or f"ramp-{level.key}")
+    optimization_stage = _trial_curriculum_stage(trial_job)
+    optimization_rung = _trial_rung(trial_job)
     budget_steps = int((trial_job or {}).get("budget_steps") or level.temporal_steps)
-    run_dir = level_dir / ("training" if trial_index == 0 else f"training_trial_{trial_index + 1:02d}")
+    run_dir = level_dir / (
+        "training" if trial_index == 0 else f"training_trial_{trial_index + 1:02d}"
+    )
     stage_checkpoints = dict(resume_stage_checkpoints)
     parent_checkpoint = (trial_job or {}).get("parent_checkpoint_path")
     if isinstance(parent_checkpoint, str) and parent_checkpoint:
         stage_checkpoints["temporal"] = Path(parent_checkpoint)
+    # 新 trial 的学习率或候选槽可能变化；只继承模型权重，避免旧 optimizer
+    # 覆盖本轮参数，并把 budget_steps 解释为本轮独立预算。
+    trial_resume_policy = "weights-only" if parent_checkpoint else resume_policy
     runtime = _trial_runtime_overrides(
         settings=settings,
         level=level,
@@ -1211,8 +1429,10 @@ def _run_level_trial(
             device=torch.device(device),
             spatial_max_steps=int(runtime["spatial_max_steps"]),
             temporal_max_steps=int(runtime["temporal_max_steps"]),
-            patch_limit=level.patch_limit,
-            cache_max_frames=level.cache_frames,
+            spatial_learning_rate=float(runtime["spatial_learning_rate"]),
+            temporal_learning_rate=float(runtime["temporal_learning_rate"]),
+            patch_limit=runtime["patch_limit"],
+            cache_max_frames=runtime["cache_max_frames"],
             max_candidates=runtime["max_candidates"],
             score_threshold=runtime["score_threshold"],
             nms_radius_px=runtime["nms_radius_px"],
@@ -1222,13 +1442,15 @@ def _run_level_trial(
             candidate_slots=int(runtime["candidate_slots"]),
             parameter_group_id=trial_id,
             curriculum_level=level.key,
+            optimization_stage=optimization_stage,
+            optimization_rung=optimization_rung,
             render_gallery=True,
             gallery_output_root=gallery_output_root,
             gallery_samples_per_group=(
                 gallery_samples_per_group or level.gallery_samples_per_group
             ),
             reporter=reporter,
-            resume_policy=resume_policy,
+            resume_policy=trial_resume_policy,
             resume_stage_checkpoints=stage_checkpoints,
         ),
     )
@@ -1240,8 +1462,8 @@ def _run_level_trial(
             settings_path=config_path,
             spatial_checkpoint_path=result.spatial.checkpoint_path,
             temporal_checkpoint_path=result.temporal.checkpoint_path,
-            score_version="point-slider-v2+click-sequence-v1+aggregate-v1",
-            candidate_cache_version="spatial-candidate-cache-v1",
+            score_version=AGGREGATE_SCORE_VERSION,
+            candidate_cache_version=CANDIDATE_CACHE_VERSION,
             code_version=collect_code_version().commit,
             extra_files={
                 "score_report": result.evaluation.report_path,
@@ -1274,15 +1496,67 @@ def _run_level_trial(
 
 
 def _trial_next_job_path(level_dir: Path, trial_index: int) -> Path:
-    run_dir = level_dir / ("training" if trial_index == 0 else f"training_trial_{trial_index + 1:02d}")
+    run_dir = level_dir / (
+        "training" if trial_index == 0 else f"training_trial_{trial_index + 1:02d}"
+    )
     return run_dir / "evaluation" / "next_training_job.json"
+
+
+def _load_pending_search(
+    level_dir: Path,
+) -> tuple[dict[str, Any], Path] | None:
+    """读取可恢复的搜索边界，避免同一 run_id 重跑初始 trial。"""
+
+    state_path = level_dir / "search_state.json"
+    if not state_path.is_file():
+        return None
+    state = _read_json(state_path)
+    if state.get("status") not in {
+        "pending",
+        "search_exhausted",
+        "execution_disabled",
+    }:
+        return None
+    try:
+        attempted_trials = int(state.get("attempted_trials") or 0)
+    except (TypeError, ValueError) as error:
+        raise RampGateError(f"invalid search state: {state_path}") from error
+    pending_raw = state.get("pending_next_job")
+    if attempted_trials < 1 or not pending_raw:
+        raise RampGateError(f"incomplete pending search state: {state_path}")
+    state["attempted_trials"] = attempted_trials
+    return state, Path(str(pending_raw))
 
 
 def _load_next_job(path: Path) -> dict[str, Any] | None:
     if not path.is_file():
         return None
     raw = _read_json(path)
-    return raw if raw.get("trial_id") else None
+    try:
+        return training_job_from_dict(raw).as_dict()
+    except ValueError as error:
+        raise RampGateError(f"invalid next training job {path}: {error}") from error
+
+
+def _trial_curriculum_stage(
+    trial_job: Mapping[str, Any] | None,
+) -> CurriculumStage:
+    raw = (trial_job or {}).get("curriculum_stage", CurriculumStage.BASIC.value)
+    try:
+        return CurriculumStage(str(raw))
+    except ValueError as error:
+        raise RampGateError(f"invalid job curriculum_stage: {raw!r}") from error
+
+
+def _trial_rung(trial_job: Mapping[str, Any] | None) -> int:
+    raw = (trial_job or {}).get("rung", 0)
+    try:
+        value = int(raw)
+    except (TypeError, ValueError) as error:
+        raise RampGateError(f"invalid job rung: {raw!r}") from error
+    if value < 0:
+        raise RampGateError("job rung must be nonnegative")
+    return value
 
 
 def _trial_runtime_overrides(
@@ -1316,11 +1590,27 @@ def _trial_runtime_overrides(
     temporal_budget = level.temporal_steps if trial_index == 0 else budget_steps
     return {
         "spatial_max_steps": spatial_steps,
-        "temporal_max_steps": max(1, parent_temporal_step + temporal_budget),
+        "temporal_max_steps": max(1, temporal_budget),
         "temporal_budget_steps": temporal_budget,
         "parent_temporal_step": parent_temporal_step,
         "sequence_length": sequence_length,
         "candidate_slots": candidate_slots,
+        "spatial_learning_rate": _positive_float_override(
+            1e-4,
+            training.get("spatial_learning_rate"),
+        ),
+        "temporal_learning_rate": _positive_float_override(
+            1e-4,
+            training.get("temporal_learning_rate"),
+        ),
+        "patch_limit": _optional_limit_override(
+            level.patch_limit,
+            training.get("patch_limit"),
+        ),
+        "cache_max_frames": _optional_limit_override(
+            level.cache_frames,
+            training.get("cache_max_frames"),
+        ),
         "score_threshold": _score_threshold_override(
             _candidate_cache_default(settings, "score_threshold", 0.05),
             inference.get("score_threshold"),
@@ -1364,10 +1654,9 @@ def _score_threshold_override(
     if isinstance(delta, (int, float)):
         return _clamp(float(default) + float(delta), 0.0, 1.0)
     if isinstance(explicit, (int, float)):
-        value = float(explicit)
-        if value < 0.0:
-            value = float(default) + value
-        return _clamp(value, 0.0, 1.0)
+        # TrainingJobSpec 保存的是已解析绝对值；旧 job 中越界值也只做边界裁剪，
+        # 不再根据正负号猜测它是不是 delta。
+        return _clamp(float(explicit), 0.0, 1.0)
     return float(default)
 
 
@@ -1379,10 +1668,7 @@ def _max_candidates_override(
     if isinstance(delta, (int, float)):
         return max(1, int(round(float(default) + float(delta))))
     if isinstance(explicit, (int, float)):
-        value = int(round(float(explicit)))
-        if 0 < value <= 8 and int(default) > 8:
-            return max(1, int(default) + value)
-        return max(1, value)
+        return max(1, int(round(float(explicit))))
     return max(1, int(default))
 
 
@@ -1403,9 +1689,24 @@ def _float_override(default: float, explicit: Any) -> float:
     return float(explicit) if isinstance(explicit, (int, float)) else float(default)
 
 
+def _positive_float_override(default: float, explicit: Any) -> float:
+    if isinstance(explicit, (int, float)):
+        return max(1e-7, float(explicit))
+    return max(1e-7, float(default))
+
+
 def _positive_int_override(default: int, explicit: Any) -> int:
     if isinstance(explicit, (int, float)):
         return max(1, int(round(float(explicit))))
+    return max(1, int(default))
+
+
+def _optional_limit_override(default: int, explicit: Any) -> int | None:
+    """解析 patch/帧上限；0 与训练 CLI 一样表示不限制。"""
+
+    if isinstance(explicit, (int, float)):
+        value = max(0, int(round(float(explicit))))
+        return None if value == 0 else value
     return max(1, int(default))
 
 
@@ -1420,7 +1721,9 @@ def _checkpoint_temporal_step(path: Path | None) -> int:
     if not isinstance(payload, Mapping):
         return 0
     position = TrainingPosition.from_mapping(payload.get("training_position"))
-    return max(position.temporal_step, position.global_step, position.last_committed_step)
+    return max(
+        position.temporal_step, position.global_step, position.last_committed_step
+    )
 
 
 def _gate_level(
@@ -1437,6 +1740,7 @@ def _gate_level(
     runtime: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     failures: list[str] = []
+    evaluation_failure: str | None = None
     expected_spatial_steps = expected_spatial_steps or level.spatial_steps
     expected_temporal_steps = expected_temporal_steps or level.temporal_steps
     if result.spatial.steps != expected_spatial_steps:
@@ -1453,18 +1757,25 @@ def _gate_level(
     quality_score = float(result.evaluation.quality_score)
     pass_threshold = float(result.evaluation.pass_threshold)
     if quality_score < pass_threshold:
-        failures.append(
+        evaluation_failure = (
             "quality score "
             f"{quality_score:.6f} below pass threshold {pass_threshold:.6f}"
         )
     elif not result.evaluation.passed:
-        failures.append(
-            "evaluation report did not pass despite quality score "
-            f"{quality_score:.6f} >= pass threshold {pass_threshold:.6f}; "
-            f"hits={result.evaluation.hit_count} "
-            f"misses={result.evaluation.miss_count} "
-            f"unresolved={result.evaluation.unresolved_count}"
-        )
+        target_count = getattr(result.evaluation, "target_count", None)
+        if target_count is not None and int(target_count) <= 0:
+            evaluation_failure = (
+                "evaluation report did not pass: no target frames were evaluated; "
+                "background-only accuracy cannot satisfy the promotion gate"
+            )
+        else:
+            evaluation_failure = (
+                "evaluation report did not pass despite quality score "
+                f"{quality_score:.6f} >= pass threshold {pass_threshold:.6f}; "
+                f"hits={result.evaluation.hit_count} "
+                f"misses={result.evaluation.miss_count} "
+                f"unresolved={result.evaluation.unresolved_count}"
+            )
     checkpoint_paths = (
         result.spatial.checkpoint_path,
         result.temporal.checkpoint_path,
@@ -1474,11 +1785,17 @@ def _gate_level(
             failures.append(f"checkpoint missing: {path}")
         else:
             torch.load(path, map_location="cpu", weights_only=False)
-    if result.evaluation.gallery_status != "saved" or result.evaluation.gallery_saved_frame_count <= 0:
+    if (
+        result.evaluation.gallery_status != "saved"
+        or result.evaluation.gallery_saved_frame_count <= 0
+    ):
         failures.append("gallery is empty or not saved")
     if not result.evaluation.report_path.exists():
         failures.append("score report missing")
-    if result.evaluation.next_job_path is None or not result.evaluation.next_job_path.exists():
+    if (
+        result.evaluation.next_job_path is None
+        or not result.evaluation.next_job_path.exists()
+    ):
         failures.append("next job missing")
     if dry_run.get("returncode") != 0:
         failures.append("run-job --dry-run failed")
@@ -1487,7 +1804,11 @@ def _gate_level(
     if not artifact_smoke.get("finite"):
         failures.append("artifact smoke produced non-finite outputs")
     if failures:
+        if evaluation_failure is not None:
+            failures.insert(0, evaluation_failure)
         raise RampGateError("; ".join(failures))
+    if evaluation_failure is not None:
+        raise RampEvaluationGateError(evaluation_failure)
     steps_per_second = (level.spatial_steps + level.temporal_steps) / max(elapsed, 1e-6)
     frames_per_second = result.candidate_cache.frames / max(elapsed, 1e-6)
     report = _read_json(result.evaluation.report_path)
@@ -1551,8 +1872,7 @@ def _ramp_parameter_snapshot(
             "slider_sample_count": record["slider_sample_count"],
             "resume_policy": resume_policy,
             "resume_stage_checkpoints": {
-                stage: str(path)
-                for stage, path in resume_stage_checkpoints.items()
+                stage: str(path) for stage, path in resume_stage_checkpoints.items()
             },
         },
         "evaluation": {
@@ -1625,6 +1945,8 @@ def _write_final_readiness(
     levels: list[RampLevelSpec],
     auto_launch_full: bool,
     failure: str | None = None,
+    status: str | None = None,
+    updated_at_utc: str | None = None,
 ) -> Path:
     path = output_dir / "final_readiness.md"
     json_path = output_dir / "final_readiness.json"
@@ -1632,11 +1954,14 @@ def _write_final_readiness(
         level for level in manifest.get("levels", ()) if level.get("status") == "passed"
     ]
     allowed = failure is None and len(passed_levels) == len(levels)
+    readiness_status = status or ("ready" if allowed else "blocked")
+    readiness_updated_at = updated_at_utc or datetime.now(UTC).isoformat()
     command = _full_command_text(output_dir / "resolved_target_config.yaml", target)
     lines = [
         "# Training Ramp Final Readiness",
         "",
-        f"status: {'ready' if allowed else 'blocked'}",
+        f"status: {readiness_status}",
+        f"updated_at_utc: {readiness_updated_at}",
         f"auto_launch_full: {auto_launch_full}",
         f"target: {target.__dict__}",
         "",
@@ -1656,7 +1981,13 @@ def _write_final_readiness(
         [
             "",
             "## Slider Data Quality",
-            json.dumps(manifest.get("preflight", {}).get("data", {}).get("slider_quality_issues", ()), ensure_ascii=False, indent=2),
+            json.dumps(
+                manifest.get("preflight", {})
+                .get("data", {})
+                .get("slider_quality_issues", ()),
+                ensure_ascii=False,
+                indent=2,
+            ),
             "",
             "## Final Command",
             "```bash",
@@ -1669,6 +2000,8 @@ def _write_final_readiness(
         json_path,
         {
             "ready": allowed,
+            "status": readiness_status,
+            "updated_at_utc": readiness_updated_at,
             "failure": failure,
             "target": target.__dict__,
             "levels_passed": len(passed_levels),
@@ -1737,6 +2070,9 @@ def _write_level_config(
         **dict(raw.get("optimization") or {}),
         "enabled": True,
         "trial_store_path": str((level_dir / "metrics" / "trials.jsonl").resolve()),
+        "trial_store_sqlite_path": str(
+            (level_dir / "metrics" / "trials.sqlite").resolve()
+        ),
     }
     raw["training_ramp_level"] = level.as_dict()
     path = level_dir / "resolved_level_config.yaml"

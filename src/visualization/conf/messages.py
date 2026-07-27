@@ -1,3 +1,5 @@
+"""集中维护仪表盘状态、字段名与事件消息的中文显示映射。"""
+
 from __future__ import annotations
 
 from typing import Mapping

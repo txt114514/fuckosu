@@ -1,3 +1,5 @@
+"""提供支持直接运行与 Prefect flow 的通用任务流水线。"""
+
 from __future__ import annotations
 
 import traceback

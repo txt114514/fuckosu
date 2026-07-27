@@ -1,3 +1,5 @@
+"""以 SQLite 管理视频片段索引，并导出和校验训练数据集清单。"""
+
 from __future__ import annotations
 
 import csv
@@ -103,6 +105,8 @@ class SegmentDatasetManifest:
             {key: str(row[key]) for key in SEGMENT_TABLE_FIELDS}
             for row in rows
         ]
+        # 单个 folder 的旧索引与新索引在同一 SQLite 事务中整体替换，保证
+        # 读取方不会观察到删除完成而新记录尚未写入的中间状态。
         with Session(self.engine) as session:
             statement = select(SegmentDatasetItem).where(
                 SegmentDatasetItem.folder_name == folder_name

@@ -1,3 +1,5 @@
+"""编排从原始样本检查、训练前处理到模型训练的统一启动流程。"""
+
 from __future__ import annotations
 
 import json
@@ -51,6 +53,8 @@ def _utc_now() -> str:
 
 @dataclass(frozen=True)
 class ProgressiveTestReport:
+    """quick/full 分级检查的统一结果；command 保存逻辑 scope 而非 shell 命令。"""
+
     level: TestLevel
     command: tuple[str, ...] = ()
     returncode: int = 0
@@ -97,6 +101,8 @@ class BeforeTrainingRunReport:
 
 @dataclass(frozen=True)
 class StartupFlowConfig:
+    """统一启动阶段配置；dry_run 允许只读检查，但禁止转换和模型训练。"""
+
     training_config: Path
     before_config: Path | None = None
     split: DataSplit = "train"
@@ -133,6 +139,8 @@ class StartupFlowConfig:
 
 @dataclass(frozen=True)
 class StartupFlowResult:
+    """按阶段保留启动证据；只有所有前置通过且训练存在或 dry-run 才算成功。"""
+
     before_startup: StartupCheckReport
     before_run: BeforeTrainingRunReport
     split_sync: DatasetSplitSyncResult
@@ -171,6 +179,9 @@ class StartupFlowResult:
 
 
 def run_startup_flow(config: StartupFlowConfig) -> StartupFlowResult:
+    """按不可跳跃的阶段顺序执行数据检查、转换、划分、自检和训练。"""
+
+    # 原始数据探测先于任何写操作；只有检查结果明确要求时才运行 before_traning。
     config.reporter.update_pipeline_stage(
         PipelineStageState(
             stage_id="before_raw_scan",
@@ -241,6 +252,7 @@ def run_startup_flow(config: StartupFlowConfig) -> StartupFlowResult:
             status="checking",
         )
     )
+    # 转换完成后再同步 item 级 split，确保新生成片段能参与稳定划分。
     split_sync = _sync_dataset_splits(training_settings, config=config)
     config.reporter.update_pipeline_stage(
         PipelineStageState(
@@ -281,6 +293,7 @@ def run_startup_flow(config: StartupFlowConfig) -> StartupFlowResult:
         )
 
     full_training = None
+    # dry-run 仍完整执行前置检查与测试，只屏蔽真正的模型训练副作用。
     if not config.dry_run and config.run_full_training:
         full_training = run_full_training_pipeline(
             training_settings,
@@ -303,6 +316,8 @@ def run_progressive_tests(
     *,
     startup_reports: tuple[StartupCheckReport, ...] = (),
 ) -> ProgressiveTestReport:
+    """quick 复用已执行的 startup 报告；full 才运行两个模块的完整检查集。"""
+
     if level == "none":
         return ProgressiveTestReport(level=level, status="skipped")
     if level == "quick":
@@ -332,6 +347,8 @@ def _maybe_run_before_traning(
     before_startup: StartupCheckReport,
     config: StartupFlowConfig,
 ) -> BeforeTrainingRunReport:
+    """仅在原始数据检查明确发现新增输入时运行训练前转换。"""
+
     should_run = _before_should_run(before_startup)
     reason = _before_reason(before_startup)
     if not should_run:
@@ -363,6 +380,7 @@ def _maybe_run_before_traning(
         before_settings,
         matched_manifest_path=config.matched_manifest_path,
     )
+    # 全阶段成功后才推进 matched manifest，失败时保留上次可恢复边界。
     manifest.save()
     return BeforeTrainingRunReport(
         status="passed",
@@ -398,6 +416,7 @@ def _sync_dataset_splits(
     config: StartupFlowConfig,
 ) -> DatasetSplitSyncResult:
     data_input = training_settings.data_input
+    # 配置中的显式列表只引导首次发现的 item；已存在归属由 package 层冻结。
     bootstrap = {
         **{item: "train" for item in data_input.train_items},
         **{item: "validation" for item in data_input.validation_items},
@@ -452,6 +471,8 @@ def write_startup_flow_report(
     result: StartupFlowResult,
     path: Path,
 ) -> None:
+    """写出供人审计的最终快照；它不是可恢复 checkpoint，也不承诺原子提交。"""
+
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(_json_ready(result.as_dict()), ensure_ascii=False, indent=2) + "\n",

@@ -1,3 +1,5 @@
+"""按训练阶段和终端尺寸选择视图、面板分页及紧凑布局。"""
+
 from __future__ import annotations
 
 from typing import Literal

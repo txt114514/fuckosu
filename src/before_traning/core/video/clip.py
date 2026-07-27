@@ -1,3 +1,5 @@
+"""调用固定区域裁剪处理器完成录像画面裁剪阶段。"""
+
 from __future__ import annotations
 
 from time import perf_counter

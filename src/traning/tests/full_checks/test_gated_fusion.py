@@ -1,3 +1,5 @@
+"""验证门控稀疏融合的输出形状、梯度与跨区域采样。"""
+
 from __future__ import annotations
 
 import unittest
@@ -19,6 +21,7 @@ class GatedFusionTests(unittest.TestCase):
             sampling_points=2,
             layers=1,
         )
+        # 两路输入都要求梯度，确保门控融合没有把任一路悄然 detach。
         local_dense = torch.randn(1, 8, 6, 6, requires_grad=True)
         global_dense = torch.randn(1, 8, 8, 8, requires_grad=True)
         meta = PatchMeta(0, 0, 0, 48, 48, 96, 96, 48, 48)

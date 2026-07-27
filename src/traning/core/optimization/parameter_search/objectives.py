@@ -1,3 +1,5 @@
+"""计算质量、显存和延迟多目标值及稳定排序键。"""
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -8,6 +10,7 @@ from traning.core.optimization.scoring import TrialScoreReport
 
 
 DEFAULT_OBJECTIVE_WEIGHTS: dict[str, float] = {
+    # 质量需要最大化；显存与延迟使用负权重表示资源代价。
     "quality_score": 1.0,
     "peak_vram_mb": -0.00005,
     "latency_ms": -0.001,

@@ -1,3 +1,5 @@
+"""渲染当前参数组的损失、评分、晋升与测试状态。"""
+
 from rich.panel import Panel
 from rich.table import Table
 

@@ -1,3 +1,5 @@
+"""训练帧渲染、样本选择、输出编号和 gallery 的公共入口。"""
+
 from traning.lib.visualization.display import launch_image_window
 from traning.lib.visualization.gallery import (
     OUTCOME_DIRECTORIES,

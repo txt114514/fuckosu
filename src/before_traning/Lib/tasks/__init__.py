@@ -1,4 +1,4 @@
-"""Reusable task registration and flow execution APIs."""
+"""公开可复用的阶段任务注册与流水线执行接口。"""
 
 from before_traning.Lib.tasks.flows import TaskPipeline, build_task_pipeline
 from before_traning.Lib.tasks.tasks import (

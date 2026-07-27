@@ -1,3 +1,5 @@
+"""规划对象唯一归属的原子片段，并将其组合为长序列样本。"""
+
 from __future__ import annotations
 
 import hashlib
@@ -289,6 +291,8 @@ def group_hit_objects(
 
     for hit_object in hit_objects:
         if isinstance(hit_object, Spinner):
+            # Spinner 占用一段持续时间但没有普通对象的可比较路径，因此它
+            # 同时是空间分组和长序列拼接的硬边界。
             if current:
                 groups.append(current)
                 current = []
@@ -307,6 +311,8 @@ def group_hit_objects(
             and hit_object.t_start
             <= current_end_ms + priority_merge_window_ms
         )
+        # 常规合并同时要求时间接近和绘制轨迹重叠；priority window 是显式
+        # 的节奏连续性覆盖规则，因此命中时不再要求空间相交。
         space_matches = time_matches and any(
             circle_overlap_ratio(
                 _polyline_distance(
@@ -334,7 +340,7 @@ def group_hit_objects(
 
 
 def classify_hit_group(hit_group: list[HitObject]) -> SegmentCategory:
-    """Classify by contained object types; mixed groups may contain many sliders."""
+    """按所含对象类型分类；混合组允许同时包含多个滑条。"""
     if not hit_group:
         raise ValueError("不能分类空 HitObject 组")
     if len(hit_group) == 1 and isinstance(hit_group[0], Spinner):
@@ -438,6 +444,8 @@ def _stable_pre_context_jitter_seconds(
 ) -> float:
     if limit_seconds <= 0:
         return 0.0
+    # 使用片段身份派生伪随机量，而非进程随机状态：重复构建得到相同窗口，
+    # 同时让不同对象拥有可控的前置上下文变化。
     payload = "|".join(
         (
             dimension,
@@ -516,6 +524,8 @@ def build_segment_plans(
         for plan in plans
         for object_index in plan.object_indexes
     ]
+    # atomic 计划是后续标签与 long_sequence 的唯一基底，必须覆盖全部对象
+    # 且恰好一次；这里把该数据契约作为运行时不变量检查。
     if sorted(assigned_indexes) != list(range(len(hit_objects))):
         raise RuntimeError("HitObject 分配不完整或存在重复归属")
     return plans
@@ -604,6 +614,8 @@ def build_long_sequence_plans(
         current = []
 
     for plan in atomic_plans:
+        # 只按 atomic 顺序连续消费，每次 flush 后不重叠回看，从构造上保证
+        # 一个命中对象至多属于一个 long_sequence。
         if plan.category == "spinner":
             flush()
             continue

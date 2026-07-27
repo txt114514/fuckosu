@@ -1,3 +1,5 @@
+"""组合启动检查阶段的概览、资源和事件视图。"""
+
 from __future__ import annotations
 
 from rich.console import Group

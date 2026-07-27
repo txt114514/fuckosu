@@ -1,3 +1,5 @@
+"""定义 osu! 原始 timing point 的结构化数据模型。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

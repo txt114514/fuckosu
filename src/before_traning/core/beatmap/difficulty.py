@@ -1,3 +1,5 @@
+"""读取谱面总体难度并将结果写入 SQLite manifest。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

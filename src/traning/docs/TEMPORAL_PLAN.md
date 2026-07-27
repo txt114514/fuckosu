@@ -38,7 +38,8 @@ output, state = model.step(frame_candidates, state)
 - `K`：每帧最大候选数，建议 `16-32`。
 - `D`：候选特征维度，建议 `64-128`。
 
-每帧候选来自 `decision` 模块的 `spatial-candidate-cache-v1`，包含：
+每帧候选来自 `decision` 模块当前写入的
+`spatial-candidate-cache-v2`，包含：
 
 - 坐标、score、object type；
 - embedding；
@@ -103,7 +104,9 @@ layers: 1-2
 
 ## 当前状态
 
-- `TemporalCandidateWindowDataset` 可读取 `spatial-candidate-cache-v1` 的 manifest/JSONL，
+- `TemporalCandidateWindowDataset` 可读取 `spatial-candidate-cache-v2` 的 manifest/JSONL，
+  并保留对 `spatial-candidate-cache-v1` 历史产物的显式诊断读取；
+  v1 的固定 64px 标签不能进入训练/决策入口，必须重建 v2 缓存。
   按 `sample_key` 分组生成固定长度窗口，保留 frame mask、candidate mask、candidate id、
   padding 和动作监督。
 - `run_temporal_training` 已提供 CPU/CUDA 统一 runtime 的首版训练入口，输出

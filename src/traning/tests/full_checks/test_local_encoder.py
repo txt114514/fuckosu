@@ -1,3 +1,5 @@
+"""验证局部编码器的 stride、特征金字塔与梯度路径。"""
+
 from __future__ import annotations
 
 import unittest

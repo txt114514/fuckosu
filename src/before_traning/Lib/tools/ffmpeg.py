@@ -1,3 +1,5 @@
+"""封装 ffmpeg/ffprobe 命令构造、执行及媒体元数据读取。"""
+
 from __future__ import annotations
 
 import json
@@ -70,6 +72,8 @@ def build_extract_wav_args(
     from_video: bool,
 ) -> tuple[str, ...]:
     video_args = ("-vn",) if from_video else ()
+    # 对齐算法要求两路信号具有完全相同的采样契约；统一解码为单声道、
+    # 固定采样率的 PCM，避免声道布局或有损编码参数进入相关性计算。
     return (
         *COMMON_FFMPEG_ARGS,
         "-i",
@@ -112,6 +116,7 @@ def build_trim_video_args(
     trim_start_seconds: float,
     trim_duration_seconds: float,
 ) -> tuple[str, ...]:
+    # AV 对齐裁切把 -ss 放在输入之后，以解码级精度落实相关算法得到的偏移。
     return (
         *COMMON_FFMPEG_ARGS,
         "-i",
@@ -157,6 +162,8 @@ def build_segment_video_args(
     trim_duration_seconds: float,
     include_audio: bool = False,
 ) -> tuple[str, ...]:
+    # 数据集片段数量多，-ss 放在输入之前优先快速 seek；音频默认移除，
+    # 是否保留必须由 include_audio 显式加入数据契约。
     audio_args = AUDIO_AAC_192K_ARGS if include_audio else NO_AUDIO_ARGS
     return (
         *COMMON_FFMPEG_ARGS,

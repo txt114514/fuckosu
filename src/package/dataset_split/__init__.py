@@ -1,3 +1,5 @@
+"""导出跨 start 与 traning 共用的稳定数据划分 API。"""
+
 from package.dataset_split.models import (
     DATASET_SPLIT_SCHEMA_VERSION,
     DatasetSplit,

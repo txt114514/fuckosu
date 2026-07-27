@@ -1,3 +1,5 @@
+"""提供可由训练 CLI 调用的 full_checks pytest 执行入口。"""
+
 from __future__ import annotations
 
 import os
@@ -38,6 +40,8 @@ def run_full_checks() -> StartupCheckReport:
 
 
 def _run_pytest(command: tuple[str, ...]) -> subprocess.CompletedProcess[str]:
+    # 子进程必须从仓库根执行并显式包含 src，确保 CLI 调用测试入口时与
+    # 开发终端是否预先激活 PYTHONPATH 无关。
     env = os.environ.copy()
     src_path = str(REPO_ROOT / "src")
     existing = env.get("PYTHONPATH")

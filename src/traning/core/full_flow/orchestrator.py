@@ -1,3 +1,5 @@
+"""按阶段注册表执行完整训练流，并统一记录耗时、产物和失败状态。"""
+
 from __future__ import annotations
 
 from contextlib import suppress
@@ -21,11 +23,13 @@ from traning.core.full_flow.stages import (
     validate_stage_id,
 )
 from traning.core.model_export import ModelArtifactSpec, export_model_artifact
+from traning.core.optimization import AGGREGATE_SCORE_VERSION
 from traning.core.training_inheritance import (
     create_inheritance_package,
     load_inheritance_package,
 )
 from traning.core.training_ramp import RampGateError, run_training_ramp
+from traning.state.candidate_cache_schema import CANDIDATE_CACHE_VERSION
 from traning.state.versioning import collect_code_version, version_manifest
 from visualization.lib import (
     PipelinePhase,
@@ -115,6 +119,8 @@ class _FlowRuntime:
 
 
 def run_full_flow(config: FullFlowConfig) -> FullFlowResult:
+    """按请求模式运行或规划完整流程，并维护可恢复的阶段状态。"""
+
     _validate_config(config)
     run_id = config.run_id or _new_run_id()
     output_dir = config.output_root / run_id
@@ -143,6 +149,7 @@ def run_full_flow(config: FullFlowConfig) -> FullFlowResult:
         progress_ui=config.progress_ui,
         progress_language=config.progress_language,
     ) as dashboard:
+        # 仪表盘上下文覆盖整个流程，成功、失败和中断都会发布最终状态并关闭渲染器。
         reporter = dashboard.reporter
         runtime.reporter = reporter
         reporter.update_metrics(
@@ -370,6 +377,7 @@ def _run_resume_section(_runtime: _FlowRuntime, *, reporter):
         current_settings=settings,
         policy=selected_policy,  # type: ignore[arg-type]
     )
+    # auto 策略可把不兼容恢复降为仅权重；阶段保留 WARNING 以显式记录语义变化。
     resume_report = inheritance.as_dict()
     resume_path = _runtime.output_dir / "resume_report.json"
     _write_json(resume_path, resume_report)
@@ -504,8 +512,8 @@ def _finish_export_stage(
             settings_path=_runtime.output_dir / "resolved_config.yaml",
             spatial_checkpoint_path=spatial_path,
             temporal_checkpoint_path=temporal_path,
-            score_version="point-slider-v2+click-sequence-v1+aggregate-v1",
-            candidate_cache_version="spatial-candidate-cache-v1",
+            score_version=AGGREGATE_SCORE_VERSION,
+            candidate_cache_version=CANDIDATE_CACHE_VERSION,
             code_version=collect_code_version().commit,
             extra_files=_record_extra_files(record),
         )
@@ -618,6 +626,8 @@ def _persist(
     status: str,
     stop_reason: str | None = None,
 ) -> None:
+    """在重要阶段边界同步状态、manifest、报告和 latest 指针。"""
+
     if stop_reason is not None:
         _runtime.stop_reason = stop_reason
     if status not in {
@@ -681,6 +691,7 @@ def _persist(
             "inheritance_path": _runtime.inheritance_path,
         }
     )
+    # latest 指针最后写入，观察者不会先看到尚未生成状态与报告的新运行。
     _write_json(_runtime.state_path, state)
     _write_json(_runtime.manifest_path, manifest)
     _write_reports(_runtime, state)

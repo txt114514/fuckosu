@@ -1,3 +1,5 @@
+"""用文件锁分配跨进程单调递增且带 UTC 时间的输出目录标识。"""
+
 from __future__ import annotations
 
 import fcntl
@@ -23,6 +25,8 @@ class OutputIdentity:
 
 
 class OutputIdentityReservation:
+    """持锁的两阶段编号预留；只有 commit 后才推进持久化计数器。"""
+
     def __init__(self, *, identity: OutputIdentity, counter_path: Path, lock_file):
         self.identity = identity
         self._counter_path = counter_path
@@ -41,6 +45,7 @@ class OutputIdentityReservation:
         self.close()
 
     def commit(self) -> None:
+        # 先完成真实输出，再提交编号，失败任务不会制造无对应目录的已用序号。
         self._counter_path.write_text(f"{self.identity.sequence}\n", encoding="ascii")
         self._committed = True
 
@@ -72,12 +77,15 @@ def _existing_max_sequence(output_root: Path) -> int:
 
 
 def allocate_output_identity(output_root: Path) -> OutputIdentity:
+    """原子分配并立即提交一个新编号。"""
+
     output_root.mkdir(parents=True, exist_ok=True)
     counter_path = output_root / ".output_counter"
     lock_path = output_root / ".output_counter.lock"
     with lock_path.open("a+", encoding="ascii") as lock_file:
         fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
         try:
+            # 同时扫描现有目录，可在计数器丢失或落后时仍保持编号单调。
             current = max(
                 _read_counter(counter_path),
                 _existing_max_sequence(output_root),
@@ -98,6 +106,8 @@ def allocate_output_identity(output_root: Path) -> OutputIdentity:
 
 
 def reserve_output_identity_for_commit(output_root: Path) -> OutputIdentityReservation:
+    """持有排他锁并预留编号，由调用方完成输出后显式 commit。"""
+
     output_root.mkdir(parents=True, exist_ok=True)
     counter_path = output_root / ".output_counter"
     lock_path = output_root / ".output_counter.lock"

@@ -1,12 +1,15 @@
+"""训练命令行门面：把 CLI 参数适配到数据、模型、训练和诊断业务入口。"""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
 import json
 import sys
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import Any, Mapping, NoReturn
 
 if __package__ is None or __package__ == "":
+    # 兼容直接执行源码文件；正常 ``python -m`` 路径不会修改 sys.path。
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
@@ -40,6 +43,7 @@ from traning.core.decision import (
     run_temporal_decision,
 )
 from traning.core.diagnostics import run_oracle_diagnostics
+from traning.core.optimization import training_job_from_dict
 from traning.core.dataset_import import build_dataset, inspect_data_input
 from traning.core.spatial import (
     run_spatial_frame_inference,
@@ -63,7 +67,7 @@ from traning.core.training_inheritance import (
     create_inheritance_package,
     load_inheritance_package,
 )
-from traning.state import load_batch_gallery_request
+from traning.state import CurriculumStage, load_batch_gallery_request
 from environment import collect_environment_report
 from visualization.lib import (
     TrainingEvent,
@@ -155,6 +159,8 @@ def _run_dir(kind: str, *, root: Path | None = None) -> Path:
 
 
 def _select_device(device: str) -> torch.device:
+    """解析设备并在显式请求 CUDA 但不可用时立即失败。"""
+
     if device == "auto":
         selected = "cuda" if torch.cuda.is_available() else "cpu"
     else:
@@ -460,7 +466,14 @@ def run_training(
     cache_max_frames: int = 1,
     sequence_length: int | None = None,
     candidate_slots: int | None = None,
+    max_candidates: int | None = None,
+    score_threshold: float | None = None,
+    nms_radius_px: float | None = None,
+    slider_threshold: float | None = None,
+    max_slider_paths: int | None = None,
     parameter_group_id: str = "pg-0001",
+    optimization_stage: CurriculumStage = CurriculumStage.BASIC,
+    optimization_rung: int = 0,
     render_gallery: bool = True,
     gallery_output_root: Path | None = None,
     gallery_samples_per_group: int | None = None,
@@ -468,6 +481,7 @@ def run_training(
     progress_language: str = "zh-CN",
     inherit_from: Path | str | None = None,
     resume_policy: str = "none",
+    direct_stage_checkpoints: Mapping[str, Path] | None = None,
 ):
     if progress_ui not in {"auto", "gui", "rich", "plain", "off"}:
         raise CliParameterError("progress-ui must be auto, gui, rich, plain, or off")
@@ -489,6 +503,11 @@ def run_training(
             inherit_from=inherit_from,
             current_settings=settings,
             policy=resume_policy,  # type: ignore[arg-type]
+        )
+        stage_checkpoints = dict(inheritance.stage_checkpoint_paths)
+        stage_checkpoints.update(dict(direct_stage_checkpoints or {}))
+        effective_resume_policy = (
+            "weights-only" if direct_stage_checkpoints else inheritance.policy
         )
         _write_json_report(
             run_dir / "dashboard" / "resume_report.json", inheritance.as_dict()
@@ -523,13 +542,20 @@ def run_training(
                 cache_max_frames=(None if cache_max_frames == 0 else cache_max_frames),
                 sequence_length=sequence_length,
                 candidate_slots=candidate_slots,
+                max_candidates=max_candidates,
+                score_threshold=score_threshold,
+                nms_radius_px=nms_radius_px,
+                slider_threshold=slider_threshold,
+                max_slider_paths=max_slider_paths,
                 parameter_group_id=parameter_group_id,
+                optimization_stage=optimization_stage,
+                optimization_rung=optimization_rung,
                 render_gallery=render_gallery,
                 gallery_output_root=gallery_output_root,
                 gallery_samples_per_group=gallery_samples_per_group,
                 reporter=reporter,
-                resume_policy=inheritance.policy,
-                resume_stage_checkpoints=inheritance.stage_checkpoint_paths,
+                resume_policy=effective_resume_policy,
+                resume_stage_checkpoints=stage_checkpoints,
             ),
         )
         package = _safe_create_inheritance_package(
@@ -600,19 +626,20 @@ def run_training_job_spec(
     raw = json.loads(job.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
         raise CliParameterError("training job spec must be a JSON object")
-    trial_id = str(raw.get("trial_id") or "")
-    if not trial_id:
-        raise CliParameterError("training job spec is missing trial_id")
-    budget_steps = int(raw.get("budget_steps") or 1)
-    if budget_steps <= 0:
-        raise CliParameterError("training job budget_steps must be positive")
+    try:
+        spec = training_job_from_dict(raw)
+    except ValueError as error:
+        raise CliParameterError(str(error)) from error
+    training = spec.parameters.training
+    inference = spec.parameters.inference
     summary = {
         "job": job,
-        "trial_id": trial_id,
-        "budget_steps": budget_steps,
-        "curriculum_stage": raw.get("curriculum_stage"),
-        "rung": raw.get("rung"),
-        "parent_checkpoint_path": raw.get("parent_checkpoint_path"),
+        "trial_id": spec.trial_id,
+        "budget_steps": spec.budget_steps,
+        "curriculum_stage": spec.curriculum_stage.value,
+        "rung": spec.rung,
+        "parent_checkpoint_path": spec.parent_checkpoint_path,
+        "parameters": spec.parameters.model_dump(mode="json"),
         "execute": execute,
     }
     if not execute:
@@ -620,9 +647,28 @@ def run_training_job_spec(
     result = run_training(
         config=config,
         device=device,
-        spatial_max_steps=budget_steps,
-        temporal_max_steps=budget_steps,
-        parameter_group_id=trial_id,
+        spatial_max_steps=spec.budget_steps,
+        temporal_max_steps=spec.budget_steps,
+        spatial_learning_rate=float(training.get("spatial_learning_rate", 1e-4)),
+        temporal_learning_rate=float(training.get("temporal_learning_rate", 1e-4)),
+        patch_limit=int(training.get("patch_limit", 1)),
+        cache_max_frames=int(training.get("cache_max_frames", 1)),
+        sequence_length=int(training.get("sequence_length", 8)),
+        candidate_slots=int(training.get("candidate_slots", 32)),
+        max_candidates=int(inference.get("max_candidates", 32)),
+        score_threshold=float(inference.get("score_threshold", 0.05)),
+        nms_radius_px=float(inference.get("nms_radius_px", 24.0)),
+        slider_threshold=float(inference.get("slider_threshold", 0.35)),
+        max_slider_paths=int(inference.get("max_slider_paths", 16)),
+        parameter_group_id=spec.trial_id,
+        optimization_stage=spec.curriculum_stage,
+        optimization_rung=spec.rung,
+        resume_policy="weights-only" if spec.parent_checkpoint_path else "none",
+        direct_stage_checkpoints=(
+            {"temporal": spec.parent_checkpoint_path}
+            if spec.parent_checkpoint_path is not None
+            else None
+        ),
     )
     return summary | {"result": result.as_summary()}
 

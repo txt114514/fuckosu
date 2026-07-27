@@ -1,3 +1,5 @@
+"""用真实目标替换逐级预测分支，定位空间、选择与时序模块的误差上限。"""
+
 from __future__ import annotations
 
 from collections import defaultdict
@@ -11,7 +13,12 @@ from typing import Any
 
 from PIL import Image, ImageDraw
 
-from package.coordinates import OSU_PLAYFIELD_HEIGHT, OSU_PLAYFIELD_WIDTH
+from package.coordinates import (
+    OSU_PLAYFIELD_HEIGHT,
+    OSU_PLAYFIELD_WIDTH,
+    frame_normalized_to_pixel,
+    frame_pixel_to_normalized,
+)
 from traning.conf import Settings
 from traning.core.dataset_import import build_dataset
 from traning.core.optimization import score_decision_outputs
@@ -80,6 +87,8 @@ def run_oracle_diagnostics(
     max_fixed_frames: int = 128,
     probe_limit: int = 12,
 ) -> OracleDiagnosticsResult:
+    """逐级注入真值并比较得分，确定最早破坏上限的生产阶段。"""
+
     selected_output_dir = output_dir or run_dir / "diagnostics" / "oracle_ladder"
     selected_output_dir.mkdir(parents=True, exist_ok=True)
     cache_dir = run_dir / "candidate_cache"
@@ -88,6 +97,7 @@ def run_oracle_diagnostics(
     decision_path = run_dir / "decision" / "decisions.jsonl"
     decision_rows = _read_jsonl(decision_path) if decision_path.is_file() else ()
 
+    # 所有 oracle 变体共享固定成员，分数差异才可归因于被替换的阶段而非抽样波动。
     fixed_manifest = _build_fixed_evaluation_manifest(
         candidate_records,
         seed=fixed_seed,
@@ -105,10 +115,14 @@ def run_oracle_diagnostics(
         settings=settings,
     )
 
-    oracle_roundtrip_path = selected_output_dir / "oracle_target_roundtrip_decisions.jsonl"
+    oracle_roundtrip_path = (
+        selected_output_dir / "oracle_target_roundtrip_decisions.jsonl"
+    )
     _write_jsonl(
         oracle_roundtrip_path,
-        _oracle_decisions(candidate_records, mode="target_roundtrip", settings=settings),
+        _oracle_decisions(
+            candidate_records, mode="target_roundtrip", settings=settings
+        ),
     )
     oracle_roundtrip = score_decision_outputs(
         parameter_group_id="oracle_target_roundtrip",
@@ -188,7 +202,9 @@ def run_oracle_diagnostics(
         "decision_diagnostics": (
             None
             if not decision_rows
-            else _decision_diagnostics(candidate_records, decision_rows, settings=settings)
+            else _decision_diagnostics(
+                candidate_records, decision_rows, settings=settings
+            )
         ),
         "loss_audit": {
             "coordinate_loss_mask": "action_frames_only",
@@ -247,6 +263,11 @@ def _oracle_decisions(
     settings: Settings | None = None,
     candidate_slots: int | None = None,
 ) -> tuple[dict[str, Any], ...]:
+    """构造不同阶梯的理想决策，并保持与真实模型相同的输出坐标契约。
+
+    oracle 即使从真值 osu! 坐标出发，也必须先映射到视频像素，再归一化为
+    ``model_input_normalized``；这样评分端会走与真实决策完全相同的往返路径。
+    """
     decisions: list[dict[str, Any]] = []
     for record in records:
         target = _target(record)
@@ -262,6 +283,7 @@ def _oracle_decisions(
             "selected_candidate_id": None,
             "selected_candidate_probability": None,
             "predicted_xy_normalized": [0.0, 0.0],
+            "predicted_xy_space": "model_input_normalized",
             "time_offset_ms": float(target.get("time_offset_ms") or 0.0),
             "diagnostics": {"oracle_mode": mode},
         }
@@ -269,6 +291,7 @@ def _oracle_decisions(
             decisions.append(row)
             continue
         if mode == "matched_candidate":
+            # 只指定候选 ID，让评分端优先读取候选缓存中的原始视频像素。
             row["selected_candidate_id"] = target.get("selected_candidate_id")
         elif mode == "temporal_slots":
             selected_id = _safe_int(target.get("selected_candidate_id"))
@@ -279,19 +302,18 @@ def _oracle_decisions(
                 else None
             )
         elif mode == "target_roundtrip":
+            # 先执行 target video -> osu，再按统一输出契约执行
+            # osu -> frame pixel -> frame normalized，用于隔离坐标往返误差。
             osu_xy = _roundtrip_target_osu(record, settings=settings)
-            if osu_xy is not None:
-                row["predicted_xy_normalized"] = [
-                    osu_xy[0] / OSU_PLAYFIELD_WIDTH,
-                    osu_xy[1] / OSU_PLAYFIELD_HEIGHT,
-                ]
+            normalized = _osu_to_frame_normalized(record, osu_xy, settings=settings)
+            if normalized is not None:
+                row["predicted_xy_normalized"] = list(normalized)
         else:
+            # GT oracle 也不能把 osu! 坐标直接除以 512x384；模型输出空间是整帧。
             osu_xy = _point_pair(target.get("target_osu_xy"))
-            if osu_xy is not None:
-                row["predicted_xy_normalized"] = [
-                    osu_xy[0] / OSU_PLAYFIELD_WIDTH,
-                    osu_xy[1] / OSU_PLAYFIELD_HEIGHT,
-                ]
+            normalized = _osu_to_frame_normalized(record, osu_xy, settings=settings)
+            if normalized is not None:
+                row["predicted_xy_normalized"] = list(normalized)
         decisions.append(row)
     return tuple(decisions)
 
@@ -301,6 +323,7 @@ def _roundtrip_target_osu(
     *,
     settings: Settings | None,
 ) -> tuple[float, float] | None:
+    """将目标视频像素反变换到 osu! 空间，供坐标往返 oracle 使用。"""
     target_video = _point_pair(_target(record).get("target_video_xy"))
     if target_video is None:
         return _point_pair(_target(record).get("target_osu_xy"))
@@ -348,9 +371,13 @@ def _fixed_eval_rows(
     max_frames: int,
 ) -> tuple[Mapping[str, Any], ...]:
     rng = random.Random(seed)
-    by_scene: dict[str, dict[str, list[Mapping[str, Any]]]] = defaultdict(lambda: defaultdict(list))
+    by_scene: dict[str, dict[str, list[Mapping[str, Any]]]] = defaultdict(
+        lambda: defaultdict(list)
+    )
     for record in records:
-        by_scene[_scene_type(record)][str(record.get("sample_key") or "")].append(record)
+        by_scene[_scene_type(record)][str(record.get("sample_key") or "")].append(
+            record
+        )
     selected: list[Mapping[str, Any]] = []
     scenes = sorted(by_scene)
     rng.shuffle(scenes)
@@ -403,7 +430,8 @@ def _candidate_recall(records: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
                     bucket[f"hits@{radius}px"] += 1
     return _finalize_recall(totals) | {
         "by_scene": {
-            scene: _finalize_recall(bucket) for scene, bucket in sorted(by_scene.items())
+            scene: _finalize_recall(bucket)
+            for scene, bucket in sorted(by_scene.items())
         }
     }
 
@@ -452,18 +480,43 @@ def _target_assignment(
         if str(target.get("action") or "no_op") == "no_op":
             continue
         target_frames += 1
-        radius = _safe_float(target.get("candidate_match_radius_px")) or 64.0
+        # cache v2 的权威匹配在 osu 空间执行；像素欧氏距离
+        # 只是诊断值。v1 没有 osu 距离时才回退历史 64px 语义。
+        use_osu_distance = (
+            target.get("candidate_match_space") == "osu"
+            and _safe_float(target.get("candidate_match_radius_osu")) is not None
+            and bool(_candidate_distances(record, space="osu"))
+        )
+        distance_space = "osu" if use_osu_distance else "video_px"
+        radius = (
+            _safe_float(target.get("candidate_match_radius_osu"))
+            if use_osu_distance
+            else _safe_float(target.get("candidate_match_radius_px")) or 64.0
+        )
         selected_id = _safe_int(target.get("selected_candidate_id"))
         candidates = _candidate_rows(record)
         ids = [_safe_int(candidate.get("candidate_id")) for candidate in candidates]
-        if len([item for item in ids if item is not None]) != len(set(item for item in ids if item is not None)):
+        if len([item for item in ids if item is not None]) != len(
+            set(item for item in ids if item is not None)
+        ):
             unstable_ids += 1
-        distances = _candidate_distances(record)
+        distances = _candidate_distances(
+            record,
+            space="osu" if use_osu_distance else "px",
+        )
+        pixel_distances = _candidate_distances(record, space="px")
         nearest_index = distances.index(min(distances)) if distances else None
         nearest_id = (
-            None if nearest_index is None else _safe_int(candidates[nearest_index].get("candidate_id"))
+            None
+            if nearest_index is None
+            else _safe_int(candidates[nearest_index].get("candidate_id"))
         )
         nearest_distance = None if nearest_index is None else distances[nearest_index]
+        nearest_distance_px = (
+            pixel_distances[nearest_index]
+            if nearest_index is not None and nearest_index < len(pixel_distances)
+            else None
+        )
         if nearest_distance is not None and nearest_distance <= radius:
             nearest_within_radius += 1
         if selected_id is not None:
@@ -482,16 +535,24 @@ def _target_assignment(
                     "action": target.get("action"),
                     "selected_candidate_id": selected_id,
                     "nearest_candidate_id": nearest_id,
-                    "nearest_distance_px": nearest_distance,
+                    "match_distance_space": distance_space,
+                    "nearest_distance_osu": (
+                        nearest_distance if use_osu_distance else None
+                    ),
+                    "nearest_distance_px": nearest_distance_px,
                     "selected_in_temporal_slots": (
                         None
                         if selected_id is None
-                        else _candidate_id_in_top_slots(record, selected_id, candidate_slots)
+                        else _candidate_id_in_top_slots(
+                            record, selected_id, candidate_slots
+                        )
                     ),
                     "selected_in_raw_top_slots": (
                         None
                         if selected_id is None
-                        else _candidate_id_in_raw_top_slots(record, selected_id, candidate_slots)
+                        else _candidate_id_in_raw_top_slots(
+                            record, selected_id, candidate_slots
+                        )
                     ),
                     "match_status": target.get("candidate_match_status"),
                     "unmatched_reason": target.get("candidate_match_unmatched_reason"),
@@ -506,7 +567,8 @@ def _target_assignment(
         "temporal_candidate_slots": candidate_slots,
         "selected_candidate_in_temporal_slots_frames": selected_in_temporal_slots,
         "selected_candidate_in_raw_top_slots_frames": selected_in_raw_top_slots,
-        "matched_but_truncated_by_raw_top_slots_frames": matched - selected_in_raw_top_slots,
+        "matched_but_truncated_by_raw_top_slots_frames": matched
+        - selected_in_raw_top_slots,
         "duplicate_or_missing_candidate_id_frames": unstable_ids,
         "match_rate": _rate(matched, target_frames),
         "temporal_slot_match_rate": _rate(
@@ -538,12 +600,8 @@ def _temporal_continuity(settings: Settings, cache_dir: Path) -> dict[str, Any]:
         )
         same_group = len(set(keys)) <= 1
         full_length = len(frame_indices) == sequence_length
-        consecutive = all(
-            b == a + 1 for a, b in zip(frame_indices, frame_indices[1:])
-        )
-        timestamp_monotonic = all(
-            b >= a for a, b in zip(timestamps, timestamps[1:])
-        )
+        consecutive = all(b == a + 1 for a, b in zip(frame_indices, frame_indices[1:]))
+        timestamp_monotonic = all(b >= a for a, b in zip(timestamps, timestamps[1:]))
         if not (same_group and full_length and consecutive and timestamp_monotonic):
             discontinuous += 1
         windows.append(
@@ -582,7 +640,9 @@ def _decision_diagnostics(
     predicted_actions = 0
     no_op_logits: list[float] = []
     action_logits: list[float] = []
-    by_scene: dict[str, dict[str, int]] = defaultdict(lambda: {"tp": 0, "fp": 0, "fn": 0, "tn": 0})
+    by_scene: dict[str, dict[str, int]] = defaultdict(
+        lambda: {"tp": 0, "fp": 0, "fn": 0, "tn": 0}
+    )
     for decision in decisions:
         record = cache_by_key.get(_frame_key(decision))
         if record is None:
@@ -606,7 +666,9 @@ def _decision_diagnostics(
         else:
             tn += 1
             by_scene[scene]["tn"] += 1
-        probabilities = ((decision.get("diagnostics") or {}).get("action_probabilities") or {})
+        probabilities = (decision.get("diagnostics") or {}).get(
+            "action_probabilities"
+        ) or {}
         if isinstance(probabilities, Mapping):
             no_op = _safe_float(probabilities.get("no_op"))
             if no_op is not None:
@@ -651,7 +713,8 @@ def _decision_diagnostics(
             "max_action_mean": _mean(action_logits),
         },
         "by_scene": {
-            scene: values | {
+            scene: values
+            | {
                 "precision": _rate(values["tp"], values["tp"] + values["fp"]),
                 "recall": _rate(values["tp"], values["tp"] + values["fn"]),
             }
@@ -751,7 +814,13 @@ def _select_probe_records(
         )
         if record is not None:
             selected.append(record | {"probe_reason": label})
-    for scene in ("single_point", "slider", "point_slider", "long_sequence", "dense_hard"):
+    for scene in (
+        "single_point",
+        "slider",
+        "point_slider",
+        "long_sequence",
+        "dense_hard",
+    ):
         record = next((item for item in targets if _scene_type(item) == scene), None)
         if record is not None:
             selected.append(record | {"probe_reason": scene})
@@ -783,7 +852,11 @@ def _probe_points(
         decoded_osu = transform.video_to_osu(*target_video)
         decoded_projection = transform.osu_to_video(*decoded_osu)
     nearest_candidate = _nearest_candidate_point(record, target_video)
-    prediction = None if decision is None else _decision_video_xy(record, decision, settings=settings)
+    prediction = (
+        None
+        if decision is None
+        else _decision_video_xy(record, decision, settings=settings)
+    )
     return {
         "sample_id": _frame_id(record),
         "probe_reason": record.get("probe_reason"),
@@ -851,10 +924,11 @@ def _error_pattern(
     mean_dx = _mean(dx_values) or 0.0
     mean_dy = _mean(dy_values) or 0.0
     centered = [
-        hypot(dx - mean_dx, dy - mean_dy)
-        for dx, dy in zip(dx_values, dy_values)
+        hypot(dx - mean_dx, dy - mean_dy) for dx, dy in zip(dx_values, dy_values)
     ]
-    if centered and (_mean(centered) or 0.0) < max(2.0, (_mean(distances) or 0.0) * 0.25):
+    if centered and (_mean(centered) or 0.0) < max(
+        2.0, (_mean(distances) or 0.0) * 0.25
+    ):
         return "fixed_offset_like"
     return "mixed_scale_aspect_crop_or_per_source_error"
 
@@ -878,20 +952,27 @@ def _first_error_stage(report: Mapping[str, Any]) -> str:
     return "No failing stage found by oracle ladder"
 
 
-def _candidate_distances(record: Mapping[str, Any]) -> list[float]:
+def _candidate_distances(
+    record: Mapping[str, Any],
+    *,
+    space: str = "px",
+) -> list[float]:
     target = _target(record)
-    raw = target.get("candidate_distances_px")
+    raw = target.get(
+        "candidate_distances_osu" if space == "osu" else "candidate_distances_px"
+    )
     if isinstance(raw, Sequence) and not isinstance(raw, (str, bytes)):
-        return [
-            float(value)
-            for value in raw
-            if isinstance(value, int | float)
-        ]
+        return [float(value) for value in raw if isinstance(value, int | float)]
+    if space == "osu":
+        return []
     target_xy = _point_pair(target.get("target_video_xy"))
     if target_xy is None:
         return []
     return [
-        hypot(float(candidate.get("x", 0.0)) - target_xy[0], float(candidate.get("y", 0.0)) - target_xy[1])
+        hypot(
+            float(candidate.get("x", 0.0)) - target_xy[0],
+            float(candidate.get("y", 0.0)) - target_xy[1],
+        )
         for candidate in _candidate_rows(record)
     ]
 
@@ -921,23 +1002,58 @@ def _decision_video_xy(
     *,
     settings: Settings,
 ) -> tuple[float, float] | None:
+    """解析诊断决策的视频坐标，候选原始像素优先于模型回归坐标。"""
     selected_id = _safe_int(decision.get("selected_candidate_id"))
     if selected_id is not None:
+        # 与正式评分一致：候选 ID 命中时直接采用检测缓存的 frame pixel。
         for candidate in _candidate_rows(record):
             if _safe_int(candidate.get("candidate_id")) == selected_id:
                 return (float(candidate.get("x", 0.0)), float(candidate.get("y", 0.0)))
     normalized = _point_pair(decision.get("predicted_xy_normalized"))
     if normalized is None:
         return None
+    frame_width = _safe_int(record.get("frame_width"))
+    frame_height = _safe_int(record.get("frame_height"))
+    if frame_width is None or frame_height is None:
+        return None
+    # predicted_xy_normalized 是完整输入帧归一化坐标，不属于 osu! 空间。
+    return frame_normalized_to_pixel(
+        normalized[0],
+        normalized[1],
+        width=frame_width,
+        height=frame_height,
+    )
+
+
+def _osu_to_frame_normalized(
+    record: Mapping[str, Any],
+    osu_xy: tuple[float, float] | None,
+    *,
+    settings: Settings | None,
+) -> tuple[float, float] | None:
+    """把 osu! 点编码成模型输出使用的整帧归一化坐标。
+
+    oracle 的正向编码与评分端的逆向解码必须经过同一个视频像素空间：
+    ``osu -> frame pixel -> frame normalized``，评分时再反向还原。
+    """
+    if osu_xy is None:
+        return None
+    frame_width = _safe_int(record.get("frame_width"))
+    frame_height = _safe_int(record.get("frame_height"))
+    if frame_width is None or frame_height is None:
+        return None
     transform, _ = transform_from_settings_or_sample(
         settings,
         record,
-        frame_width=_safe_int(record.get("frame_width")),
-        frame_height=_safe_int(record.get("frame_height")),
+        frame_width=frame_width,
+        frame_height=frame_height,
     )
-    return transform.osu_to_video(
-        normalized[0] * OSU_PLAYFIELD_WIDTH,
-        normalized[1] * OSU_PLAYFIELD_HEIGHT,
+    # 使用记录/配置解析出的同一变换，避免 oracle 绕过实际坐标映射后虚高。
+    video_xy = transform.osu_to_video(*osu_xy)
+    return frame_pixel_to_normalized(
+        *video_xy,
+        width=frame_width,
+        height=frame_height,
     )
 
 
@@ -945,7 +1061,9 @@ def _candidate_rows(record: Mapping[str, Any]) -> tuple[Mapping[str, Any], ...]:
     candidates = record.get("candidates") or ()
     if not isinstance(candidates, Sequence) or isinstance(candidates, (str, bytes)):
         return ()
-    return tuple(candidate for candidate in candidates if isinstance(candidate, Mapping))
+    return tuple(
+        candidate for candidate in candidates if isinstance(candidate, Mapping)
+    )
 
 
 def _sorted_candidate_rows(record: Mapping[str, Any]) -> tuple[Mapping[str, Any], ...]:
@@ -1034,7 +1152,9 @@ def _record_time_key(record: Mapping[str, Any]) -> tuple[str, int, float]:
 
 
 def _frame_key(record: Mapping[str, Any]) -> tuple[str, int]:
-    return str(record.get("sample_key") or ""), _safe_int(record.get("frame_index")) or -1
+    return str(record.get("sample_key") or ""), _safe_int(
+        record.get("frame_index")
+    ) or -1
 
 
 def _frame_id(record: Mapping[str, Any]) -> str:
@@ -1087,7 +1207,9 @@ def _point_list(value: tuple[float, float] | None) -> list[float] | None:
 
 
 def _safe_name(value: str) -> str:
-    return "".join(char if char.isalnum() or char in "-_" else "_" for char in value)[:120]
+    return "".join(char if char.isalnum() or char in "-_" else "_" for char in value)[
+        :120
+    ]
 
 
 def _read_jsonl(path: Path) -> tuple[dict[str, Any], ...]:
@@ -1144,5 +1266,7 @@ def _percentile(values: Sequence[float], percentile: float) -> float | None:
     if not values:
         return None
     ordered = sorted(values)
-    index = min(len(ordered) - 1, max(0, round((percentile / 100) * (len(ordered) - 1))))
+    index = min(
+        len(ordered) - 1, max(0, round((percentile / 100) * (len(ordered) - 1)))
+    )
     return ordered[index]

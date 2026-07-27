@@ -1,3 +1,5 @@
+"""登记并执行模块、环境、配置、设备和数据输入的分级检查。"""
+
 from __future__ import annotations
 
 import importlib.util
@@ -22,6 +24,8 @@ CheckRunner = Callable[[], StartupCheckResult]
 
 @dataclass(frozen=True)
 class ProgressiveCheck:
+    """带层级的惰性检查；只有调用 ``run`` 才执行实际探测。"""
+
     key: str
     level: int
     description: str
@@ -57,6 +61,8 @@ def check_environment(
     report: EnvironmentReport | None = None,
     require_cuda: bool = False,
 ) -> StartupCheckResult:
+    """把只读环境报告归约为单项结果，不安装或修改任何依赖。"""
+
     selected = report or collect_environment_report()
     if selected.ready(require_cuda=require_cuda):
         status = "passed"
@@ -179,6 +185,7 @@ def progressive_startup_checks(
     *,
     require_cuda: bool = False,
 ) -> tuple[ProgressiveCheck, ...]:
+    # level 0 只验证模块边界可导入；level 1 才触碰较重的运行环境探测。
     return (
         *(
             ProgressiveCheck(
@@ -216,6 +223,7 @@ def run_training_startup_checks(
     device: torch.device,
     require_cuda: bool | None = None,
 ) -> TrainingStartupCheckReport:
+    # 显式 require_cuda 可覆盖设备推导，便于 CPU CI 检查 CUDA 配置文件。
     cuda_required = device.type == "cuda" if require_cuda is None else require_cuda
     data_result, data_report = check_training_data_input(settings, split=split)
     report = StartupCheckReport(

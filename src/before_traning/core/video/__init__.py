@@ -1,3 +1,5 @@
+"""公开录像匹配、AV 对齐、裁剪、分段及组合执行入口。"""
+
 from before_traning.conf import Settings
 from before_traning.core.video.av import av_correspondence
 from before_traning.core.video.clip import crop_video

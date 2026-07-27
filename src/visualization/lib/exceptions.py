@@ -1,6 +1,8 @@
+"""定义可视化持久化、渲染和安全停止请求的异常类型。"""
+
 class VisualizationError(RuntimeError):
-    """Raised when dashboard state cannot be persisted or rendered."""
+    """仪表盘状态无法持久化或渲染时抛出。"""
 
 
 class TrainingStopRequested(RuntimeError):
-    """Raised by adapters that need to stop training at a safe boundary."""
+    """适配器要求训练在安全边界停止时抛出。"""

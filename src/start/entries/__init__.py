@@ -1,3 +1,5 @@
+"""集中登记 ``src`` 下可由统一入口发现的顶层模块。"""
+
 from start.entries.before_traning import ENTRY as BEFORE_TRANING_ENTRY
 from start.entries.package import ENTRY as PACKAGE_ENTRY
 from start.entries.traning import ENTRY as TRANING_ENTRY

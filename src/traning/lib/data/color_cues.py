@@ -1,3 +1,5 @@
+"""从归一化 RGB 帧提取确定性的 osu! 配色、白色字形和边缘提示通道。"""
+
 from __future__ import annotations
 
 from typing import Literal
@@ -29,7 +31,7 @@ def color_cue_channel_count(mode: ColorCueMode) -> int:
 
 
 def append_color_cues(frame: torch.Tensor, *, mode: ColorCueMode) -> torch.Tensor:
-    """Append deterministic osu! color/number cues to a normalized CHW RGB frame."""
+    """在归一化 CHW RGB 帧后追加确定性的 osu! 视觉提示通道。"""
 
     if mode == "disabled":
         return frame
@@ -38,7 +40,7 @@ def append_color_cues(frame: torch.Tensor, *, mode: ColorCueMode) -> torch.Tenso
 
 
 def extract_osu_basic_color_cues(frame: torch.Tensor) -> torch.Tensor:
-    """Return palette, white-glyph and object-edge cue maps for one CHW RGB frame."""
+    """返回 ``3xHxW`` 的配色、白色字形和物件边缘响应。"""
 
     if frame.ndim != 3 or frame.shape[0] != 3:
         raise ValueError("color cue extraction expects a normalized 3xHxW RGB frame")
@@ -48,6 +50,7 @@ def extract_osu_basic_color_cues(frame: torch.Tensor) -> torch.Tensor:
     minimum = torch.minimum(torch.minimum(red, green), blue)
     saturation = (value - minimum) / value.clamp_min(1e-6)
 
+    # 三类提示互补：物件配色、低饱和高亮数字/边框，以及受前两者约束的边缘。
     palette = _palette_response(rgb, saturation=saturation, value=value)
     white_glyph = _white_glyph_response(saturation=saturation, value=value)
     object_edge = _object_edge_response(
@@ -63,6 +66,7 @@ def _palette_response(
     saturation: torch.Tensor,
     value: torch.Tensor,
 ) -> torch.Tensor:
+    # 用色度而非原始 RGB 比较锚点，可降低整体亮度变化对颜色匹配的影响。
     chroma = rgb / rgb.sum(dim=0, keepdim=True).clamp_min(1e-6)
     anchors = torch.tensor(
         OSU_OBJECT_COLOR_ANCHORS_RGB,
@@ -93,6 +97,7 @@ def _object_edge_response(
     *,
     object_prior: torch.Tensor,
 ) -> torch.Tensor:
+    # Sobel 响应再乘物件先验，抑制背景纹理被误当成 osu! 轮廓。
     gray = (
         0.299 * rgb[0]
         + 0.587 * rgb[1]

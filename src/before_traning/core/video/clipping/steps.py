@@ -1,3 +1,5 @@
+"""通过临时文件事务执行单个录像的原地固定区域裁剪。"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -13,6 +15,8 @@ class ClipStepsMixin:
             raise FileExistsError(f"临时裁剪文件已存在，请先清理: {temp_output_path}")
 
         try:
+            # ffmpeg 只写临时文件，完整编码成功后才替换源录像；编码失败时
+            # finally 清理半成品，原文件保持可用。
             crop_video(
                 video_path,
                 temp_output_path,

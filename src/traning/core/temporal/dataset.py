@@ -1,3 +1,5 @@
+"""把候选缓存编码为定长因果窗口、有效帧 mask 和多任务监督张量。"""
+
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
@@ -9,8 +11,11 @@ from typing import Any
 import torch
 from torch.utils.data import Dataset
 
-from traning.core.decision import CANDIDATE_CACHE_VERSION
 from traning.lib.models import OBJECT_TYPE_NAMES
+from traning.state.candidate_cache_schema import (
+    CANDIDATE_CACHE_VERSION,
+    SUPPORTED_CANDIDATE_CACHE_VERSIONS,
+)
 
 
 ACTION_NAMES: tuple[str, ...] = ("no_op", "press", "hold", "release")
@@ -126,6 +131,7 @@ class TemporalCandidateWindowDataset(Dataset[TemporalWindow]):
         drop_short: bool,
     ) -> list[TemporalWindow]:
         windows: list[TemporalWindow] = []
+        # 窗口绝不跨 sample_key；不同片段之间没有可学习的时间连续性。
         for group in _group_records_by_sample(records):
             if not group:
                 continue
@@ -145,15 +151,35 @@ class TemporalCandidateWindowDataset(Dataset[TemporalWindow]):
         return windows
 
 
-def load_candidate_cache_records(cache_dir: Path) -> tuple[dict[str, Any], ...]:
+def load_candidate_cache_records(
+    cache_dir: Path,
+    *,
+    allow_legacy: bool = False,
+) -> tuple[dict[str, Any], ...]:
+    """读取候选缓存记录。
+
+    v1 把目标候选匹配固定在 64px，不能作为新的时序训练标签。
+    ``allow_legacy`` 仅供历史诊断/迁移工具显式读取；训练和决策入口
+    使用默认值，强制重建 v2 缓存。
+    """
+
     manifest_path = cache_dir / "manifest.json"
     if not manifest_path.is_file():
         raise FileNotFoundError(f"candidate cache manifest missing: {manifest_path}")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    if manifest.get("version") != CANDIDATE_CACHE_VERSION:
+    accepted_versions = (
+        SUPPORTED_CANDIDATE_CACHE_VERSIONS
+        if allow_legacy
+        else frozenset({CANDIDATE_CACHE_VERSION})
+    )
+    if manifest.get("version") not in accepted_versions:
+        if manifest.get("version") in SUPPORTED_CANDIDATE_CACHE_VERSIONS:
+            raise ValueError(
+                "legacy candidate cache is diagnostic-only; rebuild "
+                f"{CANDIDATE_CACHE_VERSION} before temporal training or decision"
+            )
         raise ValueError(
-            "unsupported candidate cache version: "
-            f"{manifest.get('version')!r}"
+            f"unsupported candidate cache version: {manifest.get('version')!r}"
         )
     records_name = manifest.get("records")
     if not isinstance(records_name, str) or not records_name:
@@ -167,7 +193,7 @@ def load_candidate_cache_records(cache_dir: Path) -> tuple[dict[str, Any], ...]:
         if not line.strip():
             continue
         record = json.loads(line)
-        if record.get("version") != CANDIDATE_CACHE_VERSION:
+        if record.get("version") not in accepted_versions:
             raise ValueError(
                 f"unsupported record version at line {line_number}: "
                 f"{record.get('version')!r}"
@@ -288,6 +314,7 @@ def _encode_window(
             frame_height = max(_optional_float(record.get("frame_height")) or 1.0, 1.0)
             target_xy = temporal_target.get("target_video_xy")
             if isinstance(target_xy, Sequence) and len(target_xy) >= 2:
+                # x/y 监督按完整训练帧宽高归一化，不是 osu 512×384 坐标。
                 xy_target[frame_slot, 0] = float(target_xy[0]) / frame_width
                 xy_target[frame_slot, 1] = float(target_xy[1]) / frame_height
             time_offset[frame_slot, 0] = float(
@@ -405,11 +432,14 @@ def _temporal_slot_candidates(
     if selected is None:
         return sorted_candidates[:candidate_slots]
     top = list(sorted_candidates[:candidate_slots])
-    if any(_optional_int(candidate.get("candidate_id")) == selected_id for candidate in top):
+    if any(
+        _optional_int(candidate.get("candidate_id")) == selected_id for candidate in top
+    ):
         return tuple(top)
     if len(top) < candidate_slots:
         top.append(selected)
     else:
+        # 真值匹配候选即使分数不在 Top-K，也必须进入槽位才能形成候选选择监督。
         top[-1] = selected
     return tuple(top)
 

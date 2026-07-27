@@ -1,4 +1,4 @@
-"""Causal temporal decision stage."""
+"""因果时序窗口、模型训练与动作决策阶段的公开入口。"""
 
 from traning.core.temporal.dataset import (
     ACTION_NAMES,

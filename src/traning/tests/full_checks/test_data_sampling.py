@@ -1,3 +1,5 @@
+"""验证帧采样、分组和可复现随机顺序的边界条件。"""
+
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -18,6 +20,7 @@ class _IdDataset(Dataset[dict[str, object]]):
         return self.size
 
     def __getitem__(self, index: int) -> dict[str, object]:
+        # sample_id 直接暴露原始索引，使测试观察 DataLoader 顺序而不受图像内容影响。
         return {"image": torch.zeros((1, 1, 1)), "sample_id": index}
 
 
@@ -37,6 +40,7 @@ def _settings(*, seed: int, shuffle: bool) -> SimpleNamespace:
 
 
 def _sample_order(settings: SimpleNamespace) -> tuple[int, ...]:
+    # 只替换数据发现边界，实际 DataLoader、generator 与 collate 路径保持不变。
     with patch.object(loader_module, "build_dataset", return_value=_IdDataset()):
         dataloader = loader_module.build_dataloader(settings, split="train")
         return tuple(int(batch["samples"][0]["sample_id"]) for batch in dataloader)

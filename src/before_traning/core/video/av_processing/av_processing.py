@@ -1,3 +1,5 @@
+"""组装 AV 对齐处理器并初始化配置、存储与状态依赖。"""
+
 from __future__ import annotations
 
 import sys
@@ -87,7 +89,7 @@ class AVCorrespondenceProcessor(
 
 
 class VideoAVProcessor(AVCorrespondenceProcessor):
-    """Task-aligned name for the video AV correspondence processor."""
+    """与业务阶段名称一致的视频 AV 对齐处理器别名。"""
 
 
 def main():

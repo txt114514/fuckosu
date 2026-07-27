@@ -1,3 +1,5 @@
+"""生成跨 patch 的几何结构，用于模型、融合和边界行为冒烟测试。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -7,7 +9,7 @@ import torch
 
 @dataclass(frozen=True)
 class SyntheticStructure:
-    """Small synthetic image bundle for model and fusion smoke tests."""
+    """模型与融合冒烟测试使用的小型合成图像及其几何真值。"""
 
     image: torch.Tensor
     mask: torch.Tensor

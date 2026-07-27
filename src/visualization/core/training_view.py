@@ -1,3 +1,5 @@
+"""组合正式训练阶段的试验、参数、评分和资源视图。"""
+
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence

@@ -9,7 +9,9 @@
 
 ## 候选缓存
 
-当前版本：`spatial-candidate-cache-v1`
+当前写入版本：`spatial-candidate-cache-v2`；时序数据集仍可读取历史
+`spatial-candidate-cache-v1` 做显式诊断，但训练/决策入口会要求重建 v2，
+不会继续消费 v1 的固定 64px 标签。
 
 离线流程：
 
@@ -28,6 +30,11 @@
 - 候选与 slider path 的关联；
 - 低置信、近分、路径异常等 `ambiguity_reasons`。
 - `coordinate_transform`、dataset/config/code/score/cache/transform 版本信息。
+- 谱面的 `circle_radius_osu_pixels`及其像素诊断半径；候选匹配会先把
+  视频像素坐标逆变换到 osu! 空间，再与真实 CircleSize 半径比较。
+- `candidate_distances_osu` 是匹配判定的权威距离；
+  `candidate_distances_px` 和 `candidate_match_radius_px` 仅用于可视化诊断，
+  避免 affine 将圆映射为椭圆后误用单一像素半径。
 - manifest 记录 `spatial_checkpoint_path`，完整训练流水线必须传入刚完成训练的
   spatial checkpoint，不能用随机初始化模型生成候选。
 - 可选 `local_refinement` 和 `ambiguity_review`，记录复查策略、触发原因和前后变化。
@@ -87,13 +94,13 @@ Slider 额外要求：
 完整计划流程：
 
 ```text
-随机冷启动
-  -> TPE 生成新参数
+初始参数
+  -> 根据错误域和资源规则生成有界新参数
   -> 低预算训练
   -> 固定评估集测试
   -> ASHA 晋级或剪枝
   -> 同一 trial 继承 checkpoint 晋级课程
-  -> 难例挖掘调整训练采样
+  -> 记录难例诊断与待接线的采样权重计划
   -> 少量候选完整训练和最终模拟排名
 ```
 
@@ -120,7 +127,7 @@ Transformer、候选交互层和动作专家。它节省参数、梯度和优化
 - `run-decision` 已能加载 `train-temporal` 产出的 `temporal_model.pt`，消费候选缓存并导出
   `decisions.jsonl`。
 - 单对象评分和序列模拟底层 API 位于 `traning.lib.metrics`。
-- trial 级评分、三类错误归因、ASHA/TPE 参数调整计划、连续通过 gate、难例采样权重、JSONL/SQLite trial 记录执行器和多目标排序位于 `core/optimization`。
+- trial 级评分、三类错误归因、ASHA + 规则式参数调整、连续通过 gate、难例诊断、JSONL/SQLite trial 记录执行器和多目标排序位于 `core/optimization`。
 - `core.decision.pipeline.TRAINING_STAGES` 当前真实登记
   `data_input / spatial / candidate_cache / temporal / decision / evaluation`。
   这是单轮训练流水线阶段；完整生命周期阶段另由

@@ -1,3 +1,5 @@
+"""验证图集 API 迁移后的新旧导入路径仍指向同一实现。"""
+
 from __future__ import annotations
 
 import unittest

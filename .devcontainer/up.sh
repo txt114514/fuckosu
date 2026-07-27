@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 
+# 启动或复用本地开发容器，并在需要时配置 X11 访问权限。
+
 set -euo pipefail
 
-# 1. 确保 xhost 允许本地 docker 容器访问 X server
-#    用 +local:docker 最安全（只允许来自 docker 用户的连接）
+# 1. 确保 xhost 允许本地 docker 容器访问 X server。
+#    安全边界：该授权不会由脚本自动撤销，仅应在可信的本机开发环境使用。
 if command -v xhost >/dev/null 2>&1; then
     xhost +local:docker || true   # 如果已经设置过，不会报错
 else

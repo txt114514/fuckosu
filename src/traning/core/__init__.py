@@ -1,2 +1,1 @@
-"""Training stage orchestration."""
-
+"""训练阶段编排与领域流程实现。"""

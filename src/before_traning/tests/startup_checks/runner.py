@@ -1,3 +1,5 @@
+"""按固定顺序汇总并运行训练前处理启动检测项。"""
+
 from __future__ import annotations
 
 from pathlib import Path

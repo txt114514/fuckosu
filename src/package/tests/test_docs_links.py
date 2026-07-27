@@ -1,3 +1,5 @@
+"""验证仓库维护的 Markdown 相对链接均指向现存资源。"""
+
 from __future__ import annotations
 
 import re

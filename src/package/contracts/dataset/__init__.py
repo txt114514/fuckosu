@@ -1,3 +1,5 @@
+"""定义数据划分、训练条目、片段和帧引用的跨模块契约。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

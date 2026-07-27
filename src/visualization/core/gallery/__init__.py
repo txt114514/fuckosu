@@ -1,3 +1,5 @@
+"""训练结果图集的选择、渲染、编号与导出公开入口。"""
+
 from visualization.core.gallery.exporter import save_best_trial_gallery
 from visualization.core.gallery.manifest import allocate_output_identity
 from visualization.core.gallery.renderer import (

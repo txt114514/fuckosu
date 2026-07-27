@@ -1,3 +1,5 @@
+"""按 patch 全局位置采样低分辨率上下文，并门控融合局部高分辨率特征。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -12,6 +14,8 @@ from traning.lib.models.local_encoder import LocalFeatures
 
 @dataclass(frozen=True)
 class FusedPatchFeatures:
+    """融合结果；dense/global_context 均与当前 patch 的 BCHW 网格对齐。"""
+
     dense: torch.Tensor
     patch_meta: PatchMeta
     global_context: torch.Tensor
@@ -30,12 +34,14 @@ def _base_grid(
         raise ValueError("feature map dimensions must be positive")
     x_extent = max(float(meta.padded_width), 1.0)
     y_extent = max(float(meta.padded_height), 1.0)
+    # 以每个局部特征单元中心为采样点，先还原到完整帧像素。
     x = meta.x0 + (torch.arange(width, device=device, dtype=dtype) + 0.5) * (
         x_extent / width
     )
     y = meta.y0 + (torch.arange(height, device=device, dtype=dtype) + 0.5) * (
         y_extent / height
     )
+    # grid_sample(align_corners=True) 要求完整帧两端像素中心映射到 [-1, 1]。
     if meta.frame_width <= 1:
         gx = torch.zeros_like(x)
     else:
@@ -54,7 +60,7 @@ def sample_global_feature(
     patch_meta: PatchMeta,
     local_feature_shape: tuple[int, int],
 ) -> torch.Tensor:
-    """Sample full-frame global features at one patch feature-grid alignment."""
+    """在当前 patch 特征网格对应的全帧位置双线性采样全局特征。"""
 
     if global_feature.ndim != 4:
         raise ValueError("global_feature must use BCHW layout")
@@ -77,7 +83,7 @@ def sample_global_feature(
 
 
 class GatedSparseFusion(nn.Module):
-    """Fuse local patch features with sparse low-resolution global context."""
+    """用稀疏低分辨率全局上下文门控融合局部 patch 特征。"""
 
     def __init__(
         self,
@@ -143,6 +149,7 @@ class GatedSparseFusion(nn.Module):
                 patch_meta=patch_meta,
                 global_context=context,
             )
+        # 稠密 context 提供同位置的全局语义；gate 控制对局部响应的逐通道增强。
         context = sample_global_feature(
             global_features,
             patch_meta,
@@ -182,6 +189,7 @@ class GatedSparseFusion(nn.Module):
             device=local.device,
             dtype=local.dtype,
         )
+        # offsets: B x heads x points x H x W x 2，最后一维是归一化网格偏移。
         offsets = self.offset_predictor(local)
         offsets = offsets.view(
             batch,
@@ -192,6 +200,7 @@ class GatedSparseFusion(nn.Module):
             width,
         )
         offsets = offsets.permute(0, 1, 2, 4, 5, 3).tanh() * 0.2
+        # 每个 head 在 sampling_points 维做 softmax，形成局部自适应的凸组合。
         weights = self.weight_predictor(local).view(
             batch,
             self.heads,

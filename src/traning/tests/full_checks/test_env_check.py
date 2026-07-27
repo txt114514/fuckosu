@@ -1,3 +1,5 @@
+"""验证训练环境检查的依赖报告和 CUDA 要求分支。"""
+
 from __future__ import annotations
 
 import unittest

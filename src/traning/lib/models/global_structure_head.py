@@ -1,3 +1,5 @@
+"""从全局特征预测粗粒度物件结构图和上下文 token。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -9,6 +11,8 @@ import torch.nn.functional as F
 
 @dataclass(frozen=True)
 class GlobalStructurePrediction:
+    """全局粗预测；除 coarse_radius 外各空间分支保留 logits。"""
+
     objectness: torch.Tensor
     center_heatmap: torch.Tensor
     ring_likelihood: torch.Tensor
@@ -19,7 +23,7 @@ class GlobalStructurePrediction:
 
 
 class GlobalStructureHead(nn.Module):
-    """Predict coarse full-frame object structure from global features."""
+    """从低分辨率全局特征预测完整帧的粗粒度物件结构。"""
 
     def __init__(
         self,
@@ -60,6 +64,7 @@ class GlobalStructureHead(nn.Module):
             ring_likelihood=self.ring_likelihood(hidden),
             slider_likelihood=self.slider_likelihood(hidden),
             spinner_likelihood=self.spinner_likelihood(hidden),
+            # 半径必须非负；其他分类/似然分支留作 logits 以配合稳定损失。
             coarse_radius=F.softplus(self.coarse_radius(hidden)),
             context_tokens=context.flatten(2).transpose(1, 2).contiguous(),
         )

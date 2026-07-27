@@ -52,6 +52,37 @@ from package import SharedType, shared_function
 每个 contract 都提供 `as_dict()`，支持需要时从 mapping 创建；调用方仍应优先从
 `package` 或 `package.contracts` 的公开入口导入。
 
+## Coordinates
+
+`package.coordinates` 是跨训练、评分和可视化共享的坐标契约。轴对齐与仿射实现都通过
+`OsuVideoCoordinateTransform` 暴露 `osu_to_video()`、`video_to_osu()`、`rect` 和半径换算；
+调用方不得自行复制 playfield 偏移或缩放公式。
+
+仿射矩阵的正向固定为 `osu -> 完整训练帧像素`：
+
+```text
+video_x = matrix[0][0] * osu_x + matrix[0][1] * osu_y + matrix[0][2]
+video_y = matrix[1][0] * osu_x + matrix[1][1] * osu_y + matrix[1][2]
+```
+
+矩阵与输入分辨率是一体的标定参数。例如两份 small-vram 配置中的矩阵只适用于
+`1484x846` 且未 resize 的帧，改变裁剪、resize 或原始分辨率后必须重新标定。公共 `rect`
+对轴对齐实现表示 playfield 本身，对仿射实现表示四个变换后角点的轴对齐外接矩形，供
+spinner、边界绘制等不依赖具体实现的调用方使用。
+
+模型的 `x/y` 输出属于完整训练帧归一化坐标，换算顺序固定为：
+
+```text
+model_input_normalized -> training_frame_pixel -> osu
+```
+
+持久化 cache、checkpoint 或 gallery 时应同时记录 transform version 与由完整方程、训练帧
+尺寸生成的 transform fingerprint；方程变化必须使旧状态失配。
+
+Dataset 必须按 record 保存并下发 `coordinate_transform`，消费者优先读取样本携带的规格，
+再考虑全局配置或显式 legacy fallback。这样含不同预处理元数据的数据不会共用错误矩阵，
+离线 gallery 在没有 `Settings` 对象时也能复现训练所用的坐标映射。
+
 ## Dataset Split
 
 `package.dataset_split` 管理跨 `start` 和 `traning` 共用的数据集划分清单。

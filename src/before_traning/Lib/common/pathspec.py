@@ -1,3 +1,5 @@
+"""将文件后缀转换为 gitwildmatch 规则并提供统一文件过滤接口。"""
+
 from __future__ import annotations
 
 from pathlib import Path

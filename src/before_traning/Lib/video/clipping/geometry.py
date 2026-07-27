@@ -1,3 +1,5 @@
+"""缩放并校验视频裁剪矩形，同时满足编码器偶数尺寸约束。"""
+
 from __future__ import annotations
 
 from pathlib import Path

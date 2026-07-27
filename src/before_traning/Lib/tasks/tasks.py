@@ -1,3 +1,5 @@
+"""定义任务规格、任务注册器与 Prefect 阶段任务构建接口。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

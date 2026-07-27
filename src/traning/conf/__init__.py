@@ -1,3 +1,5 @@
+"""导出训练配置模型、默认值与统一加载入口。"""
+
 from traning.conf.defaults import DEFAULT_SETTINGS
 from traning.conf.settings import (
     CONFIG_PATH,

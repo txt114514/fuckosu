@@ -1,3 +1,5 @@
+"""渲染课程、步数和数据使用量的总体训练进度。"""
+
 from rich.panel import Panel
 from rich.table import Table
 

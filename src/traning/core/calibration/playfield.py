@@ -1,6 +1,8 @@
+"""从谱面目标和视频圆心观测稳健拟合 osu 到视频像素的仿射变换。"""
+
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Sequence  # noqa: F401 - 保留既有模块属性兼容面。
 from dataclasses import dataclass
 import json
 import math
@@ -92,6 +94,8 @@ def calibrate_playfield_transform(
     min_inliers: int = 32,
     output_path: Path | None = None,
 ) -> CalibrationResult:
+    """从多个片段收集观测点，并用 RANSAC 拟合可逆的 2×3 仿射矩阵。"""
+
     dataset = build_dataset(settings, split=split)
     records = dataset.records if max_records is None else dataset.records[:max_records]
     points: list[CalibrationPoint] = []
@@ -108,6 +112,7 @@ def calibrate_playfield_transform(
         raise ValueError("calibration requires at least three detected points")
     src = np.array([point.osu_xy for point in points], dtype=np.float32)
     dst = np.array([point.detected_xy for point in points], dtype=np.float32)
+    # 通过样本中仍可能含 UI 圆环或检测偏差；RANSAC 防止少量误检拖动全局方程。
     matrix, inlier_mask = cv2.estimateAffine2D(
         src,
         dst,
@@ -189,6 +194,7 @@ def _detect_record_points(
                 frame_width=frame_width,
                 frame_height=frame_height,
             )
+            # 当前配置只用于限定 Hough 搜索区域；最终拟合使用检测圆心，避免自证旧方程。
             search_xy = search_transform.osu_to_video(float(item.x), float(item.y))
             detected = _detect_circle_near(
                 frame_bgr,
@@ -256,6 +262,7 @@ def _detect_circle_near(
         detected_y = float(local_y + y0)
         radius_px = float(radius)
         search_error = math.hypot(detected_x - x, detected_y - y)
+        # 位置是主证据，半径仅作为同一 ROI 内多个圆形候选的弱判别项。
         score = search_error + abs(radius_px - expected_radius_px) * 0.25
         if best is None or score < best[0]:
             best = (score, detected_x, detected_y, radius_px, search_error)

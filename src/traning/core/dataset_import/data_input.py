@@ -1,3 +1,5 @@
+"""封装训练数据检查、Dataset 和 DataLoader 构建的公开门面。"""
+
 from __future__ import annotations
 
 from torch.utils.data import DataLoader

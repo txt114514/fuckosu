@@ -1,3 +1,5 @@
+"""训练数据的标注解析、帧读取、分块和坐标工具公共入口。"""
+
 from traning.lib.data.annotation import (
     HitObjectAnnotation,
     SegmentAnnotation,

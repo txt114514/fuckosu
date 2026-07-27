@@ -1,3 +1,5 @@
+"""定义训练包 manifest 与谱面解析缓存使用的 SQLModel 表。"""
+
 from __future__ import annotations
 
 from sqlmodel import Field, SQLModel, UniqueConstraint

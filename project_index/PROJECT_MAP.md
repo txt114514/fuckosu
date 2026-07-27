@@ -23,8 +23,10 @@
 - 子模块开始持续扩充独立功能、形成稳定契约、隔离第三方依赖或承担跨层边界时，
   即使只有一个调用方，也应迁入 `src/package`；原模块只保留编排和适配。
 - 新增全局 API 时按领域建立子模块，并在 `src/package/__init__.py` 显式导出。
-- 当前跨模块稳定 API 包括 `package.contracts`、`package.checks` 和
-  `package.dataset_split`；其中 dataset split 维护
+- 当前跨模块稳定 API 包括 `package.contracts`、`package.checks`、
+  `package.coordinates` 和 `package.dataset_split`；`package.coordinates` 统一维护
+  osu、训练帧像素与模型归一化坐标的变换契约及方程指纹；该指纹包含完整变换方程和
+  训练帧尺寸，用于阻止旧方程或旧尺寸产物被静默复用；`package.dataset_split` 维护
   `training_package/splits/dataset_split_manifest.json`，供 start 同步、traning 读取。
 - 中文训练控制台的稳定 API 位于 `visualization.lib`；训练核心只能使用 reporter、
   gallery API 和状态 DTO，不依赖 Rich、Panel 或 `visualization.core` 内部实现。

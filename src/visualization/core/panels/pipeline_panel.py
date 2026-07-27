@@ -1,3 +1,5 @@
+"""渲染训练启动及处理流水线的阶段状态表。"""
+
 from rich.panel import Panel
 from rich.table import Table
 

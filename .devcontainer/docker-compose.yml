@@ -1,3 +1,4 @@
+# 开发容器需要与宿主共享 GPU、显示服务和进程命名空间，供训练与 UI 联调。
 version: "3.9"
 
 services:
@@ -20,6 +21,7 @@ services:
     #           count: all
     #           capabilities: [gpu]
     gpus: all
+    # host-exec、GPU 与输入/显示设备联调依赖这些宿主能力；不要用于生产部署。
     privileged: true
     network_mode: host
     pid: host

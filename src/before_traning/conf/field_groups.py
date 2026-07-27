@@ -1,3 +1,5 @@
+"""集中定义处理器字段组及批量赋值、参数转发辅助函数。"""
+
 from __future__ import annotations
 
 from types import SimpleNamespace

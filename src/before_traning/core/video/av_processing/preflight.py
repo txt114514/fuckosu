@@ -1,3 +1,5 @@
+"""校验 AV 对齐参数和状态步骤，并定位单目录输入输出。"""
+
 from __future__ import annotations
 
 from pathlib import Path

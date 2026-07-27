@@ -1,3 +1,5 @@
+"""提供训练前处理 Typer CLI、配置覆盖、运行器选择与结果展示。"""
+
 from __future__ import annotations
 
 import os

@@ -1,3 +1,5 @@
+"""在真实视频帧上绘制与训练一致的 osu! 标注和预测坐标。"""
+
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
@@ -8,7 +10,7 @@ import numpy as np
 import torch
 from PIL import Image, ImageDraw, ImageFont
 
-from package import OsuVideoTransform, sample_slider_path
+from package import OsuVideoCoordinateTransform, sample_slider_path
 from traning.lib.coordinates import transform_from_settings_or_sample
 
 
@@ -17,6 +19,10 @@ TARGET_COLOR = (255, 72, 72)
 PATH_COLOR = (255, 206, 64)
 PLAYFIELD_COLOR = (120, 255, 120)
 TEXT_COLOR = (255, 255, 255)
+CJK_FONT_PATHS = (
+    Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
+    Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc"),
+)
 
 
 def _image_from_tensor(image: torch.Tensor) -> Image.Image:
@@ -31,11 +37,27 @@ def _image_from_tensor(image: torch.Tensor) -> Image.Image:
     return Image.fromarray(array[:, :, :3], mode="RGB")
 
 
+def _annotation_font(image_height: int) -> ImageFont.ImageFont:
+    """优先加载容器保证安装的中文字库，小图则自动缩小字号。"""
+
+    size = max(10, min(18, round(image_height / 47)))
+    for path in CJK_FONT_PATHS:
+        if not path.is_file():
+            continue
+        try:
+            return ImageFont.truetype(str(path), size=size)
+        except OSError:
+            continue
+    return ImageFont.load_default()
+
+
 def _point(
-    transform: OsuVideoTransform,
+    transform: OsuVideoCoordinateTransform,
     x: float,
     y: float,
 ) -> tuple[int, int]:
+    """通过公共变换把 osu 坐标投影到完整帧像素并在绘制前取整。"""
+
     video_x, video_y = transform.osu_to_video(x, y)
     return round(video_x), round(video_y)
 
@@ -65,7 +87,7 @@ def _is_target(
 def _draw_circle(
     draw: ImageDraw.ImageDraw,
     hit_object: Mapping[str, Any],
-    transform: OsuVideoTransform,
+    transform: OsuVideoCoordinateTransform,
     radius: int,
     target_source_index: int | None,
 ) -> tuple[int, int] | None:
@@ -96,7 +118,7 @@ def _draw_circle(
 def _draw_slider(
     draw: ImageDraw.ImageDraw,
     hit_object: Mapping[str, Any],
-    transform: OsuVideoTransform,
+    transform: OsuVideoCoordinateTransform,
     radius: int,
     target_source_index: int | None,
 ) -> tuple[int, int] | None:
@@ -157,6 +179,8 @@ def render_annotated_frame(
     predicted_video_xy: tuple[float, float] | None = None,
     metadata_lines: Sequence[str] = (),
 ) -> Image.Image:
+    """渲染单帧标注；优先复用样本随 Dataset 传播的坐标规格。"""
+
     image = _image_from_tensor(sample["image"])
     width, height = image.size
     transform, transform_spec = transform_from_settings_or_sample(
@@ -166,12 +190,14 @@ def render_annotated_frame(
         frame_height=height,
     )
     draw = ImageDraw.Draw(image)
-    font = ImageFont.load_default()
+    font = _annotation_font(height)
 
-    left = round(transform.playfield_left)
-    top = round(transform.playfield_top)
-    right = round(transform.playfield_left + transform.playfield_width)
-    bottom = round(transform.playfield_top + transform.playfield_height)
+    # rect 是轴对齐与 affine 的公共边界语义，也供 spinner 椭圆和边框复用。
+    rect = transform.rect
+    left = round(rect.left)
+    top = round(rect.top)
+    right = round(rect.left + rect.width)
+    bottom = round(rect.top + rect.height)
     draw.rectangle((left, top, right, bottom), outline=PLAYFIELD_COLOR, width=2)
 
     radius = max(

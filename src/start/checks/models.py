@@ -1,3 +1,5 @@
+"""适配共享检查报告与训练数据输入报告的组合结果。"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -6,6 +8,8 @@ from package.checks import CheckStatus, StartupCheckReport, StartupCheckResult
 
 
 class TrainingStartupCheckReport:
+    """把可阻断的统一检查报告与只读数据输入统计绑定返回。"""
+
     def __init__(self, report: StartupCheckReport, data_input: Any):
         self.report = report
         self.data_input = data_input

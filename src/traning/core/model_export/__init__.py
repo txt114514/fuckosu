@@ -1,4 +1,4 @@
-"""Training model export and migration stage boundary."""
+"""训练模型产物导出、校验与旧配置迁移边界。"""
 
 from traning.core.model_export.artifact import (
     ArtifactFile,

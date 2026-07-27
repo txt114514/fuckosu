@@ -1,3 +1,5 @@
+"""复用有限数量的 OpenCV 解码句柄，并以 RGB 返回指定帧或时间点。"""
+
 from __future__ import annotations
 
 from collections import OrderedDict
@@ -8,6 +10,8 @@ import numpy as np
 
 
 class VideoReader:
+    """带 LRU 句柄缓存的随机访问视频读取器。"""
+
     def __init__(self, max_open_videos: int = 4):
         if max_open_videos <= 0:
             raise ValueError("max_open_videos must be positive")
@@ -22,6 +26,7 @@ class VideoReader:
                 capture.release()
                 raise ValueError(f"failed to open video: {path}")
         self._captures[path] = capture
+        # OpenCV 句柄持有系统资源，淘汰时必须立即 release，不能只依赖析构。
         while len(self._captures) > self.max_open_videos:
             _, old_capture = self._captures.popitem(last=False)
             old_capture.release()

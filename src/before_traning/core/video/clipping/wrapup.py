@@ -1,3 +1,5 @@
+"""记录裁剪进度、实际几何参数和异常失败状态。"""
+
 from __future__ import annotations
 
 from pathlib import Path

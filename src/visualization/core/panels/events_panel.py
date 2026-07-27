@@ -1,3 +1,5 @@
+"""渲染最近训练事件与告警，并解析稳定消息键。"""
+
 from rich.panel import Panel
 from rich.table import Table
 

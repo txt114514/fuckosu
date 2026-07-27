@@ -1,3 +1,5 @@
+"""用轻量 CNN 编码缩小后的完整帧，提供多尺度全局上下文。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -9,7 +11,7 @@ import torch.nn.functional as F
 
 @dataclass(frozen=True)
 class GlobalFeatures:
-    """Low-resolution full-frame context features in BCHW layout."""
+    """BCHW 低分辨率完整帧上下文、多尺度金字塔及 BNC token。"""
 
     dense: torch.Tensor
     pyramid: dict[str, torch.Tensor]
@@ -54,7 +56,7 @@ class _ConvBlock(nn.Module):
 
 
 class LightweightGlobalEncoder(nn.Module):
-    """Offline low-resolution full-frame encoder for global object context."""
+    """离线编码缩小后的完整帧，以较低显存提供物件全局上下文。"""
 
     def __init__(
         self,
@@ -92,6 +94,7 @@ class LightweightGlobalEncoder(nn.Module):
     def forward(self, frame: torch.Tensor) -> GlobalFeatures:
         if frame.ndim != 4:
             raise ValueError("LightweightGlobalEncoder expects BCHW frame tensors")
+        # 全局支路允许缩小空间尺寸；坐标对齐由融合层按完整帧位置重新采样。
         resized = F.interpolate(
             frame,
             size=(self.input_height, self.input_width),
@@ -102,6 +105,7 @@ class LightweightGlobalEncoder(nn.Module):
         p4 = self.stage4(p2)
         p8 = self.stage8(p4)
         p16 = self.stage16(p8)
+        # BCHW -> BNC，供不依赖二维卷积布局的上下文消费者使用。
         tokens = p16.flatten(2).transpose(1, 2).contiguous()
         return GlobalFeatures(
             dense=p16,

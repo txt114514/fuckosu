@@ -1,3 +1,5 @@
+"""计算单点和 slider 的连续空间/时间系数及通过判定。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -11,6 +13,8 @@ SCORE_VERSION = "point-slider-v2"
 
 @dataclass(frozen=True)
 class ScoreSpec:
+    """连续评分分段阈值；空间量均以 circle radius 为单位，时间量为毫秒。"""
+
     spatial_bonus_max: float = 0.05
     spatial_bonus_clamp_ratio: float = 0.60
     spatial_pass_ratio: float = 1.00
@@ -117,9 +121,12 @@ def spatial_coefficient(
     *,
     spec: ScoreSpec = ScoreSpec(),
 ) -> float:
+    """把非负距离半径比映射为连续空间系数。"""
+
     if not isfinite(distance_ratio) or distance_ratio < 0:
         raise ValueError("distance_ratio must be finite and nonnegative")
     if distance_ratio <= spec.spatial_pass_ratio:
+        # 通过区内给有限 bonus，并在中心附近截平，避免极小误差支配总分。
         clamped = max(distance_ratio, spec.spatial_bonus_clamp_ratio)
         bonus_progress = (
             spec.spatial_pass_ratio - clamped
@@ -128,6 +135,7 @@ def spatial_coefficient(
         )
         return 1.0 + spec.spatial_bonus_max * sqrt(bonus_progress)
     if distance_ratio < spec.spatial_comfort_end_ratio:
+        # 通过线外保留快速衰减的 comfort 分，用于优化阶段提供连续梯度信号。
         comfort_progress = (
             spec.spatial_comfort_end_ratio - distance_ratio
         ) / (
@@ -142,6 +150,8 @@ def temporal_coefficient(
     *,
     spec: ScoreSpec = ScoreSpec(),
 ) -> float:
+    """按绝对时间误差分段插值为连续时间系数。"""
+
     error = abs(time_error_ms)
     if not isfinite(error):
         raise ValueError("time_error_ms must be finite")
@@ -188,10 +198,13 @@ def combine_coefficients(
     *,
     spec: ScoreSpec = ScoreSpec(),
 ) -> CombinedScore:
+    """组合空间与时间系数，并按理论最大值归一化。"""
+
     if not isfinite(spatial) or not isfinite(temporal):
         raise ValueError("score coefficients must be finite")
     if spatial < 0 or temporal < 0:
         raise ValueError("score coefficients must be nonnegative")
+    # 乘积项奖励空间和时间同时准确，而非让单一维度完全补偿另一维度。
     raw = spatial + temporal + spatial * temporal
     return CombinedScore(
         spatial=spatial,
@@ -210,6 +223,8 @@ def score_point(
     predicted_time_ms: float,
     spec: ScoreSpec = ScoreSpec(),
 ) -> PointScore:
+    """在同一坐标空间内评分点位置，并结合毫秒级打击时间。"""
+
     if not isfinite(circle_radius) or circle_radius <= 0:
         raise ValueError("circle_radius must be finite and positive")
     distance = hypot(
@@ -289,7 +304,7 @@ def _directed_path_statistics(
     *,
     distance_limit: float,
 ) -> tuple[float, float]:
-    """Measure source centerline samples inside the dilated target corridor."""
+    """统计 source 中落入 target 膨胀走廊的中心线采样点。"""
     if not source:
         return 0.0, inf
     distances = tuple(_minimum_distance(point, target) for point in source)
@@ -331,14 +346,14 @@ def score_slider_path(
         predicted_path,
         maximum_step=sample_step,
     )
-    # A point is inside a polyline dilated by radius R exactly when its
-    # shortest distance to that polyline is at most R. Dense path sampling
-    # therefore implements the requested 1.5x corridor without rasterizing.
+    # 点到折线的最短距离不超过 R，等价于点落在折线膨胀 R 的走廊内；
+    # 因而稠密采样即可计算 1.5x 走廊，无需引入分辨率相关的栅格化误差。
     coverage, reference_max_distance = _directed_path_statistics(
         sampled_reference,
         sampled_prediction,
         distance_limit=dilation_radius,
     )
+    # 两个方向都检查，防止短预测只覆盖局部，或超长预测靠覆盖率侥幸通过。
     precision, prediction_max_distance = _directed_path_statistics(
         sampled_prediction,
         sampled_reference,

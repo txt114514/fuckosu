@@ -1,3 +1,5 @@
+"""定义 Circle、Slider 与 Spinner 的轻量命中对象数据模型。"""
+
 from dataclasses import dataclass, field
 from typing import List, Tuple, Literal
 

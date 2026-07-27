@@ -1,3 +1,5 @@
+"""在无显示设备模式下验证 Qt 页面切换、实时刷新与控件内容。"""
+
 from __future__ import annotations
 
 import os

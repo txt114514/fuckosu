@@ -1,3 +1,5 @@
+"""解析 osu!standard 谱面，并复用 manifest 中的结构化谱面缓存。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

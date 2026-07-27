@@ -1,3 +1,5 @@
+"""生成覆盖完整 CHW 图像的确定性重叠 patch 窗口。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -33,6 +35,7 @@ def _axis_starts(size: int, patch_size: int, overlap: int) -> tuple[int, ...]:
     step = patch_size - overlap
     starts = list(range(0, size - patch_size + 1, step))
     final_start = size - patch_size
+    # 步长不能整除时强制把最后窗口贴齐边界，避免尾部像素没有监督。
     if starts[-1] != final_start:
         starts.append(final_start)
     return tuple(starts)
@@ -47,6 +50,8 @@ def build_patch_windows(
     overlap_x: int,
     overlap_y: int,
 ) -> tuple[PatchWindow, ...]:
+    """构建行优先窗口；窗口坐标属于完整帧，right/bottom 为半开上界。"""
+
     x_starts = _axis_starts(image_width, patch_width, overlap_x)
     y_starts = _axis_starts(image_height, patch_height, overlap_y)
     return tuple(

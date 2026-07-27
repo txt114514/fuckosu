@@ -1,7 +1,8 @@
-"""Temporal decision orchestration and candidate cache stage."""
+"""候选缓存生成、时序决策导出与完整训练阶段编排。"""
 
 from traning.core.decision.generator import (
     CANDIDATE_CACHE_VERSION,
+    SUPPORTED_CANDIDATE_CACHE_VERSIONS,
     CandidateCacheBuildResult,
     build_candidate_cache_record,
     generate_candidate_cache,
@@ -30,6 +31,7 @@ __all__ = [
     "FullTrainingRunResult",
     "TRAINING_STAGES",
     "TemporalDecisionRunResult",
+    "SUPPORTED_CANDIDATE_CACHE_VERSIONS",
     "TrainingStage",
     "build_candidate_cache_record",
     "generate_candidate_cache",

@@ -1,3 +1,5 @@
+"""验证时序 checkpoint 推理和逐帧动作决策导出。"""
+
 from __future__ import annotations
 
 import json
@@ -67,6 +69,8 @@ def _write_cache(path: Path) -> None:
 
 class TemporalDecisionTests(unittest.TestCase):
     def test_train_then_run_decision(self) -> None:
+        # 只训练一步并不要求动作准确率；这里刻意验证 checkpoint 可以被
+        # 推理端消费，且每个有效帧均按稳定 schema 落盘。
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             cache_dir = root / "cache"

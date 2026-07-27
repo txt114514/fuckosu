@@ -1,3 +1,5 @@
+"""扫描 .osz、同步 manifest、导入谱面和音频并推进处理状态。"""
+
 from __future__ import annotations
 
 import zipfile

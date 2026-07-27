@@ -1,1 +1,1 @@
-"""Reusable beatmap parsers, models, manifests and package APIs."""
+"""汇总谱面解析、数据模型、清单仓储与训练包管理接口。"""

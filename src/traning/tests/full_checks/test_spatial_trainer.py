@@ -1,3 +1,5 @@
+"""验证空间训练 step、梯度累积、检查点和显存路径。"""
+
 from __future__ import annotations
 
 import math
@@ -13,6 +15,8 @@ from traning.core.spatial import run_spatial_training
 
 class SpatialTrainerTests(unittest.TestCase):
     def test_cpu_single_step_with_synthetic_sample(self) -> None:
+        # 极小通道数和单 patch 限制运行成本，但仍保留颜色提示、全局/局部
+        # 编码、融合、目标光栅化、反向传播和 checkpoint 的完整训练路径。
         settings = Settings(
             runtime={"seed": 7, "device": "cpu"},
             input={"width": 128, "height": 96, "color_cues": "osu_basic"},
@@ -55,6 +59,8 @@ class SpatialTrainerTests(unittest.TestCase):
             },
             loader={"pin_memory": False},
         )
+        # 命中对象处于 approach 时间窗内，保证合成样本产生非空监督而非
+        # 仅验证零损失 batch 能运行。
         sample = {
             "image": torch.rand(3, 96, 128),
             "timestamp_ms": 0.0,

@@ -1,11 +1,21 @@
+"""从逐样本评分聚合错误域、标签以及难例列表与严重度。"""
+
 from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from traning.core.optimization.scoring import SampleScoreReport, TrialScoreReport
+from traning.core.optimization.error_attribution import (
+    classify_unresolved_sample_error,
+)
+
+if TYPE_CHECKING:
+    from traning.core.optimization.scoring.evaluator import (
+        SampleScoreReport,
+        TrialScoreReport,
+    )
 
 
 ATTRIBUTION_DOMAINS = ("spatial", "temporal", "decision")
@@ -51,9 +61,7 @@ class AttributionSummary:
             "domain_rates": dict(self.domain_rates),
             "tag_counts": dict(self.tag_counts),
             "primary_domain": self.primary_domain,
-            "hard_examples": [
-                example.as_dict() for example in self.hard_examples
-            ],
+            "hard_examples": [example.as_dict() for example in self.hard_examples],
         }
 
 
@@ -74,7 +82,7 @@ def _unresolved_example(
     sample: SampleScoreReport,
     target_id: str,
 ) -> HardExample:
-    primary_error, tags, reason = _unresolved_error_domain(sample)
+    primary_error, tags, reason = classify_unresolved_sample_error(sample)
     return HardExample(
         sample_key=sample.sample_key,
         subproject=sample.subproject,
@@ -84,36 +92,6 @@ def _unresolved_example(
         frame_index=sample.frame_index,
         target_id=target_id,
         reason=reason,
-    )
-
-
-def _unresolved_error_domain(
-    sample: SampleScoreReport,
-) -> tuple[str, tuple[str, ...], str]:
-    metadata = sample.metadata
-    if metadata.get("transform_status") == "unresolved":
-        return (
-            "spatial",
-            ("unresolved_target", "coordinate_transform_unresolved"),
-            "coordinate transform unresolved before target-candidate matching",
-        )
-    if "candidate_count" in metadata and int(metadata.get("candidate_count") or 0) <= 0:
-        return (
-            "spatial",
-            ("unresolved_target", "candidate_recall_empty"),
-            "target frame had no spatial candidates",
-        )
-    reason = str(metadata.get("candidate_match_unmatched_reason") or "")
-    if reason:
-        return (
-            "spatial",
-            ("unresolved_target", "candidate_match_failed", reason),
-            f"target-candidate matching failed: {reason}",
-        )
-    return (
-        "decision",
-        ("unresolved_target",),
-        "target remained active after all predicted clicks",
     )
 
 

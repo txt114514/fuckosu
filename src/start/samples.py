@@ -1,3 +1,5 @@
+"""从 before_traning 重导出统一启动流程需要的样本检查契约。"""
+
 from before_traning.tests.startup_checks.samples import (
     BeforeTrainingSampleInspection,
     DEFAULT_MATCHED_MANIFEST,

@@ -1,3 +1,5 @@
+"""验证点击序列的一次性命中、频率限制和错误归因。"""
+
 from __future__ import annotations
 
 import unittest
@@ -21,6 +23,8 @@ class ClickSequenceScoringTests(unittest.TestCase):
             y=100.0,
             source_index=1,
         )
+        # 两次点击都可命中同一目标，但第一次必须不可逆地消费目标；第二次
+        # 只能归因为 decision duplicate，不能反向替换成更高分点击。
         result = score_click_sequence(
             (target,),
             (
@@ -102,6 +106,7 @@ class ClickSequenceScoringTests(unittest.TestCase):
             y=100.0,
             source_index=2,
         )
+        # 输入故意按较晚目标在前，断言解析顺序来自时间/源序而非 tuple 顺序。
         result = score_click_sequence(
             (second, first),
             (
@@ -133,6 +138,8 @@ class ClickSequenceScoringTests(unittest.TestCase):
             x=100.0,
             y=100.0,
         )
+        # 三次点击间隔均为 30ms；中间点击被频率门限拒绝后，第三次应相对
+        # 上一个有效点击达到 60ms 并成功命中第二目标。
         result = score_click_sequence(
             (first, second),
             (

@@ -1,4 +1,4 @@
-"""Training diagnostics and oracle evaluation helpers."""
+"""训练诊断与 oracle 上限评估工具的公开入口。"""
 
 from traning.core.diagnostics.oracle_ladder import (
     OracleDiagnosticsResult,

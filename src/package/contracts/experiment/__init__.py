@@ -1,3 +1,5 @@
+"""定义参数搜索、trial、checkpoint 与课程阶段的实验契约。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -8,6 +10,10 @@ from package.contracts.base import ContractMixin
 
 
 class SearchMethod(StrEnum):
+    """实验记录支持的搜索方法；新生产任务使用规则式搜索。"""
+
+    RULE_BASED = "rule_based"
+    # 保留以下值仅用于读取历史实验记录，训练入口不会把它们冒充已实现算法。
     RANDOM = "random"
     TPE = "tpe"
 

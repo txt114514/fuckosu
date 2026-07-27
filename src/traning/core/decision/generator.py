@@ -1,7 +1,10 @@
+"""运行空间推理并生成带时序监督、歧义信息和版本清单的候选缓存。"""
+
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from math import hypot
 from pathlib import Path
 from typing import Any
 import json
@@ -9,7 +12,10 @@ import random
 
 import torch
 
-from traning.lib.training import SliderPathCandidate
+from traning.lib.training import (
+    DEFAULT_CIRCLE_RADIUS_OSU_PIXELS,
+    SliderPathCandidate,
+)
 from traning.lib.training.spatial_decode import SpatialCandidate
 from traning.conf import DataSplit, Settings
 from traning.core.dataset_import import build_dataset
@@ -19,10 +25,11 @@ from traning.core.spatial import (
     spatial_candidate_to_dict,
 )
 from traning.lib.coordinates import transform_from_settings_or_sample
+from traning.state.candidate_cache_schema import (
+    CANDIDATE_CACHE_VERSION,
+    SUPPORTED_CANDIDATE_CACHE_VERSIONS,
+)
 from traning.state.versioning import version_manifest
-
-
-CANDIDATE_CACHE_VERSION = "spatial-candidate-cache-v1"
 
 
 @dataclass(frozen=True)
@@ -103,6 +110,7 @@ def generate_candidate_cache(
         diverse=max_frames is not None,
         contiguous_block_frames=max(1, int(settings.temporal.history_frames)),
     )
+    # 有限帧模式仍按样本组选择连续块，避免给时序阶段制造跨片段的伪连续窗口。
 
     total_candidates = 0
     total_slider_paths = 0
@@ -173,14 +181,19 @@ def generate_candidate_cache(
                 int(record["spatial_diagnostics"]["nms_candidate_count"])
             )
             temporal_target = record.get("temporal_target")
-            if isinstance(temporal_target, Mapping) and str(temporal_target.get("action")) != "no_op":
+            if (
+                isinstance(temporal_target, Mapping)
+                and str(temporal_target.get("action")) != "no_op"
+            ):
                 target_frame_count += 1
                 if record["candidates"]:
                     target_frames_with_any_candidate += 1
                 if temporal_target.get("selected_candidate_id") is not None:
                     target_frames_with_matched_candidate += 1
                 distances = temporal_target.get("candidate_distances_px")
-                if isinstance(distances, Sequence) and not isinstance(distances, (str, bytes)):
+                if isinstance(distances, Sequence) and not isinstance(
+                    distances, (str, bytes)
+                ):
                     valid_distances = [
                         float(value)
                         for value in distances
@@ -202,7 +215,9 @@ def generate_candidate_cache(
 
     diagnostics = {
         "frame_count": frame_total,
-        "frames_with_candidate": sum(1 for count in frame_candidate_counts if count > 0),
+        "frames_with_candidate": sum(
+            1 for count in frame_candidate_counts if count > 0
+        ),
         "candidate_total": total_candidates,
         "candidate_per_frame_mean": _mean(frame_candidate_counts),
         "candidate_per_frame_p50": _percentile(frame_candidate_counts, 50),
@@ -216,6 +231,9 @@ def generate_candidate_cache(
         "target_frame_count": target_frame_count,
         "target_frames_with_any_candidate": target_frames_with_any_candidate,
         "target_frames_with_candidate_near_target": target_frames_with_matched_candidate,
+        # 下列是用于比较候选器的固定视频像素探针，不是
+        # v2 的命中半径；真实匹配已在 osu 空间按 CircleSize 判定。
+        "target_candidate_recall_probe_space": "video_px_fixed_threshold",
         "target_candidate_recall@16px": _rate(recall_hits[16], target_frame_count),
         "target_candidate_recall@32px": _rate(recall_hits[32], target_frame_count),
         "target_candidate_recall@64px": _rate(recall_hits[64], target_frame_count),
@@ -227,7 +245,9 @@ def generate_candidate_cache(
         "split": split,
         "device": str(device),
         "spatial_checkpoint_path": (
-            str(spatial_checkpoint_path) if spatial_checkpoint_path is not None else None
+            str(spatial_checkpoint_path)
+            if spatial_checkpoint_path is not None
+            else None
         ),
         "spatial_inference_context": "reused_per_candidate_cache",
         "frames": frame_total,
@@ -240,7 +260,9 @@ def generate_candidate_cache(
             "seed": int(settings.runtime.seed),
             "contiguous_block_frames": max(1, int(settings.temporal.history_frames)),
             "selected_indices_preview": selected_indices[:100],
-            "unique_sample_groups": len(_sample_groups_for_indices(source, selected_indices)),
+            "unique_sample_groups": len(
+                _sample_groups_for_indices(source, selected_indices)
+            ),
         },
         "records": str(records_path.name),
         "max_candidates_per_frame": selected_max_candidates,
@@ -293,7 +315,9 @@ def _candidate_cache_indices(
     for indices in groups.values():
         indices.sort()
     block_size = max(1, contiguous_block_frames)
-    active_group_count = max(1, min(len(ordered_groups), max(1, frame_total // block_size)))
+    active_group_count = max(
+        1, min(len(ordered_groups), max(1, frame_total // block_size))
+    )
     active_groups = ordered_groups[:active_group_count]
     starts: dict[str, int] = {}
     positions: dict[str, int] = {}
@@ -318,7 +342,11 @@ def _candidate_cache_indices(
                 position += 1
                 progressed = True
             positions[group] = position
-            if position >= len(indices) and starts[group] > 0 and len(selected) < frame_total:
+            if (
+                position >= len(indices)
+                and starts[group] > 0
+                and len(selected) < frame_total
+            ):
                 positions[group] = 0
                 starts[group] = 0
             if len(selected) >= frame_total:
@@ -420,12 +448,19 @@ def build_candidate_cache_record(
             else 0.0
         ),
     )
-    _, transform_spec = transform_from_settings_or_sample(
+    transform, transform_spec = transform_from_settings_or_sample(
         settings,
         sample,
         frame_width=frame_width,
         frame_height=frame_height,
     )
+    circle_radius_osu_pixels = _circle_radius_osu_pixels(sample)
+    circle_radius_video_pixels = (
+        None
+        if transform_spec.transform_status == "unresolved"
+        else transform.osu_radius_to_video(circle_radius_osu_pixels)
+    )
+    # 缓存是空间、时序、评分和图集之间的持久边界，必须随记录保存确切坐标规格。
     return {
         "version": CANDIDATE_CACHE_VERSION,
         "coordinate_transform": transform_spec.as_dict(),
@@ -434,6 +469,8 @@ def build_candidate_cache_record(
         "timestamp_ms": sample.get("timestamp_ms"),
         "frame_width": frame_width,
         "frame_height": frame_height,
+        "circle_radius_osu_pixels": circle_radius_osu_pixels,
+        "circle_radius_video_pixels": circle_radius_video_pixels,
         "device": device,
         "patches_processed": patches_processed,
         "frame_channels": frame_channels,
@@ -443,6 +480,7 @@ def build_candidate_cache_record(
             frame_width=frame_width,
             frame_height=frame_height,
             action_window_ms=action_window_ms,
+            circle_radius_osu_pixels=circle_radius_osu_pixels,
             settings=settings,
         ),
         "candidates": candidate_rows,
@@ -457,6 +495,7 @@ def _build_temporal_target(
     frame_width: int,
     frame_height: int,
     action_window_ms: float,
+    circle_radius_osu_pixels: float,
     settings: Settings | None = None,
 ) -> dict[str, Any]:
     timestamp_ms = _optional_float(sample.get("timestamp_ms")) or 0.0
@@ -489,7 +528,8 @@ def _build_temporal_target(
             "action": target["action"],
             "action_id": target["action_id"],
             "selected_candidate_id": None,
-            "candidate_match_radius_px": 64.0,
+            "candidate_match_radius_osu": circle_radius_osu_pixels,
+            "candidate_match_radius_px": None,
             "candidate_match_status": "unmatched",
             "candidate_match_unmatched_reason": "coordinate_transform_unresolved",
             "candidate_count": len(candidates),
@@ -500,15 +540,22 @@ def _build_temporal_target(
             "object_start_ms": target["start_ms"],
             "object_end_ms": target["end_ms"],
         }
+    # 候选原始位置保留视频像素供诊断；命中判定逆变换到 osu 空间，避免
+    # affine 把圆映成椭圆后用平均像素半径近似造成边界误判。
     video_xy = transform.osu_to_video(target["x"], target["y"])
-    candidate, distances = _nearest_candidate(
+    candidate_match_radius_px = transform.osu_radius_to_video(circle_radius_osu_pixels)
+    candidate, distances_px, distances_osu = _nearest_candidate(
         candidates,
-        video_xy,
-        max_distance_px=64.0,
+        target_video_xy=video_xy,
+        target_osu_xy=(float(target["x"]), float(target["y"])),
+        transform=transform,
+        max_distance_osu=circle_radius_osu_pixels,
     )
     unmatched_reason = None
     if candidate is None:
-        unmatched_reason = "no_candidates" if not candidates else "nearest_candidate_outside_radius"
+        unmatched_reason = (
+            "no_candidates" if not candidates else "nearest_candidate_outside_radius"
+        )
     return {
         "target_strategy": "beatmap_action_v1",
         "target_strategy_version": "beatmap-action-v2",
@@ -518,11 +565,14 @@ def _build_temporal_target(
         "selected_candidate_id": (
             None if candidate is None else candidate.get("candidate_id")
         ),
-        "candidate_match_radius_px": 64.0,
+        "candidate_match_radius_osu": circle_radius_osu_pixels,
+        "candidate_match_radius_px": candidate_match_radius_px,
+        "candidate_match_space": "osu",
         "candidate_match_status": "matched" if candidate is not None else "unmatched",
         "candidate_match_unmatched_reason": unmatched_reason,
         "candidate_count": len(candidates),
-        "candidate_distances_px": distances,
+        "candidate_distances_osu": distances_osu,
+        "candidate_distances_px": distances_px,
         "target_video_xy": [float(video_xy[0]), float(video_xy[1])],
         "target_osu_xy": [float(target["x"]), float(target["y"])],
         "time_offset_ms": float(target["time_offset_ms"]),
@@ -531,6 +581,15 @@ def _build_temporal_target(
         "object_start_ms": target["start_ms"],
         "object_end_ms": target["end_ms"],
     }
+
+
+def _circle_radius_osu_pixels(sample: Mapping[str, Any]) -> float:
+    """读取谱面真实命中半径；旧样本缺字段时才使用协议默认值。"""
+
+    value = _optional_float(sample.get("circle_radius_osu_pixels"))
+    if value is None or value <= 0:
+        return DEFAULT_CIRCLE_RADIUS_OSU_PIXELS
+    return value
 
 
 def _select_temporal_object(
@@ -545,16 +604,19 @@ def _select_temporal_object(
         target
         for item in objects
         if isinstance(item, Mapping)
-        for target in (_temporal_target_for_object(
-            item,
-            timestamp_ms=timestamp_ms,
-            action_window_ms=action_window_ms,
-        ),)
+        for target in (
+            _temporal_target_for_object(
+                item,
+                timestamp_ms=timestamp_ms,
+                action_window_ms=action_window_ms,
+            ),
+        )
         if target is not None
     ]
     if not targets:
         return None
     priority = {"press": 0, "release": 1, "hold": 2}
+    # 同帧多个对象竞争时优先离散边界动作，再按时间距离和谱面顺序稳定决胜。
     return min(
         targets,
         key=lambda target: (
@@ -598,13 +660,18 @@ def _temporal_target_for_object(
     elif kind == "slider" and repeat_boundaries:
         selected = min(
             repeat_boundaries,
-            key=lambda item: (abs(timestamp_ms - item[0]), 0 if item[1] == "press" else 1),
+            key=lambda item: (
+                abs(timestamp_ms - item[0]),
+                0 if item[1] == "press" else 1,
+            ),
         )
         if abs(timestamp_ms - selected[0]) <= action_window_ms:
             action = selected[1]
             boundary_ms = selected[0]
             boundary_point = selected[2]
-    elif kind in {"slider", "spinner"} and abs(timestamp_ms - end_ms) <= action_window_ms:
+    elif (
+        kind in {"slider", "spinner"} and abs(timestamp_ms - end_ms) <= action_window_ms
+    ):
         action = "release"
         boundary_ms = end_ms
         if kind == "slider":
@@ -699,30 +766,28 @@ def _object_kind(item: Mapping[str, Any]) -> str:
 
 def _nearest_candidate(
     candidates: Sequence[Mapping[str, Any]],
-    point: tuple[float, float],
     *,
-    max_distance_px: float,
-) -> tuple[Mapping[str, Any] | None, list[float]]:
+    target_video_xy: tuple[float, float],
+    target_osu_xy: tuple[float, float],
+    transform: Any,
+    max_distance_osu: float,
+) -> tuple[Mapping[str, Any] | None, list[float], list[float]]:
     if not candidates:
-        return None, []
-    points = torch.tensor(
-        [
-            [
-                _optional_float(candidate.get("x")) or 0.0,
-                _optional_float(candidate.get("y")) or 0.0,
-            ]
-            for candidate in candidates
-        ],
-        dtype=torch.float32,
-        device="cuda" if torch.cuda.is_available() else "cpu",
-    )
-    target = torch.tensor([point], dtype=torch.float32, device=points.device)
-    distances_tensor = torch.cdist(target, points)[0]
-    nearest_distance, nearest_index = torch.min(distances_tensor, dim=0)
-    distances = [float(value) for value in distances_tensor.detach().cpu().tolist()]
-    if float(nearest_distance.detach().cpu()) > float(max_distance_px):
-        return None, distances
-    return candidates[int(nearest_index.detach().cpu())], distances
+        return None, [], []
+    distances_px: list[float] = []
+    distances_osu: list[float] = []
+    for candidate in candidates:
+        video_x = _optional_float(candidate.get("x")) or 0.0
+        video_y = _optional_float(candidate.get("y")) or 0.0
+        osu_x, osu_y = transform.video_to_osu(video_x, video_y)
+        distances_px.append(
+            hypot(video_x - target_video_xy[0], video_y - target_video_xy[1])
+        )
+        distances_osu.append(hypot(osu_x - target_osu_xy[0], osu_y - target_osu_xy[1]))
+    nearest_index = min(range(len(candidates)), key=distances_osu.__getitem__)
+    if distances_osu[nearest_index] > max_distance_osu:
+        return None, distances_px, distances_osu
+    return candidates[nearest_index], distances_px, distances_osu
 
 
 def _candidate_ambiguity_reasons(
@@ -789,7 +854,9 @@ def _apply_candidate_reviews(
             row["ambiguity_reasons"] = unresolved
             row["ambiguous"] = bool(unresolved)
         else:
-            row["ambiguity_reasons"] = tuple(dict.fromkeys((*reasons, "local_review_unresolved")))
+            row["ambiguity_reasons"] = tuple(
+                dict.fromkeys((*reasons, "local_review_unresolved"))
+            )
             row["ambiguous"] = True
         reviewed += 1
         if reviewed >= max_candidates:
@@ -831,9 +898,7 @@ def _apply_local_refinement(
         moved = after != tuple(before)
         refined_score = min(
             1.0,
-            score + (0.03 if moved else 0.01)
-            if row.get("ambiguous")
-            else score,
+            score + (0.03 if moved else 0.01) if row.get("ambiguous") else score,
         )
         row["local_refinement"] = {
             "strategy": "local_patch_consistency_refiner_v2",
@@ -897,7 +962,10 @@ def _local_evidence_score(row: Mapping[str, Any]) -> float:
         type_evidence = max(type_score, spinner)
     else:
         type_evidence = type_score
-    return min(1.0, max(0.0, 0.35 * score + 0.30 * center + 0.20 * visible + 0.15 * type_evidence))
+    return min(
+        1.0,
+        max(0.0, 0.35 * score + 0.30 * center + 0.20 * visible + 0.15 * type_evidence),
+    )
 
 
 def _refined_candidate_xy(
@@ -948,11 +1016,7 @@ def _polyline_from_row(row: Mapping[str, Any]) -> tuple[tuple[float, float], ...
     raw = row.get("polyline")
     if not isinstance(raw, Sequence):
         return ()
-    points = [
-        _point_from_row(point)
-        for point in raw
-        if isinstance(point, Sequence)
-    ]
+    points = [_point_from_row(point) for point in raw if isinstance(point, Sequence)]
     return tuple(point for point in points if point is not None)
 
 
@@ -1101,6 +1165,7 @@ def _optional_float(value: Any) -> float | None:
 
 __all__ = [
     "CANDIDATE_CACHE_VERSION",
+    "SUPPORTED_CANDIDATE_CACHE_VERSIONS",
     "CandidateCacheBuildResult",
     "build_candidate_cache_record",
     "generate_candidate_cache",

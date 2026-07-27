@@ -1,3 +1,5 @@
+"""兼容旧配置构建 API，并按目标构造函数签名转发 Settings 字段。"""
+
 from __future__ import annotations
 
 import inspect
@@ -10,7 +12,8 @@ from loguru import logger
 from before_traning.Lib.common.failures import format_exception
 from before_traning.conf.artifacts import VERIFY_FILENAME
 from before_traning.conf import Settings, load_settings
-from before_traning.conf.field_groups import assign_group, forward_kwargs, group_values
+# 兼容层仍需向旧调用方暴露这些名称，即使本模块内部不直接调用。
+from before_traning.conf.field_groups import assign_group, forward_kwargs, group_values  # noqa: F401
 
 
 CONFIG_PATH = Path(__file__).resolve().parents[2] / "conf" / "config.yaml"
@@ -22,7 +25,7 @@ class CheckDataConfigError(Exception):
 
 
 class ConfigReader:
-    """Small compatibility reader for legacy build_* helpers."""
+    """为旧版 build_* 辅助函数保留的轻量配置读取器。"""
 
     def __init__(self, path: Path | None = None):
         self.path = path or CONFIG_PATH

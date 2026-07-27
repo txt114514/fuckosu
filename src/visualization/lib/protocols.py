@@ -1,3 +1,5 @@
+"""定义训练核心与可视化实现之间的最小结构化协议。"""
+
 from __future__ import annotations
 
 from pathlib import Path

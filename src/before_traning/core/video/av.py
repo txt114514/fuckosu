@@ -1,3 +1,5 @@
+"""调用 VideoAVProcessor 执行录像与谱面音频对齐阶段。"""
+
 from __future__ import annotations
 
 from time import perf_counter

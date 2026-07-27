@@ -1,3 +1,5 @@
+"""收集主机与 GPU 资源状态，并按多种监控后端顺序容错降级。"""
+
 from __future__ import annotations
 
 from collections import defaultdict, deque
@@ -44,6 +46,8 @@ class _MonitorProbe:
 
 
 def collect_resource_state(device_index: int | None = None) -> ResourceState:
+    """合并 PyTorch 显存统计与首个可用 GPU 监控后端的采样。"""
+
     disk = shutil.disk_usage(".")
     process = psutil.Process()
     state = ResourceState(
@@ -59,6 +63,7 @@ def collect_resource_state(device_index: int | None = None) -> ResourceState:
         state.gpu_index = monitor_index
 
     errors: list[str] = []
+    # 容器中 /dev/nvidia 与主机工具可见性不同，依次尝试 NVML、nvidia-smi 和主机桥。
     for probe in _monitor_probes(monitor_index):
         if probe.sample is not None:
             _apply_monitor_sample(state, probe.sample)

@@ -1,3 +1,5 @@
+"""提供低耦合的仪表盘报告器工厂，并支持完全关闭可视化。"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -17,6 +19,7 @@ def create_dashboard_reporter(
     if progress_ui == "off":
         return _NullDashboardHandle()
     settings = DashboardSettings(mode=progress_ui, language=progress_language)
+    # 延迟导入 core，保持训练代码只依赖轻量 lib 边界，并避免加载可选 GUI/Rich 实现。
     build_dashboard_handle = import_module(
         "visualization.core.controller"
     ).build_dashboard_handle

@@ -1,3 +1,5 @@
+"""隔离可选可视化故障，并按训练步频率控制预览导出。"""
+
 from __future__ import annotations
 
 import subprocess
@@ -21,7 +23,7 @@ from visualization.lib.gallery_api import export_best_trial_gallery
 
 
 class OptionalTrainingVisualizer:
-    """Best-effort visualization that never raises into training code."""
+    """尽力完成可视化，但绝不把旁路故障抛回训练主流程。"""
 
     def __init__(self, settings: VisualizationSettings):
         self.settings = settings
@@ -73,6 +75,7 @@ class OptionalTrainingVisualizer:
             )
             saved_path = save_annotated_frame(image, selected_output)
         except Exception as error:
+            # 首次渲染失败后熔断后续调用，避免训练循环反复承担相同异常和 I/O 成本。
             self._render_disabled = True
             return VisualizationResult(
                 status="failed",
@@ -97,6 +100,7 @@ class OptionalTrainingVisualizer:
                 output_path=saved_path,
             )
         except Exception as error:
+            # 窗口显示与图片保存独立降级；ffplay 失败不能否定已经落盘的有效图片。
             self._display_disabled = True
             return VisualizationResult(
                 status="saved",

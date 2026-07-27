@@ -1,3 +1,5 @@
+"""验证单帧空间推理的 patch 编排、CPU 融合和输出缓存。"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -17,6 +19,7 @@ from traning.lib.models import build_model_stack
 
 
 def _tiny_settings() -> Settings:
+    # 缩小网络与帧尺寸但保留正式的六通道颜色提示和 patch 融合结构。
     return Settings(
         runtime={"seed": 7, "device": "cpu"},
         input={"width": 128, "height": 96, "color_cues": "osu_basic"},
@@ -98,6 +101,8 @@ class SpatialInferenceTests(unittest.TestCase):
         modules = build_model_stack(settings)
         with tempfile.TemporaryDirectory() as temporary:
             checkpoint_path = Path(temporary) / "spatial_model.pt"
+            # 直接保存同构模型栈的 state_dict，隔离验证 checkpoint 名称映射
+            # 与加载边界，不把训练器格式转换混入本测试。
             torch.save(
                 {
                     "models": {

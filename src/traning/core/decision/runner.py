@@ -1,3 +1,5 @@
+"""加载时序模型和候选缓存，逐窗口导出动作、候选与坐标决策。"""
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -106,6 +108,7 @@ def run_temporal_decision(
                 )
                 outputs, _ = model(batch)
                 for frame_index, output in enumerate(outputs):
+                    # 定长窗口尾部用零填充；frame_mask 防止把填充槽序列化为真实决策。
                     if not bool(window.frame_mask[frame_index]):
                         continue
                     row = _decision_row(window, frame_index, output)
@@ -164,6 +167,11 @@ def _decision_row(
     frame_index: int,
     output,
 ) -> dict[str, Any]:
+    """将单帧时序模型输出序列化为坐标空间明确的决策记录。
+
+    ``model_input_normalized`` 表示相对于完整输入帧宽高的归一化坐标，
+    不是相对于 osu! 512x384 playfield 的归一化坐标。
+    """
     action_probs = F.softmax(output.action_logits[0], dim=0).detach().cpu()
     top_probs, _ = torch.topk(action_probs, k=min(2, action_probs.numel()))
     action_id = int(action_probs.argmax().item())
@@ -174,6 +182,8 @@ def _decision_row(
         selected_slot = int(candidate_logits.argmax().item())
         selected_score = float(F.softmax(candidate_logits, dim=0)[selected_slot].item())
         selected_candidate_id = window.candidate_ids[frame_index][selected_slot]
+        # candidate feature 的 x/y 已按完整模型输入帧归一化；保留该空间契约，
+        # 后续评分可通过 candidate_id 回查原始视频像素，避免重复换算造成误差。
         selected_candidate_xy = [
             float(window.candidate_features[frame_index, selected_slot, 1].item()),
             float(window.candidate_features[frame_index, selected_slot, 2].item()),
@@ -196,10 +206,14 @@ def _decision_row(
         "selected_candidate_id": selected_candidate_id,
         "selected_candidate_probability": selected_score,
         "selected_candidate_xy_normalized": selected_candidate_xy,
+        "selected_candidate_xy_space": "model_input_normalized",
+        # 模型直接回归的 x/y 同样以整帧为基准；消费方必须先还原视频像素，
+        # 再通过当前样本的坐标变换映射到 osu! 空间。
         "predicted_xy_normalized": [
             float(output.x[0, 0].detach().cpu().item()),
             float(output.y[0, 0].detach().cpu().item()),
         ],
+        "predicted_xy_space": "model_input_normalized",
         "time_offset_ms": float(output.time_offset_ms[0, 0].detach().cpu().item()),
         "diagnostics": {
             "action_probabilities": {

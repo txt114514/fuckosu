@@ -1,3 +1,5 @@
+# ROS 2 GPU 视觉实验镜像；显式安装 CUDA 12.1 runtime 以匹配下方 cu121 wheel。
+# 构建过程会从 NVIDIA/PyTorch 官方源联网下载，不是离线或完全可复现构建。
 # 基础镜像：ROS 2 Humble（官方桌面版，基于Ubuntu 22.04）
 FROM elainasuki/ros:ros2-humble-full-0614
 

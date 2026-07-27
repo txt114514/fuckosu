@@ -1,3 +1,5 @@
+"""使用 Rich Live 渲染可分页终端仪表盘。"""
+
 from __future__ import annotations
 
 import threading
@@ -31,10 +33,12 @@ class RichDashboardRenderer:
             transient=False,
         )
         self.live.start()
+        # 先启动 Live 再注册回调，避免首个状态事件刷新尚未初始化的渲染对象。
         self.reporter.add_refresh_callback(self._refresh_callback)
         self.refresh()
 
     def stop(self) -> None:
+        # 先解除事件流订阅，确保 Live 停止后不会再收到跨线程刷新。
         self.reporter.remove_refresh_callback(self._refresh_callback)
         if self.live is not None:
             self.refresh()
@@ -42,6 +46,7 @@ class RichDashboardRenderer:
             self.live = None
 
     def refresh(self) -> None:
+        # 报告器更新可能来自训练和资源采样线程，Rich Live 更新必须串行化。
         with self._refresh_lock:
             if self.live is not None:
                 self.live.update(self._render())

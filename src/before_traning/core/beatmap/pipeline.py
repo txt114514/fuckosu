@@ -1,3 +1,8 @@
+"""声明七阶段任务注册表，并提供谱面与视频阶段的统一流水线。"""
+
+# Prefect 会在任务模块导入时读取运行目录，因此必须先初始化环境再导入阶段任务。
+# ruff: noqa: E402
+
 from __future__ import annotations
 
 from collections.abc import Mapping

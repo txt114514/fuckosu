@@ -1,3 +1,5 @@
+"""验证训练 CLI 参数适配层不会改变底层业务配置语义。"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -14,6 +16,8 @@ from traning import main as training_main
 
 class TrainingCliAdapterTests(unittest.TestCase):
     def test_business_run_training_calls_pipeline_without_typer(self) -> None:
+        # 业务 API 把 0 解释为“不设上限”，而 Typer 层仍需原样接收 0；
+        # 本测试只 mock I/O 和 pipeline，专门约束这层归一化语义。
         with (
             patch("traning.main.load_settings", return_value=sentinel.settings),
             patch("traning.main._run_dir", return_value=Path("runs/full")),
@@ -48,6 +52,8 @@ class TrainingCliAdapterTests(unittest.TestCase):
             as_summary=lambda: {"ok": True},
             evaluation=sentinel.evaluation,
         )
+        # 渲染函数被替换以隔离终端输出；业务函数调用参数仍由真实 Typer
+        # 解析器生成，因而可捕获 CLI 默认值或类型转换回归。
         with (
             patch(
                 "traning.main.run_training",

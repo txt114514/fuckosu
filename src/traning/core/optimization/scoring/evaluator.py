@@ -1,3 +1,5 @@
+"""按对象与点击序列契约聚合逐样本命中质量和试验总分。"""
+
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
@@ -15,7 +17,7 @@ from traning.lib.metrics import (
 from traning.state import TrialParameters
 
 
-AGGREGATE_SCORE_VERSION = "point-slider-v2+click-sequence-v1+aggregate-v1"
+AGGREGATE_SCORE_VERSION = "point-slider-v2+click-sequence-v1+aggregate-v2"
 
 
 @dataclass(frozen=True)
@@ -23,6 +25,7 @@ class TrialScoreSpec:
     miss_penalty_weight: float = 0.10
     frequency_penalty_weight: float = 0.08
     unresolved_penalty_weight: float = 0.35
+    no_target_sample_weight: float = 0.10
     sample_pass_threshold: float = 0.75
     trial_pass_threshold: float = 0.80
     sequence_spec: SequenceScoreSpec = field(default_factory=SequenceScoreSpec)
@@ -32,6 +35,7 @@ class TrialScoreSpec:
             self.miss_penalty_weight,
             self.frequency_penalty_weight,
             self.unresolved_penalty_weight,
+            self.no_target_sample_weight,
             self.sample_pass_threshold,
             self.trial_pass_threshold,
         )
@@ -39,6 +43,8 @@ class TrialScoreSpec:
             raise ValueError("trial score thresholds and weights must be finite")
         if self.sample_pass_threshold > 1 or self.trial_pass_threshold > 1:
             raise ValueError("pass thresholds must be in the 0..1 range")
+        if not 0 < self.no_target_sample_weight <= 1:
+            raise ValueError("no_target_sample_weight must be in the 0..1 range")
 
 
 @dataclass(frozen=True)
@@ -132,8 +138,12 @@ class TrialScoreReport:
 
     @property
     def passed(self) -> bool:
+        # 总分不能掩盖局部失败；纯背景批次也不具备证明模型
+        # 命中能力的覆盖度，必须至少包含一个评估目标。
         return (
-            all(sample.passed for sample in self.samples)
+            self.target_count > 0
+            and bool(self.samples)
+            and all(sample.passed for sample in self.samples)
             and self.quality_score >= self.pass_threshold
         )
 
@@ -166,8 +176,7 @@ def _resolved_object_score(sequence: SequenceScore, target_count: int) -> float:
     if target_count == 0:
         return 1.0 if not sequence.clicks else 0.0
     score_sum = sum(
-        resolution.score.score.normalized
-        for resolution in sequence.resolved_targets
+        resolution.score.score.normalized for resolution in sequence.resolved_targets
     )
     return _clamp01(score_sum / target_count)
 
@@ -228,15 +237,22 @@ def score_trial(
     reports = tuple(score_sample(sample, spec=spec) for sample in samples)
     if not reports:
         raise ValueError("trial scoring requires at least one sample")
+
+    # 有目标帧按目标数承担主要权重；空帧仅保留较小权重，用于惩罚误点击，
+    # 避免“所有帧都 no_op”仅靠大量背景帧得到看似合格的总分。
+    def sample_weight(report: SampleScoreReport) -> float:
+        return (
+            float(report.target_count)
+            if report.target_count > 0
+            else spec.no_target_sample_weight
+        )
+
     weighted_score_sum = sum(
-        report.quality_score * max(report.target_count, 1)
-        for report in reports
+        report.quality_score * sample_weight(report) for report in reports
     )
-    weight_sum = sum(max(report.target_count, 1) for report in reports)
+    weight_sum = sum(sample_weight(report) for report in reports)
     finite_metrics = {
-        name: value
-        for name, value in (metrics or {}).items()
-        if isfinite(value)
+        name: value for name, value in (metrics or {}).items() if isfinite(value)
     }
     return TrialScoreReport(
         trial_id=trial_id,

@@ -1,3 +1,5 @@
+"""按谱面目录读写 SQLite 处理状态，并迁移旧 JSON 状态文件。"""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -135,6 +137,8 @@ class ProcessStatusManager:
         folder_name = self._normalize_folder_name(folder_name)
         self._require_existing_folder(folder_name)
 
+        # 迁移优先级固定为“旧 source_name 数据库键 -> 旧 JSON”；只在当前
+        # 内部目录完全没有记录时迁移，避免旧数据覆盖已经推进的新状态。
         if not self._has_records(folder_name):
             self._migrate_legacy_status_key(folder_name)
         if not self._has_records(folder_name):
@@ -162,6 +166,8 @@ class ProcessStatusManager:
         self._require_existing_folder(folder_name)
         normalized = self._normalize_status(status)
 
+        # 一个目录的全部步骤在同一事务中 upsert，使 done、时间与 detail
+        # 始终来自同一份规范化状态快照。
         with Session(self.engine) as session:
             for step, step_status in normalized["steps"].items():
                 record = self._select_record(session, folder_name, step)

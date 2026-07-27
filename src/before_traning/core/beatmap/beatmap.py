@@ -1,3 +1,5 @@
+"""集中公开谱面导入、校验、难度导出处理器与阶段流水线。"""
+
 from before_traning.conf import Settings
 from before_traning.core.beatmap.difficulty import (
     BeatmapDifficultyProcessor,

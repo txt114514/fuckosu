@@ -1,3 +1,5 @@
+"""组装固定区域裁剪处理器并校验裁剪阶段配置。"""
+
 from __future__ import annotations
 
 import sys
@@ -113,7 +115,7 @@ class FixedRegionVideoCropProcessor(
 
 
 class VideoClipProcessor(FixedRegionVideoCropProcessor):
-    """Task-aligned name for the fixed-region video clip processor."""
+    """与业务阶段名称一致的固定区域视频裁剪处理器别名。"""
 
 
 def main():

@@ -1,3 +1,5 @@
+"""验证统一启动流程的阶段选择、数据同步与失败传播。"""
+
 from __future__ import annotations
 
 import sqlite3

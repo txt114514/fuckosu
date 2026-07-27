@@ -1,7 +1,10 @@
+"""验证单轮完整训练 pipeline 的阶段顺序和输出契约。"""
+
 from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 import tempfile
 import unittest
 from unittest.mock import ANY, patch
@@ -17,7 +20,10 @@ from traning.core.decision import (
     TemporalDecisionRunResult,
     run_full_training_pipeline,
 )
-from traning.core.decision.pipeline import _optimization_base_parameters
+from traning.core.decision.pipeline import (
+    _evaluation_stage_message,
+    _optimization_base_parameters,
+)
 from traning.core.spatial import SpatialTrainingResult
 from traning.core.temporal import TemporalTrainingResult
 from traning.lib.visualization import GalleryResult
@@ -37,6 +43,11 @@ class FullTrainingPipelineTests(unittest.TestCase):
             parameters = _optimization_base_parameters(settings, config=config)
 
         self.assertEqual(parameters.training["parameter_group_id"], "ramp-a")
+        self.assertEqual(parameters.training["sequence_length"], settings.temporal.history_frames)
+        self.assertEqual(
+            parameters.training["candidate_slots"],
+            settings.candidate_cache.max_candidates_per_frame,
+        )
         self.assertEqual(
             parameters.inference["score_threshold"],
             settings.candidate_cache.score_threshold,
@@ -45,6 +56,24 @@ class FullTrainingPipelineTests(unittest.TestCase):
             parameters.inference["max_candidates"],
             settings.candidate_cache.max_candidates_per_frame,
         )
+
+    def test_evaluation_message_distinguishes_strict_gate_failure(self) -> None:
+        message = _evaluation_stage_message(
+            SimpleNamespace(
+                passed=False,
+                quality_score=0.824,
+                pass_threshold=0.8,
+                unresolved_count=88,
+                target_count=88,
+                action_frame_count=0,
+                gallery_warning=None,
+            )
+        )
+
+        self.assertIn("聚合分 0.824000 已达阈值", message or "")
+        self.assertIn("样本门禁未通过", message or "")
+        self.assertIn("未解析目标 88/88", message or "")
+        self.assertIn("决策输出没有点击动作", message or "")
 
     def test_pipeline_runs_all_training_steps_and_writes_summary(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -160,6 +189,8 @@ class FullTrainingPipelineTests(unittest.TestCase):
                 data_input=data_report,
             )
 
+            # 各重型阶段替换为类型真实的结果 DTO，保留 pipeline 的评分、
+            # summary、恢复参数转发和 reporter 状态流作为被测边界。
             with (
                 patch(
                     "traning.core.decision.pipeline.run_training_startup_checks",
@@ -226,6 +257,8 @@ class FullTrainingPipelineTests(unittest.TestCase):
                 for update in reporter.metric_updates
                 if "trial_status" in update
             ]
+            # 首次参数快照应是“已计划、未评分”，末次快照则必须合并真实
+            # evaluation 与产物计数，捕获 UI 提前宣告分数的状态回归。
             self.assertTrue(parameter_updates)
             self.assertIn(PipelinePhase.TRAINING.value, phase_updates)
             self.assertIn("evaluating", trial_status_updates)
@@ -379,6 +412,8 @@ class FullTrainingPipelineTests(unittest.TestCase):
                 data_input=data_report,
             )
 
+            # 前五个阶段均返回成功，仅让图集返回结构化失败，验证可选导出
+            # 不抹掉训练结果，同时 reporter 收到唯一可诊断的失败事件。
             with (
                 patch("traning.core.decision.pipeline.run_training_startup_checks", return_value=startup_report),
                 patch("traning.core.decision.pipeline.run_spatial_training", return_value=spatial_result),

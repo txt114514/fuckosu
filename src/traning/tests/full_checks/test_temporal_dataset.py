@@ -1,7 +1,12 @@
+"""验证候选缓存窗口的连续性、mask、特征槽位和监督编码。"""
+
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -22,6 +27,8 @@ def _record(
     candidates: list[dict] | None = None,
     temporal_target: dict | None = None,
 ) -> dict:
+    # 100×50 使候选 (25, 10) 恰好编码为 (0.25, 0.2)，便于同时验证
+    # 候选槽位和整帧归一化坐标契约。
     record = {
         "version": CANDIDATE_CACHE_VERSION,
         "sample_key": sample_key,
@@ -65,24 +72,60 @@ def _candidate(
     }
 
 
-def _write_cache(path: Path, records: list[dict]) -> None:
+def _write_cache(
+    path: Path,
+    records: list[dict],
+    *,
+    version: str = CANDIDATE_CACHE_VERSION,
+) -> None:
     path.mkdir(parents=True, exist_ok=True)
+    versioned_records = [dict(record, version=version) for record in records]
     (path / "manifest.json").write_text(
         json.dumps(
             {
-                "version": CANDIDATE_CACHE_VERSION,
+                "version": version,
                 "records": "frames.jsonl",
             }
         ),
         encoding="utf-8",
     )
     (path / "frames.jsonl").write_text(
-        "\n".join(json.dumps(record) for record in records) + "\n",
+        "\n".join(json.dumps(record) for record in versioned_records) + "\n",
         encoding="utf-8",
     )
 
 
 class TemporalDatasetTests(unittest.TestCase):
+    def test_temporal_package_imports_in_fresh_interpreter(self) -> None:
+        environment = dict(os.environ)
+        environment["PYTHONPATH"] = str(Path(__file__).resolve().parents[3])
+        environment["PYTHONDONTWRITEBYTECODE"] = "1"
+
+        result = subprocess.run(
+            [sys.executable, "-c", "import traning.core.temporal"],
+            capture_output=True,
+            check=False,
+            env=environment,
+            text=True,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_legacy_v1_cache_requires_explicit_diagnostic_mode(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_dir = Path(tmp)
+            _write_cache(
+                cache_dir,
+                [_record("legacy", 0, candidates=[_candidate(0.8)])],
+                version="spatial-candidate-cache-v1",
+            )
+
+            with self.assertRaisesRegex(ValueError, "diagnostic-only"):
+                load_candidate_cache_records(cache_dir)
+            loaded = load_candidate_cache_records(cache_dir, allow_legacy=True)
+
+        self.assertEqual(loaded[0]["version"], "spatial-candidate-cache-v1")
+
     def test_loads_candidate_cache_records(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             cache_dir = Path(tmp)
@@ -93,6 +136,8 @@ class TemporalDatasetTests(unittest.TestCase):
         self.assertEqual(loaded[0]["sample_key"], "a")
 
     def test_encodes_fixed_windows_without_crossing_samples(self) -> None:
+        # a 正好填满窗口，b 需要一个 padding 帧；若窗口跨 sample 拼接，
+        # b 会错误消费 a 的时序状态且 mask/sentinel 均会变化。
         records = [
             _record("a", 0, candidates=[_candidate(0.7)]),
             _record("a", 1),
@@ -121,6 +166,7 @@ class TemporalDatasetTests(unittest.TestCase):
             _record(
                 "a",
                 0,
+                # 目标候选 ID=7 不是分数最高项，约束监督按显式 ID 而非 argmax。
                 candidates=[
                     _candidate(0.7, candidate_id=7),
                     _candidate(0.9, x=60.0, candidate_id=3),
@@ -144,9 +190,13 @@ class TemporalDatasetTests(unittest.TestCase):
         self.assertEqual(window.action_target.tolist(), [2])
         self.assertEqual(window.selected_candidate_target.tolist(), [1])
         self.assertEqual(window.target_strategy, "beatmap_action_v1")
-        self.assertTrue(torch.allclose(window.time_offset_target[0], torch.tensor([3.0])))
+        self.assertTrue(
+            torch.allclose(window.time_offset_target[0], torch.tensor([3.0]))
+        )
 
     def test_preserves_selected_target_candidate_when_outside_top_scores(self) -> None:
+        # candidate_slots=2 但监督候选按分数排第三；数据集必须替换掉普通
+        # top-k 的末槽，否则 candidate loss 会得到 ignore sentinel。
         records = [
             _record(
                 "a",

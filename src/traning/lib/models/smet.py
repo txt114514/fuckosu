@@ -1,3 +1,5 @@
+"""以权重绝对值 top-k 掩码实现可选的动态稀疏线性层。"""
+
 from __future__ import annotations
 
 import torch
@@ -6,7 +8,7 @@ import torch.nn.functional as F
 
 
 class DynamicSparseLinear(nn.Module):
-    """Linear layer with a deterministic top-k dynamic sparse weight mask."""
+    """使用确定性权重绝对值 top-k 动态掩码的线性层。"""
 
     def __init__(
         self,
@@ -52,11 +54,13 @@ class DynamicSparseLinear(nn.Module):
         self.mask.copy_(self._mask_from_weight().to(self.mask.dtype))
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
+        # 训练时按当前权重重算掩码；推理使用缓冲区，保证重复输出稳定。
         mask = self._mask_from_weight() if self.training else self.mask
         return F.linear(input, self.weight * mask, self.bias)
 
     def _mask_from_weight(self) -> torch.Tensor:
         keep = max(1, int(round(self.weight.numel() * self.density)))
+        # 排名不参与梯度，保留下来的原始 weight 仍通过 F.linear 正常求导。
         weight_abs = self.weight.detach().abs()
         flat = weight_abs.flatten()
         if keep >= flat.numel():

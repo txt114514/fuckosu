@@ -1,3 +1,5 @@
+"""验证 Rich 面板、紧凑视图及 tmux 启动降级行为。"""
+
 from __future__ import annotations
 
 import unittest

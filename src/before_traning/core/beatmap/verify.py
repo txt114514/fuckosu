@@ -1,3 +1,5 @@
+"""校验标准谱面缓存并导出训练前核验文本。"""
+
 from __future__ import annotations
 
 from pathlib import Path

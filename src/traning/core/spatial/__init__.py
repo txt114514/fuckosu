@@ -1,4 +1,4 @@
-"""Spatial candidate detection stage."""
+"""空间模型训练、单帧推理与候选解码的公开入口。"""
 
 from traning.lib.training import (
     decode_slider_paths,

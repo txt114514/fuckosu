@@ -1,3 +1,5 @@
+"""依据质量门槛和连续通过次数更新课程阶段状态。"""
+
 from __future__ import annotations
 
 from collections import defaultdict
@@ -75,6 +77,7 @@ def _gate_subproject(
     samples: Sequence[SampleScoreReport],
     rule: SubprojectPassRule,
 ) -> SubprojectGateResult:
+    # 输入顺序代表实际评估顺序；不重排才能让“连续通过”保持课程门禁语义。
     window = tuple(samples[: rule.max_samples])
     streak = 0
     longest = 0

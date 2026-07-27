@@ -1,3 +1,5 @@
+"""按 item、维度和类别发现成对的 segment 视频与标注文件。"""
+
 from __future__ import annotations
 
 from pathlib import Path

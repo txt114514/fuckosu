@@ -1,3 +1,5 @@
+"""从预处理状态库恢复原视频尺寸和裁剪矩形元数据。"""
+
 from __future__ import annotations
 
 import json
@@ -10,6 +12,8 @@ def load_preprocessing_metadata(
     dataset_root: Path,
     item_name: str,
 ) -> dict[str, Any] | None:
+    """读取最近一次成功视频预处理记录；缺失或损坏时返回 ``None``。"""
+
     status_db = _status_db_for_dataset_root(dataset_root)
     if status_db is None:
         return None
@@ -35,6 +39,7 @@ def load_preprocessing_metadata(
         return None
     if not isinstance(detail, dict):
         return None
+    # 保留 raw 便于审计，同时提升常用尺寸/裁剪字段为稳定的坐标链输入。
     return {
         "source": "process_status.video_processed",
         "status_db": str(status_db),

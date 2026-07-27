@@ -1,3 +1,5 @@
+"""验证分段规划的对象归属、边界与 ffmpeg 参数契约。"""
+
 from __future__ import annotations
 
 import unittest

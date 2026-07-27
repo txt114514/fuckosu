@@ -1,3 +1,5 @@
+"""定义预测事件、评分结果与错误域等评估交换结构。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field

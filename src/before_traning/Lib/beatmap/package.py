@@ -1,3 +1,5 @@
+"""依据 SQLite manifest 创建并同步允许参与处理的内部谱面目录。"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -68,7 +70,7 @@ class PackageUpdater:
         return folder_path
 
     def sync_folders_from_manifest(self) -> List[Path]:
-        """Create active manifest folders in processing order."""
+        """按照处理顺序创建 manifest 中处于启用状态的目录。"""
         folder_names = self.load_manifest_folder_names()
         result: List[Path] = []
 

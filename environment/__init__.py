@@ -1,3 +1,5 @@
+"""公开运行环境、依赖包与 CUDA 能力检查接口。"""
+
 from environment.env_check import (
     OPTIONAL_PACKAGES,
     REQUIRED_PACKAGES,

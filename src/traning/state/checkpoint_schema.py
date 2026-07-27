@@ -1,3 +1,5 @@
+"""定义带 lineage 和可恢复组件声明的训练检查点元数据。"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -8,6 +10,8 @@ from traning.state.experiment_schema import CurriculumStage
 
 
 class CheckpointMetadata(BaseModel):
+    """记录检查点位置、训练进度、父节点及可恢复状态范围。"""
+
     checkpoint_id: str
     trial_id: str
     curriculum_stage: CurriculumStage

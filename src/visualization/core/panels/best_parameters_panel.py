@@ -1,3 +1,5 @@
+"""渲染最佳评分、检查点和关键参数摘要面板。"""
+
 from collections.abc import Mapping, Sequence
 
 from rich.panel import Panel

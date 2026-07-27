@@ -1,3 +1,5 @@
+"""汇聚训练事件和指标，持久化快照，并通知活动渲染器刷新。"""
+
 from __future__ import annotations
 
 from collections import deque
@@ -43,6 +45,8 @@ _GLOBAL_TERMINAL_STATUSES = {"failed", "interrupted"}
 
 
 class NullReporter:
+    """关闭可视化时保持同一调用协议的无副作用实现。"""
+
     def update_pipeline_stage(self, stage: PipelineStageState) -> None:
         return None
 
@@ -88,6 +92,8 @@ class NullReporter:
 
 
 class DashboardReporter:
+    """维护单次运行的内存状态，并把每次有效更新发布给文件与渲染器。"""
+
     def __init__(
         self,
         *,
@@ -126,6 +132,7 @@ class DashboardReporter:
             self._state.status = stage.status
         self._touch()
         self._sync_current_parameter_status()
+        # 仅状态发生生命周期跃迁时生成事件，避免每次进度更新淹没真正的阶段变化。
         event = _stage_lifecycle_event(previous, stage)
         if event is not None:
             self._record_event(event)
@@ -266,6 +273,7 @@ class DashboardReporter:
     def _record_event(self, event: TrainingEvent) -> None:
         self._events.append(event)
         self._state.recent_events = list(self._events)
+        # 仪表盘是训练旁路：事件日志故障不得反向中断模型训练。
         with suppress(Exception):
             self.store.append_event(event)
 
@@ -339,6 +347,7 @@ class DashboardReporter:
         self._state.updated_at = utc_now()
 
     def _write_state(self) -> None:
+        # 先尝试发布最新磁盘快照，再通知进程内渲染器读取同一内存状态。
         with suppress(Exception):
             self.store.write_state(self._state)
         self._notify_refresh_callbacks()
@@ -372,6 +381,7 @@ def _stage_lifecycle_event(
     if stage.status == "pending":
         return None
     if previous is not None and previous.status == stage.status:
+        # processed/total 等字段会高频变化，但同状态不重复写生命周期事件。
         return None
     if stage.status in _ACTIVE_STAGE_STATUSES:
         severity = "info"
@@ -444,6 +454,8 @@ def _stage_lifecycle_raw_message(
 
 
 def _protects_terminal_global_state(state: TrainingDashboardState) -> bool:
+    """判断失败或停止终态是否应阻止迟到更新把全局状态改回运行中。"""
+
     return (
         state.stop_state is not None
         or state.status in _GLOBAL_TERMINAL_STATUSES
@@ -612,6 +624,8 @@ def _derive_trial_status(state: TrainingDashboardState) -> str | None:
 
 
 class ManagedDashboardHandle:
+    """按上下文管理报告器与可选渲染器的启动、关闭顺序。"""
+
     def __init__(
         self, reporter: DashboardReporter, renderer: object | None = None
     ) -> None:
@@ -629,6 +643,7 @@ class ManagedDashboardHandle:
         return None
 
     def close(self) -> None:
+        # 先写入最终报告器状态，再停止渲染器，使最后一次刷新可见。
         self.reporter.close()
         if hasattr(self.renderer, "stop"):
             with suppress(Exception):
@@ -636,6 +651,8 @@ class ManagedDashboardHandle:
 
 
 def choose_ui_mode(mode: str) -> str:
+    """显式模式原样返回；auto 按 GUI、交互终端、纯文本顺序降级。"""
+
     if mode != "auto":
         return mode
     try:

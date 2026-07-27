@@ -1,3 +1,5 @@
+"""验证训练前处理 CLI 与无 Typer 业务入口的适配契约。"""
+
 from __future__ import annotations
 
 from pathlib import Path

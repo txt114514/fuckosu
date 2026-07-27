@@ -1,3 +1,5 @@
+"""分块运行空间模型，融合全帧特征画布并解码点与 slider 候选。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -137,7 +139,7 @@ def prepare_spatial_frame_inference(
     device: torch.device,
     checkpoint_path: Path | None = None,
 ) -> SpatialFrameInferenceRunner:
-    """Prepare spatial models once for repeated frame inference."""
+    """一次性准备空间模型和运行时，供多帧推理复用。"""
 
     memory_budget = enforce_runtime_memory_budget(
         device=device,
@@ -200,7 +202,7 @@ def run_spatial_frame_inference(
     slider_path_points: int = 32,
     patch_limit: int | None = None,
 ) -> SpatialFrameInferenceResult:
-    """Run one-frame spatial inference with explicit GPU/CPU work separation."""
+    """执行单帧空间推理，并显式分离 GPU 前向与 CPU 画布融合。"""
 
     runner = prepare_spatial_frame_inference(
         settings,
@@ -254,6 +256,7 @@ def _run_spatial_frame_inference_prepared(
         stride=settings.local_encoder.output_stride,
         embedding_dim=settings.local_encoder.embedding_dim,
     )
+    # 画布坐标始终对应完整视频帧；重叠 patch 在此融合后才能做全局 NMS 和路径解码。
     processed = 0
     with torch.no_grad():
         with autocast_context(device, settings.memory.amp_dtype):
@@ -276,6 +279,7 @@ def _run_spatial_frame_inference_prepared(
                     patch_meta=meta,
                 )
                 prediction = modules["head"](fused.dense)
+            # write_patch 在 detached CPU 画布累计结果，不保留逐 patch 的 GPU 计算图。
             canvas.write_patch(prediction, meta)
             processed += 1
 

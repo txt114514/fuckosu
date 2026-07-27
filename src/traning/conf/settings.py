@@ -1,3 +1,5 @@
+"""定义训练全量配置模型、跨字段校验和相对路径解析规则。"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -25,6 +27,8 @@ DataSplit = Literal["all", "train", "validation", "test"]
 
 
 class SettingsError(Exception):
+    """表示配置读取、解析或跨字段校验失败。"""
+
     pass
 
 
@@ -90,6 +94,8 @@ class CropRectSettings(BaseModel):
 
 
 class CoordinateTransformSettings(BaseModel):
+    """声明 osu! 到训练帧的坐标标定模式及其必需参数。"""
+
     version: str = COORDINATE_TRANSFORM_VERSION
     mode: Literal["explicit_rect", "explicit_source_rect", "affine_matrix", "legacy_centered"] = (
         "legacy_centered"
@@ -386,12 +392,10 @@ class CandidateCacheSettings(BaseModel):
 
 class OptimizationSettings(BaseModel):
     enabled: bool = False
-    max_generated_jobs: int = 1
     execute_generated_jobs: bool = False
-    dry_run: bool = False
-    job_only: bool = True
-    max_trials: int = 1
-    max_stage: str = "basic"
+    # None 表示由严格评估通过或用户中断结束搜索；正整数表示含初始 trial 的总预算。
+    max_trials: int | None = None
+    max_stage: Literal["basic", "multi_object", "complex", "full"] = "basic"
     trial_store_path: Path = REPO_ROOT / "runs" / "optimization" / "trials.jsonl"
     trial_store_backend: Literal["jsonl", "sqlite"] = "jsonl"
     trial_store_sqlite_path: Path = (
@@ -405,9 +409,11 @@ class OptimizationSettings(BaseModel):
         }
     )
 
-    @field_validator("max_generated_jobs", "max_trials")
+    @field_validator("max_trials")
     @classmethod
-    def _positive_integer(cls, value: int) -> int:
+    def _positive_integer(cls, value: int | None) -> int | None:
+        if value is None:
+            return None
         if value <= 0:
             raise ValueError("optimization counts must be positive")
         return value
@@ -584,6 +590,8 @@ class DataInputSettings(BaseModel):
 
 
 class Settings(BaseSettings):
+    """聚合训练各阶段配置，并定义环境变量覆盖优先级。"""
+
     model_config = SettingsConfigDict(
         env_prefix="OSU_TRAINING_",
         env_nested_delimiter="__",
@@ -643,6 +651,9 @@ def _read_config(config_path: Path) -> dict[str, Any]:
 
 
 def _resolve_paths(raw: dict[str, Any], base_dir: Path) -> dict[str, Any]:
+    """相对配置文件目录解析所有持久化输入输出路径。"""
+
+    # 路径不能相对当前 shell 工作目录，否则同一配置从不同入口启动会指向不同数据。
     resolved = dict(raw)
     data_input = dict(resolved.get("data_input") or {})
     dataset_root = data_input.get("dataset_root")
@@ -687,6 +698,8 @@ def _resolve_paths(raw: dict[str, Any], base_dir: Path) -> dict[str, Any]:
 
 
 def load_settings(config_path: Path | None = None) -> Settings:
+    """加载配置并执行 Pydantic 与 tiling 的完整跨字段校验。"""
+
     selected = (config_path or CONFIG_PATH).resolve()
     raw = _resolve_paths(_read_config(selected), selected.parent)
     try:

@@ -1,3 +1,5 @@
+"""定义训练前处理配置模型，并加载、校验及兼容 YAML/JSON 配置。"""
+
 from __future__ import annotations
 
 import json

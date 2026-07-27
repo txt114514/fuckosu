@@ -1,3 +1,5 @@
+"""验证 Rich 渲染器分页、紧凑布局和最终中文显示替换。"""
+
 from __future__ import annotations
 
 from pathlib import Path

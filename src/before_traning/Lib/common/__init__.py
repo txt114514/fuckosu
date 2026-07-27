@@ -1,3 +1,5 @@
+"""公开训练前处理通用的批处理、异常、路径和状态守卫接口。"""
+
 from before_traning.Lib.common.batch import FolderBatchProcessor
 from before_traning.Lib.common.failures import exception_detail, failure_detail
 from before_traning.Lib.common.pathspec import filter_files, suffix_spec

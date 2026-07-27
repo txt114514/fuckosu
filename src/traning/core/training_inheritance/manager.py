@@ -1,3 +1,5 @@
+"""创建和加载训练继承包，并按数据与版本兼容性执行恢复策略。"""
+
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
@@ -83,6 +85,8 @@ def create_inheritance_package(
     artifacts: dict[str, Any] | None = None,
     stage_checkpoints: Mapping[str, Path | None] | None = None,
 ) -> InheritancePackage:
+    """复制恢复所需文件并在最后发布 manifest 与 latest 指针。"""
+
     inheritance_dir = output_dir / "inheritance"
     inheritance_dir.mkdir(parents=True, exist_ok=True)
     latest_copy = _copy_checkpoint(latest_checkpoint_path, inheritance_dir / "latest_checkpoint.pt")
@@ -121,6 +125,7 @@ def create_inheritance_package(
     }
     manifest_path = inheritance_dir / "inheritance_manifest.json"
     _write_json(manifest_path, manifest)
+    # 指针在 manifest 完成后发布，latest 不会指向尚未描述完整的继承目录。
     latest_pointer = output_dir.parent / "latest_inheritance.json"
     _write_json(latest_pointer, {"path": str(inheritance_dir), "manifest_path": str(manifest_path)})
     return InheritancePackage(
@@ -158,6 +163,7 @@ def load_inheritance_package(
         raise ValueError("inheritance incompatible: " + ", ".join(reasons))
     effective_policy: ResumePolicy = policy
     if reasons and policy == "auto":
+        # auto 遇到数据或方程不兼容时仅复用形状兼容权重，不恢复优化器/RNG/步数。
         effective_policy = "weights-only"
         reasons.append("auto_downgraded_to_weights_only")
     compatible = not reasons
@@ -249,6 +255,8 @@ def resolve_inheritance_path(value: Path | str | None) -> Path | None:
 
 
 def _compatibility_reasons(manifest: dict[str, Any], settings: Settings) -> list[str]:
+    """列出继承包与当前训练设置之间所有会影响安全恢复的差异。"""
+
     reasons: list[str] = []
     if manifest.get("schema_version") != INHERITANCE_SCHEMA_VERSION:
         reasons.append("schema_version")
@@ -258,8 +266,16 @@ def _compatibility_reasons(manifest: dict[str, Any], settings: Settings) -> list
         if _comparable(old.get(key)) != _comparable(current.get(key)):
             reasons.append(f"dataset_{key}")
     versions = manifest.get("versions") or {}
-    if versions.get("configuration_version") != version_manifest(settings).get("configuration_version"):
-        reasons.append("configuration_version")
+    current_versions = version_manifest(settings)
+    # transform_version 只表示协议版本；fingerprint 才能识别系数、偏移量或训练帧尺寸变化。
+    # 这里使用直接比较，因此旧 manifest 缺少 fingerprint 时同样失配并触发降级。
+    for key in (
+        "configuration_version",
+        "transform_version",
+        "transform_fingerprint",
+    ):
+        if versions.get(key) != current_versions.get(key):
+            reasons.append(key)
     return reasons
 
 

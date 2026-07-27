@@ -1,3 +1,5 @@
+"""验证 osu! 颜色提示通道的形状、范围与禁用行为。"""
+
 from __future__ import annotations
 
 import unittest
@@ -15,6 +17,8 @@ from traning.lib.models import build_model_stack
 
 class ColorCueTests(unittest.TestCase):
     def test_osu_basic_cues_highlight_colored_target_and_white_number(self) -> None:
+        # 暗背景、红色目标块和内部白色窄条分别激活不同 cue；区域彼此嵌套
+        # 可捕获白色数字被误并入颜色 mask 或背景阈值过宽。
         frame = torch.zeros(3, 32, 32)
         frame[:, :, :] = torch.tensor([0.05, 0.06, 0.08]).view(3, 1, 1)
         frame[:, 8:24, 8:24] = torch.tensor([1.0, 0.12, 0.25]).view(3, 1, 1)

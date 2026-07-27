@@ -1,3 +1,5 @@
+"""定义启动检查结果、聚合报告及 JSON 安全序列化规则。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -11,6 +13,8 @@ CheckStatus = Literal["passed", "warning", "failed", "skipped"]
 
 @dataclass(frozen=True)
 class StartupCheckResult:
+    """表示一个稳定 key 对应的单项检查状态与结构化细节。"""
+
     key: str
     status: CheckStatus
     message: str
@@ -31,6 +35,8 @@ class StartupCheckResult:
 
 @dataclass(frozen=True)
 class StartupCheckReport:
+    """聚合同一检查 scope 的结果，并只把 failed 视为阻断。"""
+
     scope: str
     results: tuple[StartupCheckResult, ...]
     generated_at_utc: str = field(

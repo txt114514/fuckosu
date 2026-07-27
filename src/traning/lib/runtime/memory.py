@@ -1,3 +1,5 @@
+"""统一训练与冒烟测试的内存预算、CUDA 性能开关和 AMP 设备操作。"""
+
 from __future__ import annotations
 
 from contextlib import contextmanager, nullcontext
@@ -13,6 +15,8 @@ AmpDType = str | torch.dtype | None
 
 @dataclass(frozen=True)
 class MemorySnapshot:
+    """PyTorch CUDA allocator 的峰值与当前 allocated/reserved 快照。"""
+
     cuda_available: bool
     max_allocated_gib: float | None
     max_reserved_gib: float | None
@@ -22,6 +26,8 @@ class MemorySnapshot:
 
 @dataclass(frozen=True)
 class RuntimeMemoryBudget:
+    """预算检查后得到的主存、显存和 CUDA allocator 上限记录。"""
+
     device: str
     ram_total_gib: float
     ram_available_gib: float
@@ -54,6 +60,8 @@ class RuntimeMemoryBudget:
 
 @dataclass(frozen=True)
 class CudaRuntimeConfig:
+    """CUDA 数值性能开关；CPU 设备会忽略 CUDA 专属项。"""
+
     allow_tf32: bool = True
     cudnn_benchmark: bool = True
     matmul_float32_precision: str = "high"
@@ -80,7 +88,7 @@ def enforce_runtime_memory_budget(
     reserve_ram_gib: float,
     set_cuda_fraction: bool = True,
 ) -> RuntimeMemoryBudget:
-    """Validate CPU/CUDA budgets and reserve headroom for the host system."""
+    """验证 CPU/CUDA 预算，并为宿主系统保留不可占用的余量。"""
 
     if max_vram_gib <= 0 or not _finite(max_vram_gib):
         raise ValueError("max_vram_gib must be finite and positive")
@@ -96,6 +104,7 @@ def enforce_runtime_memory_budget(
     ram_total_gib = ram.total / 1024**3
     ram_available_gib = ram.available / 1024**3
     ram_system_budget = max(ram_total_gib - reserve_ram_gib, 0.0)
+    # available 不含进程已占用内存，因此加回 RSS 得到“进程最终可达到”的上限。
     ram_available_budget = process_rss_gib + max(
         ram_available_gib - reserve_ram_gib,
         0.0,
@@ -153,6 +162,7 @@ def enforce_runtime_memory_budget(
             )
         cuda_fraction = min(max(vram_budget_gib / vram_total_gib, 0.01), 1.0)
         if set_cuda_fraction:
+            # 这是 PyTorch allocator 的进程上限，不代表立即预留相应物理显存。
             torch.cuda.set_per_process_memory_fraction(
                 cuda_fraction,
                 device=device_index,
@@ -177,6 +187,8 @@ def enforce_runtime_memory_budget(
 
 
 def resolve_amp_dtype(device: torch.device, amp_dtype: AmpDType) -> torch.dtype | None:
+    """解析 AMP 精度；非 CUDA 或 float32 返回 ``None`` 表示禁用 autocast。"""
+
     if device.type != "cuda" or amp_dtype is None:
         return None
     if isinstance(amp_dtype, torch.dtype):
@@ -194,11 +206,14 @@ def resolve_amp_dtype(device: torch.device, amp_dtype: AmpDType) -> torch.dtype 
         return torch.bfloat16
     if normalized != "auto":
         raise ValueError(f"unsupported amp dtype: {amp_dtype}")
+    # auto 优先 bfloat16 的动态范围；硬件不支持时才退到 float16。
     return torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
 
 
 @contextmanager
 def autocast_context(device: torch.device, amp_dtype: AmpDType) -> Iterator[None]:
+    """提供统一上下文；AMP 关闭时退化为无操作上下文。"""
+
     dtype = resolve_amp_dtype(device, amp_dtype)
     if dtype is None:
         with nullcontext():
@@ -214,7 +229,7 @@ def configure_torch_runtime(
     amp_dtype: AmpDType,
     runtime: CudaRuntimeConfig = CudaRuntimeConfig(),
 ) -> CudaRuntimeState:
-    """Apply CUDA runtime defaults used by training and smoke tests."""
+    """应用训练与冒烟测试共用的 CUDA 数值和卷积运行时设置。"""
 
     if device.type == "cuda":
         precision = "tf32" if runtime.allow_tf32 else "ieee"
@@ -245,6 +260,8 @@ def configure_torch_runtime(
 
 
 def amp_uses_grad_scaler(device: torch.device, amp_dtype: AmpDType) -> bool:
+    """仅 float16 CUDA 路径需要 GradScaler；bfloat16 通常无需缩放。"""
+
     return (
         device.type == "cuda" and resolve_amp_dtype(device, amp_dtype) == torch.float16
     )
@@ -272,6 +289,8 @@ def module_to_device(
     *,
     channels_last: bool,
 ) -> nn.Module:
+    """搬运模块，并仅在 CUDA 请求时切为 channels-last 内存格式。"""
+
     module = module.to(device)
     if channels_last and device.type == "cuda":
         module = module.to(memory_format=torch.channels_last)
@@ -298,6 +317,8 @@ def tensor_to_device(
     channels_last: bool,
     non_blocking: bool = True,
 ) -> torch.Tensor:
+    """搬运张量；只有四维 CUDA 图像张量应用 channels-last。"""
+
     if channels_last and device.type == "cuda" and tensor.ndim == 4:
         return tensor.to(
             device=device,
@@ -308,6 +329,8 @@ def tensor_to_device(
 
 
 def collect_memory_snapshot() -> MemorySnapshot:
+    """采集当前默认 CUDA 设备的 PyTorch allocator 统计。"""
+
     if not torch.cuda.is_available():
         return MemorySnapshot(
             cuda_available=False,

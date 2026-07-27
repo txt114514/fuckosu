@@ -1,3 +1,5 @@
+"""定义空间候选、slider 路径、时序目标与决策帧的稳定契约。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

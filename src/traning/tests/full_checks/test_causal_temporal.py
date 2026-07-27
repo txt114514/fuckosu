@@ -1,3 +1,5 @@
+"""验证时序模型的因果性、状态传递与未来信息隔离。"""
+
 from __future__ import annotations
 
 import unittest
@@ -14,6 +16,8 @@ class CausalTemporalTests(unittest.TestCase):
             input_size=5, hidden_size=7, layers=2, candidate_slots=3
         )
         sequence = torch.randn(5, 1, 5)
+        # 同一前缀分别独立执行和作为完整序列的一部分执行，可直接捕获
+        # attention/RNN 意外读取未来帧的因果性回归。
         prefix_outputs, _ = model(sequence[:3])
         full_outputs, _ = model(sequence)
         for left, right in zip(prefix_outputs, full_outputs[:3]):
@@ -95,6 +99,8 @@ class CausalTemporalTests(unittest.TestCase):
         sparse_layers = [
             module for module in model.modules() if isinstance(module, DynamicSparseLinear)
         ]
+        # autograd 会用 Tensor version 检测原地修改；显式记录版本可在错误
+        # 尚未触发反向异常前定位动态稀疏 mask 的隐式 mutation。
         versions = [layer.mask._version for layer in sparse_layers]
 
         outputs, _ = model(torch.randn(4, 1, 4))
@@ -113,6 +119,7 @@ class CausalTemporalTests(unittest.TestCase):
         )
         sequence = torch.randn(8, 2, 6)
         mutated = sequence.clone()
+        # 大幅放大未来扰动，避免正常随机噪声过小而掩盖微弱的信息泄漏。
         mutated[4:] = torch.randn_like(mutated[4:]) * 100.0
         original_outputs, _ = model(sequence)
         mutated_outputs, _ = model(mutated)
@@ -138,6 +145,8 @@ class CausalTemporalTests(unittest.TestCase):
         for left, right in zip(continuous, segmented):
             self.assertTrue(torch.allclose(left.action_logits, right.action_logits))
 
+        # 只改 batch 中第二条序列，第一条输出必须保持不变，防止隐藏状态
+        # 在 batch 维度被错误共享。
         changed = sequence.clone()
         changed[:, 1] = torch.randn_like(changed[:, 1]) * 50.0
         changed_outputs, _ = model(changed)

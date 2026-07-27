@@ -1,5 +1,8 @@
+"""验证最佳结果图集的筛选、仿射渲染、目录布局与故障隔离。"""
+
 from __future__ import annotations
 
+import csv
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -9,6 +12,9 @@ from unittest.mock import patch
 
 import torch
 
+from package.coordinates import AffineOsuVideoTransform, OsuVideoTransform
+from traning.lib.visualization import render_annotated_frame
+from traning.lib.visualization.render import _annotation_font
 from traning.lib.visualization.gallery import save_best_trial_gallery
 from traning.state import (
     BatchGalleryRequest,
@@ -16,10 +22,23 @@ from traning.state import (
     TrialGalleryEvaluation,
     TrialParameters,
 )
+from visualization.core.gallery.exporter import MAX_SAFE_NAME_LENGTH, _safe_name
+
+
+# 与正式配置一致，用真实非居中映射检查渲染链路没有回退到 legacy_centered。
+AFFINE_RENDER_MATRIX = (
+    (2.115860914627143, 0.0011971920855575358, 242.59057485632047),
+    (0.0003418231662923798, 2.1166805757239477, 16.12108357719331),
+)
+AFFINE_MARKER_OSU_XY = (256.0, 183.0)
+TARGET_MARKER_COLOR = (255, 72, 72)
+PREDICTED_MARKER_COLOR = (255, 80, 255)
 
 
 class _FakeSegmentFrameDataset:
     def __init__(self) -> None:
+        # item_a 有三个帧、item_b 只有一个帧，用同一 fixture 区分
+        # “sample group 数量上限”和“组内帧数量”两层选择语义。
         self.records = (
             SimpleNamespace(
                 key="item_a/long_sequence_0001",
@@ -122,6 +141,145 @@ def _multi_trial_request(
 
 
 class ResultExportGalleryTests(unittest.TestCase):
+    def test_safe_name_caps_long_tokens_with_stable_collision_resistant_hash(
+        self,
+    ) -> None:
+        short = "trial-ramp-a__r01"
+        long_prefix = "trial-" + "parameter-group-" * 12
+        first = _safe_name(long_prefix + "alpha")
+        second = _safe_name(long_prefix + "beta")
+
+        self.assertEqual(_safe_name(short), short)
+        self.assertLessEqual(len(first), MAX_SAFE_NAME_LENGTH)
+        self.assertEqual(first, _safe_name(long_prefix + "alpha"))
+        self.assertNotEqual(first, second)
+
+    def test_annotation_font_distinguishes_chinese_diagnostic_text(self) -> None:
+        font = _annotation_font(846)
+
+        self.assertNotEqual(
+            bytes(font.getmask("真值目标")), bytes(font.getmask("模型点击"))
+        )
+
+    def test_failed_gallery_persists_no_op_reason_and_action(self) -> None:
+        dataset = _FakeSegmentFrameDataset()
+        request = _request(
+            (
+                FrameEvaluation(
+                    sample_key="item_a/long_sequence_0001",
+                    frame_index=1,
+                    passed=False,
+                    target_source_index=11,
+                    action="no_op",
+                    action_probability=0.8981025218963623,
+                    primary_error="spatial",
+                    error_tags=(
+                        "unresolved_target",
+                        "candidate_match_failed",
+                        "nearest_candidate_outside_radius",
+                    ),
+                    failure_reason=(
+                        "target-candidate matching failed: "
+                        "nearest_candidate_outside_radius"
+                    ),
+                ),
+            )
+        )
+
+        with tempfile.TemporaryDirectory() as temporary:
+            output_dir, saved_count, issues = save_best_trial_gallery(
+                dataset,
+                request,
+                output_root=Path(temporary),
+            )
+            manifest = json.loads(
+                (output_dir / "manifest.json").read_text(encoding="utf-8")
+            )
+            with (output_dir / "index.csv").open(
+                encoding="utf-8", newline=""
+            ) as handle:
+                index_rows = list(csv.DictReader(handle))
+
+        frame = manifest["frames"][0]
+        self.assertEqual(issues, ())
+        self.assertEqual(saved_count, 1)
+        self.assertTrue(frame["path"].startswith("failed/long_sequence/"))
+        self.assertEqual(frame["action"], "no_op")
+        self.assertIsNone(frame["predicted_video_xy"])
+        self.assertEqual(frame["primary_error"], "spatial")
+        self.assertEqual(index_rows[0]["action_type"], "no_op")
+        self.assertIn("target-candidate", index_rows[0]["failure_reason"])
+
+    def test_affine_circle_slider_and_spinner_render_at_affine_marker(self) -> None:
+        """验证三类对象都消费样本携带的仿射规格，而非仅修正某一渲染分支。"""
+
+        transform = AffineOsuVideoTransform(AFFINE_RENDER_MATRIX)
+        transform_spec = transform.spec(source="test.affine", status="calibrated")
+        expected_marker = tuple(
+            round(value) for value in transform.osu_to_video(*AFFINE_MARKER_OSU_XY)
+        )
+        legacy_marker = tuple(
+            round(value)
+            for value in OsuVideoTransform.fit_centered(1484, 846).osu_to_video(
+                *AFFINE_MARKER_OSU_XY
+            )
+        )
+        # 三类对象走不同绘制路径；spinner 通过预测标记显式检查变换后的中心。
+        objects = {
+            "circle": {
+                "type": "circle",
+                "x": AFFINE_MARKER_OSU_XY[0],
+                "y": AFFINE_MARKER_OSU_XY[1],
+                "source_index": 1,
+            },
+            "slider": {
+                "type": "slider",
+                "x": AFFINE_MARKER_OSU_XY[0],
+                "y": AFFINE_MARKER_OSU_XY[1],
+                "path": (
+                    AFFINE_MARKER_OSU_XY,
+                    (AFFINE_MARKER_OSU_XY[0] + 48.0, AFFINE_MARKER_OSU_XY[1]),
+                ),
+                "curve_type": "L",
+                "source_index": 1,
+            },
+            "spinner": {
+                "type": "spinner",
+                "start_ms": 0.0,
+                "end_ms": 1000.0,
+                "source_index": 1,
+            },
+        }
+
+        for object_type, hit_object in objects.items():
+            with self.subTest(object_type=object_type):
+                sample = {
+                    "image": torch.zeros((3, 846, 1484), dtype=torch.float32),
+                    "sample_key": f"item/affine_{object_type}",
+                    "frame_index": 0,
+                    "timestamp_ms": 0.0,
+                    "hit_objects": (hit_object,),
+                    "visible_hit_objects": (hit_object,),
+                    "circle_radius_osu_pixels": 16.0,
+                    "coordinate_transform": transform_spec.as_dict(),
+                }
+                image = render_annotated_frame(
+                    sample,
+                    target_source_index=1,
+                    predicted_osu_xy=(
+                        AFFINE_MARKER_OSU_XY if object_type == "spinner" else None
+                    ),
+                )
+
+                marker_color = (
+                    PREDICTED_MARKER_COLOR
+                    if object_type == "spinner"
+                    else TARGET_MARKER_COLOR
+                )
+                # 同时断言旧中心没有目标颜色，可捕获悄然回退旧映射的回归。
+                self.assertEqual(image.getpixel(expected_marker), marker_color)
+                self.assertNotEqual(image.getpixel(legacy_marker), marker_color)
+
     def test_outputs_one_folder_per_selected_sample_group(self) -> None:
         dataset = _FakeSegmentFrameDataset()
         request = _request(
@@ -159,9 +317,7 @@ class ResultExportGalleryTests(unittest.TestCase):
             manifest = json.loads(
                 (output_dir / "manifest.json").read_text(encoding="utf-8")
             )
-            sample_dirs = tuple(
-                (output_dir / "passed" / "long_sequence").iterdir()
-            )
+            sample_dirs = tuple((output_dir / "passed" / "long_sequence").iterdir())
             sample_dir_count = len(sample_dirs)
             sample_png_count = len(tuple(sample_dirs[0].glob("*.png")))
 
@@ -212,9 +368,7 @@ class ResultExportGalleryTests(unittest.TestCase):
             manifest = json.loads(
                 (output_dir / "manifest.json").read_text(encoding="utf-8")
             )
-            sample_dirs = tuple(
-                (output_dir / "passed" / "long_sequence").iterdir()
-            )
+            sample_dirs = tuple((output_dir / "passed" / "long_sequence").iterdir())
             sample_dir_count = len(sample_dirs)
 
         self.assertEqual(issues, ())
@@ -260,6 +414,7 @@ class ResultExportGalleryTests(unittest.TestCase):
                 (output_dir / "manifest.json").read_text(encoding="utf-8")
             )
 
+        # 不固定具体抽样结果，只约束可复现随机策略没有退化为目录前 N 项。
         selected = tuple(group["sample_key"] for group in manifest["sample_groups"])
         self.assertEqual(issues, ())
         self.assertEqual(saved_count, 2)
@@ -392,6 +547,8 @@ class ResultExportGalleryTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
+            # 在首帧渲染边界注入失败，验证计数器和正式 output_* 目录都只在
+            # 整批成功后提交，不遗留看似有效的半成品。
             with patch(
                 "visualization.core.gallery.exporter.render_annotated_frame",
                 side_effect=RuntimeError("render exploded"),

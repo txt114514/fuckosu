@@ -1,3 +1,5 @@
+"""提供训练侧可调用的最佳试验图集导出稳定 API。"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -14,6 +16,7 @@ def export_best_trial_gallery(
     output_root: Path,
     samples_per_group: int = 10,
 ):
+    # 图集实现依赖训练 Dataset 和图片库，按需导入可保持普通报告器启动路径轻量。
     save_best_trial_gallery = import_module(
         "visualization.core.gallery.exporter"
     ).save_best_trial_gallery

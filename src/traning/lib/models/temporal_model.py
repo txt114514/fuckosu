@@ -1,3 +1,5 @@
+"""用分层 GRUCell 实现可流式调用的因果动作与候选选择模型。"""
+
 from __future__ import annotations
 
 import torch
@@ -8,7 +10,7 @@ from traning.lib.models.smet import maybe_sparse_linear
 
 
 class CausalTemporalModel(nn.Module):
-    """Causal GRU action head for streaming frame-by-frame inference."""
+    """支持逐帧流式推理的因果 GRU 动作头。"""
 
     def __init__(
         self,
@@ -51,6 +53,8 @@ class CausalTemporalModel(nn.Module):
         *,
         dtype: torch.dtype | None = None,
     ) -> torch.Tensor:
+        """创建 ``layers x batch x hidden`` 隐状态，与模型设备/精度一致。"""
+
         if batch_size <= 0:
             raise ValueError("batch_size must be positive")
         parameter = next(self.parameters())
@@ -68,6 +72,8 @@ class CausalTemporalModel(nn.Module):
         current_features: torch.Tensor,
         previous_state: torch.Tensor,
     ) -> tuple[ActionPrediction, torch.Tensor]:
+        """消费一个 BF 帧特征和上一状态，不读取任何未来帧。"""
+
         if current_features.ndim != 2:
             raise ValueError("current_features must use BF layout")
         if previous_state.shape[:2] != (self.layers, current_features.shape[0]):
@@ -76,6 +82,7 @@ class CausalTemporalModel(nn.Module):
             raise ValueError("previous_state hidden size mismatch")
         layer_input = current_features
         next_states = []
+        # 显式逐层 GRUCell 让同一 step API 可直接复用于在线决策。
         for layer, cell in enumerate(self.cells):
             hidden = cell(layer_input, previous_state[layer])
             next_states.append(hidden)
@@ -95,6 +102,8 @@ class CausalTemporalModel(nn.Module):
     def forward(
         self, sequence: torch.Tensor
     ) -> tuple[list[ActionPrediction], torch.Tensor]:
+        """按 ``T x B x F`` 时间顺序重复调用因果 step。"""
+
         if sequence.ndim != 3:
             raise ValueError("sequence must use TBF layout")
         _, batch_size, _ = sequence.shape

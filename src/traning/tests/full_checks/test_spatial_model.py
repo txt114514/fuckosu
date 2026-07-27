@@ -1,3 +1,5 @@
+"""验证完整空间模型栈的输出 head、形状和梯度。"""
+
 from __future__ import annotations
 
 import unittest

@@ -1,3 +1,5 @@
+"""验证 patch、特征网格、视频帧和 osu! 坐标之间的换算。"""
+
 from __future__ import annotations
 
 import unittest
@@ -57,6 +59,7 @@ class CoordinateTests(unittest.TestCase):
             playfield_source_rect=PlayfieldRect(left=220, top=110, width=1024, height=768),
             source="test_geometry",
         )
+        # 四角覆盖方向、缩放与偏移，中心点额外捕获错误的半像素或中心对齐。
         points = (
             (0.0, 0.0),
             (OSU_PLAYFIELD_WIDTH, 0.0),
@@ -84,6 +87,8 @@ class CoordinateTests(unittest.TestCase):
             source="property_test",
         )
 
+        # 互质步长生成可复现且分散的控制点，不依赖随机模块状态，同时
+        # 覆盖非整数坐标在 crop/resize 往返中的精度。
         max_error = 0.0
         for index in range(128):
             beatmap_x = (index * 37 % 512) + 0.125

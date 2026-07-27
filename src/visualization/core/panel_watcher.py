@@ -1,3 +1,5 @@
+"""持续读取仪表盘快照，并在独立终端渲染一个指定 Rich 面板。"""
+
 from __future__ import annotations
 
 import json
@@ -42,6 +44,8 @@ def watch_panel(
     panel: str = typer.Argument(..., help="要显示的面板名称。"),
     interval: float = typer.Option(1.0, "--interval", min=0.1, help="刷新间隔秒数。"),
 ) -> None:
+    """以固定间隔刷新只读面板，训练进程终止后仍保留最后状态。"""
+
     console = Console()
     with Live(
         _render_panel(state_path, panel),
@@ -75,6 +79,8 @@ def _render_panel(state_path: Path, panel: str):
 
 
 def _load_state(path: Path) -> TrainingDashboardState:
+    """把持久化字典恢复成面板所需的嵌套状态对象。"""
+
     if not path.exists():
         return TrainingDashboardState(run_id="waiting", status="等待状态文件")
     raw = json.loads(path.read_text(encoding="utf-8"))

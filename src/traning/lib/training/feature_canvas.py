@@ -1,3 +1,5 @@
+"""把重叠 patch 特征按完整帧位置加权融合到 CPU 特征画布。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -11,7 +13,7 @@ from traning.lib.data import PatchMeta
 
 @dataclass
 class FeatureCanvas:
-    """CPU accumulation canvas for detached patch features."""
+    """在 CPU 累加已 detach 的重叠 patch 特征。"""
 
     channels: int
     frame_width: int
@@ -34,7 +36,7 @@ class FeatureCanvas:
         *,
         weight: torch.Tensor | None = None,
     ) -> None:
-        """Accumulate one detached CHW or 1CHW patch feature tensor on CPU."""
+        """按 PatchMeta 的完整帧位置累加一个 CHW 或 1CHW 特征张量。"""
 
         if features.ndim == 4:
             if features.shape[0] != 1:
@@ -42,6 +44,7 @@ class FeatureCanvas:
             features = features[0]
         if features.ndim != 3 or features.shape[0] != self.channels:
             raise ValueError("features must use CHW layout with matching channels")
+        # patch 完整帧像素边界按 stride 投影到 canvas；右/下界向上取整保留尾部。
         x0 = meta.x0 // self.stride
         y0 = meta.y0 // self.stride
         x1 = ceil(meta.x1 / self.stride)
@@ -68,11 +71,12 @@ class FeatureCanvas:
                     mode="bilinear",
                     align_corners=False,
                 )[0]
+        # 分别累加加权值与权重，重叠区最终取平均而不是由最后一个 patch 覆盖。
         self._values[:, y0:y1, x0:x1] += patch * patch_weight
         self._weights[:, y0:y1, x0:x1] += patch_weight
 
     def to_tensor(self) -> torch.Tensor:
-        """Return the weighted average canvas as a detached CPU tensor."""
+        """返回 detach 的 CPU 加权平均画布，形状为 CHW。"""
 
         return self._values / self._weights.clamp_min(1e-6)
 

@@ -1,3 +1,5 @@
+"""解析 .osu 区段、时间点和命中对象并生成结构化数据。"""
+
 from __future__ import annotations
 
 from pathlib import Path

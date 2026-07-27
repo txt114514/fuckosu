@@ -1,3 +1,5 @@
+"""验证 patch 流的覆盖、padding、批次顺序与元数据。"""
+
 from __future__ import annotations
 
 import unittest
@@ -13,6 +15,8 @@ class PatchStreamTests(unittest.TestCase):
             patch_width=512, patch_height=512, overlap_x=128, overlap_y=128
         )
         frame = torch.zeros((3, height, width))
+        # 布尔画布验证真实帧每个像素至少被访问一次，coords 集合则额外
+        # 防止边界补丁因锚点钳制而重复生成。
         coverage = torch.zeros((height, width), dtype=torch.bool)
         coords = set()
         for patch, meta in stream.iter_patches(frame):

@@ -1,3 +1,4 @@
+# 训练模块的库内默认配置；正式运行优先使用仓库根目录 configs 下的完整 profile。
 runtime:
   seed: 2026
   device: cuda
@@ -36,6 +37,7 @@ loader:
   drop_last: false
 
 memory:
+  # 这些开关共同定义小显存训练策略，修改时需同步检查 runtime/memory.py 契约。
   amp_dtype: auto
   gradient_checkpointing: true
   backward_per_patch: true
@@ -93,11 +95,9 @@ visualization:
 
 optimization:
   enabled: true
-  max_generated_jobs: 1
   execute_generated_jobs: true
-  dry_run: false
-  job_only: true
-  max_trials: 1
+  # null 表示持续执行优化 job，直到严格样本门禁通过或用户中断。
+  max_trials: null
   max_stage: basic
   trial_store_path: ../../../runs/optimization/trials.jsonl
   trial_store_backend: sqlite

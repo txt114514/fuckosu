@@ -1,3 +1,5 @@
+"""定义可持久化文件、模型检查点和版本化产物引用。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

@@ -1,3 +1,5 @@
+"""定义完整训练流的阶段结果和总体运行结果契约。"""
+
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
@@ -41,6 +43,7 @@ class FullFlowStageState:
         artifacts: tuple[str, ...] = (),
         restored: bool = False,
     ) -> None:
+        # 只有结束状态写入 ended_at；result/artifacts 同步提交，便于状态恢复时整体读取。
         self.status = status
         self.ended_at = utc_now()
         self.result = dict(result or {})

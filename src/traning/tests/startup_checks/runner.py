@@ -1,3 +1,5 @@
+"""按稳定顺序聚合训练启动检查，并返回共享检查报告。"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -35,6 +37,8 @@ def run_startup_checks(
     results.append(result)
 
     if settings is not None:
+        # 后续检查依赖已校验的 Settings；配置失败时用固定 skipped 占位，
+        # 保持报告键和顺序稳定，调用方无需处理缺失项。
         for call in (
             lambda: check_runtime_device(
                 settings,

@@ -1,3 +1,4 @@
+# before_traning 默认流程：状态依赖图、文件位置与视频处理算法参数。
 progress:
   process_steps:
     - osu_imported
@@ -22,6 +23,7 @@ progress:
       - video_processed
 
 runtime:
+  # overwrite=false 保留已完成阶段；continue_on_error=false 避免失败后推进状态链。
   overwrite: false
   continue_on_error: false
 

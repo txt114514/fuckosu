@@ -1,3 +1,5 @@
+"""公开训练前处理配置模型、默认值、加载器与运行目录初始化接口。"""
+
 from before_traning.conf.runtime import ensure_prefect_home
 from before_traning.conf.settings import REPO_ROOT, Settings, load_settings
 from before_traning.conf.artifacts import VERIFY_FILENAME

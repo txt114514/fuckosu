@@ -1,8 +1,4 @@
-"""Assembly entry for audio-based video matching.
-
-Use:
-    from before_traning.core.audio.matching import AudioMatchProcessor
-"""
+"""公开基于音频内容匹配录像的组装入口与兼容构建器。"""
 
 from before_traning.core.audio.matching.matching import (
     AudioMatchExperiment,

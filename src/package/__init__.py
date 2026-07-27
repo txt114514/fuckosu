@@ -1,17 +1,22 @@
-"""Stable APIs shared by multiple top-level modules under src."""
+"""供 ``src`` 下多个顶层模块复用的稳定公开 API。"""
 
+# 坐标实现通过这里统一导出，业务模块无需依赖 package.coordinates 的内部细节。
 from package.coordinates import (
     AffineOsuVideoTransform,
     COORDINATE_CHAIN_VERSION,
     COORDINATE_TRANSFORM_VERSION,
     CoordinateTransformChain,
     CoordinateTransformSpec,
+    OsuVideoCoordinateTransform,
     ImageSize,
     OSU_PLAYFIELD_HEIGHT,
     OSU_PLAYFIELD_WIDTH,
     OsuVideoTransform,
     PlayfieldRect,
     ScreenTransform,
+    coordinate_transform_fingerprint,
+    frame_normalized_to_pixel,
+    frame_pixel_to_normalized,
 )
 from package.contracts import (
     ArtifactFileRef,
@@ -80,6 +85,7 @@ __all__ = [
     "CoordinateSpace",
     "CoordinateTransformChain",
     "CoordinateTransformSpec",
+    "OsuVideoCoordinateTransform",
     "CurriculumStage",
     "DataSplit",
     "DatasetDimension",
@@ -124,8 +130,11 @@ __all__ = [
     "TrialStatus",
     "VersionedArtifactRef",
     "contract_to_dict",
+    "coordinate_transform_fingerprint",
     "default_split_manifest_path",
     "load_split_manifest",
+    "frame_normalized_to_pixel",
+    "frame_pixel_to_normalized",
     "sample_slider_path",
     "sync_dataset_split_manifest",
 ]

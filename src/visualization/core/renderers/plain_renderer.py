@@ -1,3 +1,5 @@
+"""提供无 Rich、GUI 交互依赖的最低限度训练状态输出。"""
+
 from __future__ import annotations
 
 from visualization.conf import DashboardSettings

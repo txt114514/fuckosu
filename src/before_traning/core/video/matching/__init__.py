@@ -1,8 +1,4 @@
-"""Assembly entry for video matching.
-
-Use:
-    from before_traning.core.video.matching import VideoMatchProcessor
-"""
+"""公开录像匹配策略、顺序重命名器及兼容构建入口。"""
 
 from before_traning.core.video.matching.builders import (
     build_video_package_renamer_from_config_or_default,

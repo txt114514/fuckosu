@@ -1,3 +1,5 @@
+"""以低显存深度可分离 CNN 编码高分辨率 patch 的局部特征。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -10,10 +12,10 @@ from torch.utils.checkpoint import checkpoint
 
 @dataclass(frozen=True)
 class LocalFeatures:
-    """High-resolution patch features.
+    """高分辨率 patch 特征。
 
-    ``dense`` uses BCHW layout at ``stride`` relative to the patch image.
-    ``pyramid`` contains progressively coarser BCHW feature maps.
+    ``dense`` 为相对 patch 图像具有 ``stride`` 的 BCHW；``pyramid``
+    保存逐级变粗的 BCHW 特征图，坐标原点始终是当前 patch 左上角。
     """
 
     dense: torch.Tensor
@@ -77,7 +79,7 @@ class SeparableResidualBlock(nn.Module):
 
 
 class SmallLocalEncoder(nn.Module):
-    """Small-channel local CNN for serial high-resolution patch training."""
+    """面向串行高分辨率 patch 训练的小通道局部 CNN。"""
 
     def __init__(
         self,
@@ -122,6 +124,7 @@ class SmallLocalEncoder(nn.Module):
         x: torch.Tensor,
     ) -> torch.Tensor:
         if self.gradient_checkpointing and self.training and x.requires_grad:
+            # 反向时重算中间激活，以计算换取显存；推理与无梯度输入不承担该成本。
             return checkpoint(module, x, use_reentrant=False)
         return module(x)
 

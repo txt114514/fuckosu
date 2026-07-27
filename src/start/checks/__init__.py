@@ -1,3 +1,5 @@
+"""导出分级启动检查和训练前检查的公开 API。"""
+
 from start.checks.models import (
     StartupCheckReport,
     StartupCheckResult,

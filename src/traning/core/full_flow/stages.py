@@ -1,3 +1,5 @@
+"""声明完整训练流阶段规格、依赖关系以及阻断和恢复属性。"""
+
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
@@ -34,6 +36,7 @@ class FullFlowStageSpec:
         return asdict(self)
 
 
+# 阶段注册表是状态展示、选择范围、依赖检查和报告生成共享的单一顺序真值。
 FULL_FLOW_STAGES: tuple[FullFlowStageSpec, ...] = (
     FullFlowStageSpec(
         "ENVIRONMENT_PREFLIGHT",

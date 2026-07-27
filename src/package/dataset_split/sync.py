@@ -1,3 +1,5 @@
+"""发现数据 item，并以稳定、可复现的策略同步划分清单。"""
+
 from __future__ import annotations
 
 import hashlib
@@ -27,6 +29,8 @@ def default_split_manifest_path(dataset_root: Path) -> Path:
 
 
 def load_split_manifest(path: Path) -> DatasetSplitManifest | None:
+    """读取已存在清单；文件不存在返回 ``None``，损坏内容则显式报错。"""
+
     if not path.is_file():
         return None
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -45,6 +49,8 @@ def sync_dataset_split_manifest(
     allow_test_growth: bool = False,
     dry_run: bool = False,
 ) -> DatasetSplitSyncResult:
+    """增量加入新 item，并保留所有历史 item 的 split 归属。"""
+
     target_path = manifest_path or default_split_manifest_path(dataset_root)
     existing = load_split_manifest(target_path)
     discovered_counts = discover_dataset_items(dataset_root)
@@ -65,6 +71,8 @@ def sync_dataset_split_manifest(
     updated_items = dict(manifest.items)
     bootstrap = dict(bootstrap_splits or {})
     new_items: list[DatasetSplitItem] = []
+    # 只给首次发现的 item 分配 split；历史归属永不因比例变化而重排，
+    # 从而避免同一谱面跨实验漂移并污染固定评估集。
     for item_name in _stable_new_item_order(
         discovered_counts.keys(),
         known_items=updated_items.keys(),
@@ -118,6 +126,8 @@ def sync_dataset_split_manifest(
 
 
 def discover_dataset_items(dataset_root: Path) -> dict[str, int]:
+    """按 ``beatmap.json`` 统计 item 的 segment 数，不读取标注内容。"""
+
     counts: dict[str, int] = {}
     if not dataset_root.is_dir():
         return counts
@@ -145,6 +155,7 @@ def _select_split_for_new_item(
         split: ratio_map[split] * total_after - counts[split]
         for split in candidates
     }
+    # 选择“目标数量 - 当前数量”缺口最大的 split；后续排序项保证平局可复现。
     return max(candidates, key=lambda split: (deficits[split], ratio_map[split], split))
 
 
@@ -155,6 +166,7 @@ def _stable_new_item_order(
     seed: int,
 ) -> tuple[str, ...]:
     known = set(known_items)
+    # 先按 seed+名称哈希再按名称排序，结果不受文件系统遍历顺序影响。
     return tuple(
         sorted(
             (item for item in item_names if item not in known),
@@ -170,6 +182,8 @@ def _stable_hash(seed: int, item_name: str) -> str:
 
 def _write_manifest(path: Path, manifest: DatasetSplitManifest) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    # 临时文件必须与目标同目录，replace 才能在同一文件系统内原子提交；
+    # 进程若在提交前中断，旧 manifest 仍保持完整。
     tmp_path = path.with_name(f".{path.name}.tmp")
     tmp_path.write_text(
         json.dumps(_json_ready(manifest.as_dict()), ensure_ascii=False, indent=2) + "\n",

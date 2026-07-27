@@ -1,3 +1,5 @@
+"""应用音频匹配结果，移动录像、回写处理状态并在失败时回滚。"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -56,6 +58,8 @@ class AudioMatchWrapUpMixin:
         temp_plan: list[tuple[Path, Path]] = []
         completed_plan: list[tuple[str, Path, Path]] = []
 
+        # 所有源录像先改为临时名再发布目标名，避免某个目标路径恰好仍是
+        # 后续源路径时相互覆盖；发布失败则按完成顺序反向恢复。
         for index, (_folder_name, source_path, _destination_path, _result) in enumerate(plan):
             temp_path = source_path.with_name(f".__audio_match_tmp__{index}{source_path.suffix}")
             if temp_path.exists():
@@ -70,6 +74,8 @@ class AudioMatchWrapUpMixin:
             ):
                 temp_path.rename(destination_path)
                 completed_plan.append((folder_name, destination_path, original_path))
+                # 文件发布与状态推进成对执行；异常分支会同时恢复文件和
+                # pending 状态，避免数据库宣称成功但文件仍在原位置。
                 detail: dict[str, Any] = {
                     "video_path": str(destination_path),
                     "match_strategy": "audio_experiment",

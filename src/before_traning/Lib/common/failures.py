@@ -1,3 +1,5 @@
+"""统一生成包含异常类型、函数和模块定位信息的失败明细。"""
+
 from __future__ import annotations
 
 from collections.abc import Callable

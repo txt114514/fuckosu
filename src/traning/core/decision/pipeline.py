@@ -1,3 +1,5 @@
+"""串接启动检查、空间/时序训练、决策、评分和图集导出的完整训练流程。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -11,6 +13,7 @@ from start.checks import TrainingStartupCheckReport, run_training_startup_checks
 from traning.conf import DataSplit, Settings, load_settings
 from traning.core.dataset_import import DataInputReport
 from traning.core.decision.generator import (
+    CANDIDATE_CACHE_VERSION,
     CandidateCacheBuildResult,
     generate_candidate_cache,
 )
@@ -29,9 +32,10 @@ from traning.core.optimization import (
     execute_optimization_plan,
     plan_next_trial,
     score_decision_outputs,
+    trial_history_from_records,
 )
 from traning.lib.metrics import SequenceScoreSpec
-from traning.state import TrialParameters
+from traning.state import CurriculumStage, TrialParameters
 from traning.state.versioning import version_manifest
 from traning.core.result_export import save_annotation_gallery
 from traning.core.spatial import SpatialTrainingResult, run_spatial_training
@@ -74,6 +78,8 @@ class FullTrainingRunConfig:
     candidate_slots: int | None = None
     parameter_group_id: str = "pg-0001"
     curriculum_level: str | None = None
+    optimization_stage: CurriculumStage = CurriculumStage.BASIC
+    optimization_rung: int = 0
     render_gallery: bool = True
     gallery_output_root: Path | None = None
     gallery_samples_per_group: int | None = None
@@ -84,6 +90,8 @@ class FullTrainingRunConfig:
     def __post_init__(self) -> None:
         if not self.parameter_group_id:
             raise ValueError("parameter_group_id must not be empty")
+        if self.optimization_rung < 0:
+            raise ValueError("optimization_rung must be nonnegative")
         if self.spatial_max_steps <= 0:
             raise ValueError("spatial_max_steps must be positive")
         if self.temporal_max_steps <= 0:
@@ -238,6 +246,8 @@ def run_full_training_pipeline(
     *,
     config: FullTrainingRunConfig,
 ) -> FullTrainingRunResult:
+    """执行单个参数组的完整可训练、可评分和可追溯闭环。"""
+
     config.run_dir.mkdir(parents=True, exist_ok=True)
     reporter = config.reporter
     reporter.update_metrics(
@@ -353,6 +363,7 @@ def run_full_training_pipeline(
         slider_threshold=config.slider_threshold,
         max_slider_paths=config.max_slider_paths,
     )
+    # 后续时序训练、决策和评分共享这一份缓存，避免各阶段重新推理产生样本漂移。
     reporter.report_dataset_usage(
         DatasetUsageState(
             total_segments=data_report.segment_count,
@@ -556,9 +567,10 @@ def _evaluate_training_outputs(
     report_path = output_dir / "trial_score_report.json"
     versions = version_manifest(settings) | {
         "score_version": score_result.report.score_version,
-        "candidate_cache_version": "spatial-candidate-cache-v1",
+        "candidate_cache_version": CANDIDATE_CACHE_VERSION,
         "trial_id": config.parameter_group_id,
     }
+    # 评分报告和图集请求共用版本元数据，确保人工图片能追溯到同一缓存与坐标方程。
     report_path.write_text(
         json.dumps(
             _json_ready(score_result.report.as_dict() | {"versions": versions}),
@@ -677,11 +689,24 @@ def _evaluate_training_outputs(
     asha_reasons: tuple[str, ...] = ()
     if settings.optimization.enabled:
         attribution = analyze_trial_attribution(score_result.report)
+        trial_store = create_trial_store(
+            backend=settings.optimization.trial_store_backend,
+            jsonl_path=settings.optimization.trial_store_path,
+            sqlite_path=settings.optimization.trial_store_sqlite_path,
+        )
+        history = trial_history_from_records(
+            trial_store.load(),
+            score_version=score_result.report.score_version,
+        )
         plan = plan_next_trial(
             score_result.report,
             attribution,
+            history=history,
+            current_stage=config.optimization_stage,
+            rung=config.optimization_rung,
             config=ParameterSearchConfig(
-                objective_weights=settings.optimization.objective_weights
+                max_stage=CurriculumStage(settings.optimization.max_stage),
+                objective_weights=settings.optimization.objective_weights,
             ),
         )
         asha_action = plan.asha_action
@@ -693,15 +718,17 @@ def _evaluate_training_outputs(
             base_parameters=_optimization_base_parameters(settings, config=config),
             parent_checkpoint_path=temporal.checkpoint_path,
             config=OptimizationExecutorConfig(
+                # rung 0 复用本轮实际预算；高级 ramp level 的重试不能退回
+                # executor 的通用 100-step 默认值。
+                base_budget_steps=max(
+                    config.spatial_max_steps,
+                    config.temporal_max_steps,
+                ),
                 output_dir=settings.optimization.trial_store_path.parent,
                 code_version=json.dumps(versions["code_version"], sort_keys=True),
                 data_version=str(versions["dataset_version"]),
             ),
-            store=create_trial_store(
-                backend=settings.optimization.trial_store_backend,
-                jsonl_path=settings.optimization.trial_store_path,
-                sqlite_path=settings.optimization.trial_store_sqlite_path,
-            ),
+            store=trial_store,
         )
         attribution_path = output_dir / "attribution.json"
         plan_path = output_dir / "optimization_plan.json"
@@ -956,6 +983,18 @@ def _optimization_base_parameters(
     return TrialParameters(
         training={
             "parameter_group_id": config.parameter_group_id,
+            "spatial_learning_rate": config.spatial_learning_rate,
+            "temporal_learning_rate": config.temporal_learning_rate,
+            "patch_limit": config.patch_limit or 0,
+            # job 文件使用 0 表示无限制，与 run_training CLI 保持一致。
+            "cache_max_frames": config.cache_max_frames or 0,
+            "sequence_length": (
+                config.sequence_length or settings.temporal.history_frames
+            ),
+            "candidate_slots": (
+                config.candidate_slots
+                or settings.candidate_cache.max_candidates_per_frame
+            ),
         },
         inference={
             "score_threshold": (
@@ -1040,8 +1079,18 @@ def _report_stage(
 def _evaluation_stage_message(evaluation: FullTrainingEvaluationResult) -> str | None:
     if evaluation.passed:
         return None
+    if evaluation.quality_score < evaluation.pass_threshold:
+        score_detail = (
+            f"质量分 {evaluation.quality_score:.6f} "
+            f"低于通过阈值 {evaluation.pass_threshold:.6f}"
+        )
+    else:
+        score_detail = (
+            f"聚合分 {evaluation.quality_score:.6f} 已达阈值 "
+            f"{evaluation.pass_threshold:.6f}，但样本门禁未通过"
+        )
     details = [
-        f"质量分 {evaluation.quality_score:.6f} 低于通过阈值 {evaluation.pass_threshold:.6f}",
+        score_detail,
         f"未解析目标 {evaluation.unresolved_count}/{evaluation.target_count}",
     ]
     if evaluation.action_frame_count <= 0 and evaluation.target_count > 0:

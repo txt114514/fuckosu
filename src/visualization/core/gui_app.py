@@ -1,3 +1,5 @@
+"""启动独立 PySide6 进程并轮询训练进程发布的原子状态快照。"""
+
 from __future__ import annotations
 
 import argparse
@@ -20,12 +22,14 @@ def main() -> int:
 
     def refresh() -> None:
         state = load_state_snapshot(args.state_path)
+        # 短暂缺失或无效快照不清空窗口，下一次定时轮询会自行恢复。
         if state is not None:
             window.apply_state(state)
 
     refresh()
     window.show()
     timer = QtCore.QTimer(window.widget)
+    # 将定时器挂到窗口对象，确保窗口销毁时 Qt 同步终止刷新生命周期。
     timer.setInterval(250)
     timer.timeout.connect(refresh)
     timer.start()

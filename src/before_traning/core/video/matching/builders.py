@@ -1,3 +1,5 @@
+"""依据兼容配置构建按时间顺序匹配录像的重命名器。"""
+
 from __future__ import annotations
 
 from pathlib import Path

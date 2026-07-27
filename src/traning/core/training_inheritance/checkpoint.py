@@ -1,3 +1,5 @@
+"""构建、原子保存、校验并恢复包含完整训练位置的检查点。"""
+
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
@@ -16,6 +18,8 @@ TRAINING_CHECKPOINT_SCHEMA_VERSION = "training-checkpoint-v1"
 
 @dataclass(frozen=True)
 class TrainingPosition:
+    """描述最近一次已提交 optimizer step 之后可安全恢复的位置。"""
+
     epoch: int = 0
     next_batch_index: int = 0
     global_step: int = 0
@@ -160,12 +164,15 @@ def atomic_torch_save_checkpoint(
     *,
     expected_kind: str,
 ) -> None:
+    """写入临时文件并回读校验后，再替换正式检查点。"""
+
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = path.with_name(f".{path.name}.tmp")
     with tmp_path.open("wb") as handle:
         torch.save(dict(payload), handle)
         handle.flush()
         os.fsync(handle.fileno())
+    # 替换前回读可捕获截断文件或结构错误，旧检查点因此始终保持可恢复。
     loaded = torch.load(tmp_path, map_location="cpu", weights_only=False)
     validate_training_checkpoint(loaded, expected_kind=expected_kind)
     tmp_path.replace(path)
@@ -214,6 +221,7 @@ def restore_module_state(
         target.load_state_dict(state_dict, strict=True)
         return tuple(state_dict.keys()), ()
     current = target.state_dict()
+    # 非严格恢复只接受同名同形状张量，适用于架构小幅变化时的 weights-only 继承。
     compatible = {
         key: value
         for key, value in state_dict.items()

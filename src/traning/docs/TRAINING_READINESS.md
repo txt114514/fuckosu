@@ -1,6 +1,6 @@
 # traning 训练启动就绪报告
 
-检查日期：2026-06-26
+初始检查日期：2026-06-26；最近闭环修复：2026-07-27
 
 本文记录 `src/traning` 当前从数据、空间、时间、决策、评分、训练到图像导出的可启动状态。
 源码定位仍以 [`CODEX_INDEX.md`](CODEX_INDEX.md) 为准；长期设计见
@@ -40,10 +40,10 @@ JSONL、score、gallery、next job 和可独立 smoke 的 model artifact。兼�
 |---|---|---|---|
 | 空间 | 保留原始分辨率，用重叠 patch 串行训练；全局 encoder 提供上下文，局部 encoder/fusion/head 产出 dense 空间预测；CPU 侧做全图融合、NMS、slider 连通域和候选解码。 | `train-spatial`、`spatial-decode-smoke`、`run_spatial_frame_inference`、候选/slider 解码、候选缓存、局部 refiner、条件歧义复查和配置化空间一致性 loss 已接入。 | 不阻塞开训。 |
 | 时间 | 消费空间候选缓存，按 `sample_key` 组成固定长度因果窗口；动作是 `no_op / press / hold / release`，模型用 GRU 首版保持流式因果接口。 | `TemporalCandidateWindowDataset`、circle release、slider repeat、spinner hold/release、配置化 temporal loss、`train-temporal`、`temporal_model.pt` checkpoint 和因果一致性测试已实现。 | 不阻塞开训。 |
-| 决策 | 离线阶段把空间候选、slider path、歧义原因、显式 transform 和时序监督写进 `spatial-candidate-cache-v1`；推理阶段加载 temporal checkpoint，把窗口输出转成逐帧动作决策。 | `build-candidate-cache` 和 `run-decision` 已跑通，能输出带版本信息的 `manifest.json`、`frames.jsonl`、`decisions.jsonl`。 | 不阻塞开训。 |
+| 决策 | 离线阶段把空间候选、slider path、歧义原因、显式 transform、真实 CircleSize 半径和时序监督写进 `spatial-candidate-cache-v2`；候选在 osu! 空间按半径匹配，推理阶段加载 temporal checkpoint，把窗口输出转成逐帧动作决策。 | `build-candidate-cache` 和 `run-decision` 已跑通，能输出带版本信息的 `manifest.json`、`frames.jsonl`、`decisions.jsonl`；v1 仅可显式用于历史诊断，训练前必须重建 v2。 | 不阻塞开训。 |
 | 评分 | 单对象用 `point-slider-v2`，点击序列用 `click-sequence-v1`，再由 `core/optimization/scoring` 聚合到 trial 级 `quality_score`。 | `core/optimization/scoring/run_outputs.py` 已从候选缓存和 decisions JSONL 构建真实评分输入，完整训练会写 `trial_score_report.json` 和 `gallery_request.json`。 | 不阻塞开训。 |
 | 错误归因 | 在 `core/optimization/attribution` 中按空间、时间、决策三类统计错误和 hard examples。 | 已能输出 domain counts/rates、tag counts、难例列表和难例采样权重。 | 不阻塞开训。后续可把采样权重接入具体训练 runner。 |
-| 参数调优 | 在 `core/optimization/parameter_search` 中根据评分、归因和历史 trial 计划下一轮参数。 | 完整训练可在 `settings.optimization.enabled=true` 时自动写出归因、计划、trial JSONL 和 `next_training_job.json`；`run-job` 可消费 job。 | 不阻塞开训。默认不递归执行子 trial。 |
+| 参数调优 | 在 `core/optimization/parameter_search` 中根据评分、归因和历史 trial 计划下一轮参数。 | 完整训练可在 `settings.optimization.enabled=true` 时自动写出归因、计划、trial store 和 `next_training_job.json`；计划中的相对调整会转成有界绝对参数，`run-job` 与 ramp 共用同一 job 解析契约。 | 不阻塞开训。`execute_generated_jobs=true` 时自动消费新 job；`max_trials: null` 由严格全样本通过或用户中断结束。 |
 | 训练 | 配置集中在 `conf`，运行时统一走 `traning.lib.runtime`；空间训练按 patch 串行，时序训练消费候选缓存。 | `full-flow` 是推荐入口；`run` 已串接 data-check、空间训练、候选缓存、时序训练和决策导出；分步 CLI 仍保留。 | 不阻塞开训。真实训练需 GPU host bridge；大预算参数按显存逐步放大。 |
 | 结果导出 | 训练/评估结果不直接进入训练异常路径，图像导出 best-effort；按最高分 trial 输出 passed/failed 图集、manifest 和 CSV 索引。 | `visualize-label`、`save-annotation-gallery` 已实现；optimization 可直接生成带版本 metadata 的 `BatchGalleryRequest`。 | 不阻塞开训。 |
 | 模型导出 | 把 checkpoint、配置和版本信息整理成可迁移 artifact。 | `core/model_export` 已能导出 inference/resume PyTorch artifact、写 manifest、记录 sha256、迁移旧 settings 并执行 CPU artifact smoke。 | 不阻塞开训。 |
@@ -81,8 +81,10 @@ JSONL、score、gallery、next job 和可独立 smoke 的 model artifact。兼�
 host-exec docker exec -u dev osu_ai_dev bash -lc 'cd /home/dev/workspace && PYTHONPATH=src:. python -m traning.main env-check --strict --require-cuda'
 ```
 
-确认 CUDA 后，推荐用完整流程入口启动。默认不会无限递归；只有显式 `--auto-launch-full`
-才会在 ramp gate 后启动目标 full run：
+确认 CUDA 后，推荐用完整流程入口启动。当配置为
+`execute_generated_jobs: true` 且 `max_trials: null` 时，ramp 会持续执行新参数 job，
+直到严格样本门禁通过或用户中断；`--auto-launch-full` 仅控制 ramp gate
+全部通过后是否继续启动目标 full run：
 
 ```bash
 host-exec docker exec -u dev osu_ai_dev bash -lc 'cd /home/dev/workspace && PYTHONPATH=src:. python -m traning.main full-flow --config configs/model_full_small_vram.yaml --device cuda --resume --resume-policy auto --auto-launch-full --progress-ui rich'

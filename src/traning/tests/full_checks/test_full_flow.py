@@ -1,3 +1,5 @@
+"""验证完整训练生命周期的阶段状态、恢复和产物编排。"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -130,6 +132,8 @@ class FullFlowTests(unittest.TestCase):
     def test_ramp_gate_error_returns_failed_result_without_raising(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
+            # 启动和恢复阶段被隔离为成功，仅让 ramp gate 抛错，验证顶层
+            # orchestrator 把预期门禁失败写成结果与 stop_state，而非泄漏异常。
             with (
                 patch("traning.core.full_flow.orchestrator._run_startup_section"),
                 patch(
@@ -183,6 +187,8 @@ class FullFlowTests(unittest.TestCase):
                 output_dir=root / "dashboard",
             )
 
+            # 直接驱动阶段完成边界，避免完整训练流程掩盖 stage ID 到 UI ID
+            # 以及 artifact 路径的字段映射错误。
             _finish_stage(
                 runtime,
                 "RAMP_TRAINING",
@@ -236,6 +242,8 @@ class FullFlowTests(unittest.TestCase):
             root = Path(temp_dir)
             captured: dict[str, DashboardReporter] = {}
 
+            # fake handle 保留真实 DashboardReporter 状态机，只替换生命周期
+            # 上下文和外部资源采样，确保断言针对实际快照序列化逻辑。
             class FakeDashboardHandle:
                 def __init__(self, reporter: DashboardReporter) -> None:
                     self.reporter = reporter
@@ -328,6 +336,8 @@ class FullFlowTests(unittest.TestCase):
                 stage_checkpoint_paths={},
             )
 
+            # mock 只截断昂贵的 ramp 执行；检查 _run_ramp_section 的配置
+            # 转发边界没有把正式图集根目录退回 run 内部临时目录。
             with patch(
                 "traning.core.full_flow.orchestrator.run_training_ramp",
                 return_value=fake_ramp,

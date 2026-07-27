@@ -1,3 +1,5 @@
+"""实现 PySide6 仪表盘进程、窗口页面与持久化快照到控件的映射。"""
+
 from __future__ import annotations
 
 import os
@@ -46,11 +48,14 @@ def is_gui_environment_available() -> bool:
 
 
 class GuiDashboardRenderer:
+    """在独立进程运行 Qt 事件循环，避免阻塞训练主进程。"""
+
     def __init__(self, reporter: DashboardReporter) -> None:
         self.reporter = reporter
         self.process: subprocess.Popen[str] | None = None
 
     def start(self) -> None:
+        # start 允许被句柄重复调用，但同一报告器只保留一个存活 GUI 子进程。
         if self.process is not None and self.process.poll() is None:
             return
         env = os.environ.copy()
@@ -75,6 +80,7 @@ class GuiDashboardRenderer:
         if self.process is None:
             return
         if self.process.poll() is None:
+            # 先给 Qt 正常退出窗口；超时后强制结束，防止训练进程关闭时遗留子进程。
             self.process.terminate()
             with suppress(subprocess.TimeoutExpired):
                 self.process.wait(timeout=5.0)
@@ -87,6 +93,8 @@ class GuiDashboardRenderer:
 
 
 class VisualizationApplication:
+    """供同进程嵌入场景使用的 Qt 生命周期适配器。"""
+
     def __init__(self, reporter: DashboardReporter, *, refresh_ms: int = 250) -> None:
         from PySide6 import QtCore
 
@@ -97,6 +105,7 @@ class VisualizationApplication:
         self.timer = QtCore.QTimer(self.window.widget)
         self.timer.setInterval(refresh_ms)
         self.timer.timeout.connect(self.refresh_from_reporter)
+        # 所有控件更新都由 Qt 信号/定时器回到 GUI 线程执行，调用方线程只发请求。
         self.bridge.refresh_requested.connect(self.refresh_from_reporter)
         self.bridge.stop_requested.connect(self.stop)
         self.timer.start()
@@ -131,6 +140,8 @@ def _create_signal_bridge():
 
 
 def load_state_snapshot(path: Path) -> TrainingDashboardState | None:
+    """容错读取一个完整状态快照；文件不存在或暂不可解析时保留旧界面。"""
+
     if not path.is_file():
         return None
     try:

@@ -1,3 +1,5 @@
+"""对齐候选缓存与决策输出，并统一换算坐标后进行序列评分。"""
+
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
@@ -6,12 +8,10 @@ import json
 from pathlib import Path
 from typing import Any
 
-from package.coordinates import (
-    OSU_PLAYFIELD_HEIGHT,
-    OSU_PLAYFIELD_WIDTH,
-)
+from package.coordinates import frame_normalized_to_pixel
 from traning.lib.coordinates import transform_from_settings_or_sample
 from traning.lib.metrics import PredictedClick, TargetObject
+from traning.lib.training import DEFAULT_CIRCLE_RADIUS_OSU_PIXELS
 from traning.state import TrialParameters
 from traning.core.optimization.scoring.evaluator import (
     SampleScoringInput,
@@ -21,7 +21,8 @@ from traning.core.optimization.scoring.evaluator import (
 )
 
 
-DEFAULT_CIRCLE_RADIUS_OSU = 32.0
+# 保留旧公开名称；唯一默认值由训练标签模块定义，避免各阶段再次漂移。
+DEFAULT_CIRCLE_RADIUS_OSU = DEFAULT_CIRCLE_RADIUS_OSU_PIXELS
 
 
 @dataclass(frozen=True)
@@ -57,7 +58,7 @@ def score_decision_outputs(
     candidate_cache_path: Path,
     decisions_path: Path,
     metrics: Mapping[str, float] | None = None,
-    circle_radius: float = DEFAULT_CIRCLE_RADIUS_OSU,
+    circle_radius: float | None = None,
     spec: TrialScoreSpec = TrialScoreSpec(),
     settings: Any | None = None,
 ) -> DecisionOutputScoreResult:
@@ -65,18 +66,27 @@ def score_decision_outputs(
         raise ValueError("parameter_group_id must not be empty")
     candidate_rows = tuple(_read_jsonl(candidate_cache_path))
     decision_rows = tuple(_read_jsonl(decisions_path))
-    cache_by_key = {
-        _frame_key(row): row
-        for row in candidate_rows
-    }
+    if not candidate_rows:
+        raise ValueError("candidate cache must contain at least one frame")
+    cache_by_key = _index_unique_frames(candidate_rows, label="candidate cache")
+    decisions_by_key = _index_unique_frames(decision_rows, label="decision output")
+    missing_decisions = tuple(sorted(cache_by_key.keys() - decisions_by_key.keys()))
+    orphan_decisions = tuple(sorted(decisions_by_key.keys() - cache_by_key.keys()))
+    if missing_decisions or orphan_decisions:
+        raise ValueError(
+            "candidate/decision frame keys do not match: "
+            f"missing_decisions={len(missing_decisions)} "
+            f"orphan_decisions={len(orphan_decisions)} "
+            f"missing_preview={missing_decisions[:3]} "
+            f"orphan_preview={orphan_decisions[:3]}"
+        )
     samples = []
     no_op_frames = 0
     action_frames = 0
-    for decision in decision_rows:
-        key = _frame_key(decision)
-        cache_row = cache_by_key.get(key)
-        if cache_row is None:
-            continue
+    # 以候选缓存作为固定评估集顺序；上方已要求两侧 key
+    # 一一对应，因此决策漏帧不会被严格 sample gate 静默忽略。
+    for cache_row in candidate_rows:
+        decision = decisions_by_key[_frame_key(cache_row)]
         action = str(decision.get("action") or "no_op")
         if action == "no_op":
             no_op_frames += 1
@@ -87,16 +97,14 @@ def score_decision_outputs(
                 cache_row,
                 decision,
                 parameter_group_id=parameter_group_id,
-                circle_radius=circle_radius,
+                circle_radius_override=circle_radius,
                 settings=settings,
             )
         )
     report = score_trial(
         parameter_group_id,
         samples,
-        parameters=TrialParameters(
-            training={"parameter_group_id": parameter_group_id}
-        ),
+        parameters=TrialParameters(training={"parameter_group_id": parameter_group_id}),
         metrics={
             "candidate_frame_count": float(len(candidate_rows)),
             "decision_frame_count": float(len(decision_rows)),
@@ -122,7 +130,7 @@ def _sample_from_rows(
     decision: Mapping[str, Any],
     *,
     parameter_group_id: str,
-    circle_radius: float,
+    circle_radius_override: float | None,
     settings: Any | None = None,
 ) -> SampleScoringInput:
     sample_key = str(cache_row.get("sample_key") or decision.get("sample_key"))
@@ -137,6 +145,11 @@ def _sample_from_rows(
     )
     temporal_target = cache_row.get("temporal_target")
     target_metadata = temporal_target if isinstance(temporal_target, Mapping) else {}
+    circle_radius = _circle_radius_from_row(
+        cache_row,
+        target_metadata,
+        override=circle_radius_override,
+    )
     return SampleScoringInput(
         sample_key=sample_key,
         subproject=_subproject_from_sample_key(sample_key),
@@ -156,6 +169,7 @@ def _sample_from_rows(
             "predicted_video_xy": predicted_video_xy,
             "time_offset_ms": decision.get("time_offset_ms"),
             "candidate_count": len(cache_row.get("candidates") or ()),
+            "circle_radius_osu_pixels": circle_radius,
             "candidate_match_status": target_metadata.get("candidate_match_status"),
             "candidate_match_unmatched_reason": target_metadata.get(
                 "candidate_match_unmatched_reason"
@@ -167,6 +181,26 @@ def _sample_from_rows(
             ),
         },
     )
+
+
+def _circle_radius_from_row(
+    cache_row: Mapping[str, Any],
+    target_metadata: Mapping[str, Any],
+    *,
+    override: float | None,
+) -> float:
+    """按显式覆盖、新缓存字段、目标字段、旧协议默认值依次解析半径。"""
+
+    candidates = (
+        override,
+        _safe_float(cache_row.get("circle_radius_osu_pixels")),
+        _safe_float(target_metadata.get("candidate_match_radius_osu")),
+        DEFAULT_CIRCLE_RADIUS_OSU,
+    )
+    for value in candidates:
+        if value is not None and value > 0:
+            return float(value)
+    return DEFAULT_CIRCLE_RADIUS_OSU
 
 
 def _target_objects(
@@ -217,6 +251,7 @@ def _predicted_clicks(
     predicted_video_xy: tuple[float, float] | None = None,
     settings: Any | None = None,
 ) -> tuple[PredictedClick, ...]:
+    """把决策位置统一转换为 osu! 坐标后构造评分点击事件。"""
     if str(decision.get("action") or "no_op") == "no_op":
         return ()
     timestamp_ms = _safe_float(decision.get("timestamp_ms"))
@@ -234,7 +269,13 @@ def _predicted_clicks(
         )
     )
     if point is None:
-        point = _normalized_to_osu(decision.get("predicted_xy_normalized"))
+        # 没有可用候选像素时，模型输出仍是整帧归一化坐标，必须依次执行
+        # frame normalized -> frame pixel -> osu，而不能直接乘 512x384。
+        point = _normalized_frame_to_osu(
+            decision.get("predicted_xy_normalized"),
+            cache_row,
+            settings=settings,
+        )
     if point is None:
         return ()
     return (PredictedClick(time_ms=time_ms, x=point[0], y=point[1]),)
@@ -244,25 +285,43 @@ def _prediction_video_xy(
     cache_row: Mapping[str, Any],
     decision: Mapping[str, Any],
 ) -> tuple[float, float] | None:
+    """解析决策对应的视频像素，优先使用被选候选的原始像素位置。
+
+    候选缓存中的 x/y 是检测阶段保存的视频像素，比从归一化特征反算更直接；
+    仅在候选缺失或无法匹配时才回退到模型回归的整帧归一化坐标。
+    """
     if str(decision.get("action") or "no_op") == "no_op":
         return None
     selected_id = _safe_int(decision.get("selected_candidate_id"))
-    if selected_id is None:
+    if selected_id is not None:
+        # selected_candidate_id 是跨阶段的稳定引用；从缓存回查原始像素，
+        # 不使用 decision 中仅供诊断的 normalized candidate feature。
+        candidates = cache_row.get("candidates")
+        if isinstance(candidates, Sequence) and not isinstance(
+            candidates,
+            (str, bytes),
+        ):
+            for candidate in candidates:
+                if not isinstance(candidate, Mapping):
+                    continue
+                if _safe_int(candidate.get("candidate_id")) != selected_id:
+                    continue
+                x = _safe_float(candidate.get("x"))
+                y = _safe_float(candidate.get("y"))
+                if x is not None and y is not None:
+                    return (x, y)
+                break
+    # 回归坐标的归一化基准是完整视频帧，而不是 osu! playfield。
+    normalized = _point_pair(decision.get("predicted_xy_normalized"))
+    frame_width = _safe_int(cache_row.get("frame_width"))
+    frame_height = _safe_int(cache_row.get("frame_height"))
+    if normalized is None or frame_width is None or frame_height is None:
         return None
-    candidates = cache_row.get("candidates")
-    if not isinstance(candidates, Sequence) or isinstance(candidates, (str, bytes)):
-        return None
-    for candidate in candidates:
-        if not isinstance(candidate, Mapping):
-            continue
-        if _safe_int(candidate.get("candidate_id")) != selected_id:
-            continue
-        x = _safe_float(candidate.get("x"))
-        y = _safe_float(candidate.get("y"))
-        if x is None or y is None:
-            return None
-        return (x, y)
-    return None
+    return frame_normalized_to_pixel(
+        *normalized,
+        width=frame_width,
+        height=frame_height,
+    )
 
 
 def _video_to_osu_pair(
@@ -271,6 +330,7 @@ def _video_to_osu_pair(
     *,
     settings: Any | None = None,
 ) -> tuple[float, float] | None:
+    """校验一个视频像素坐标对，并使用样本变换映射到 osu! 空间。"""
     point = _point_pair(value)
     if point is None:
         return None
@@ -284,6 +344,7 @@ def _video_to_osu(
     *,
     settings: Any | None = None,
 ) -> tuple[float, float] | None:
+    """使用与当前缓存样本匹配的变换执行 frame pixel -> osu。"""
     frame_width = _safe_int(row.get("frame_width"))
     frame_height = _safe_int(row.get("frame_height"))
     if frame_width is None or frame_height is None:
@@ -297,11 +358,29 @@ def _video_to_osu(
     return transform.video_to_osu(x, y)
 
 
-def _normalized_to_osu(value: object) -> tuple[float, float] | None:
+def _normalized_frame_to_osu(
+    value: object,
+    row: Mapping[str, Any],
+    *,
+    settings: Any | None = None,
+) -> tuple[float, float] | None:
+    """按整帧尺寸还原模型坐标，再由样本变换转换到 osu! 空间。"""
     point = _point_pair(value)
     if point is None:
         return None
-    return (point[0] * OSU_PLAYFIELD_WIDTH, point[1] * OSU_PLAYFIELD_HEIGHT)
+    frame_width = _safe_int(row.get("frame_width"))
+    frame_height = _safe_int(row.get("frame_height"))
+    if frame_width is None or frame_height is None:
+        return None
+    # 两步转换显式分开，保证 affine/explicit_rect/legacy 等变换均从同一
+    # 视频像素空间接收输入，并与训练标签采用的坐标契约一致。
+    video_xy = frame_normalized_to_pixel(
+        point[0],
+        point[1],
+        width=frame_width,
+        height=frame_height,
+    )
+    return _video_to_osu(*video_xy, row, settings=settings)
 
 
 def _point_pair(value: object) -> tuple[float, float] | None:
@@ -334,6 +413,24 @@ def _frame_key(row: Mapping[str, Any]) -> tuple[str, int]:
     sample_key = str(row.get("sample_key") or "")
     frame_index = _safe_int(row.get("frame_index"))
     return sample_key, frame_index if frame_index is not None else -1
+
+
+def _index_unique_frames(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    label: str,
+) -> dict[tuple[str, int], Mapping[str, Any]]:
+    """校验帧身份并构建唯一索引，避免字典覆盖重复帧。"""
+
+    indexed: dict[tuple[str, int], Mapping[str, Any]] = {}
+    for row_number, row in enumerate(rows, start=1):
+        key = _frame_key(row)
+        if not key[0] or key[1] < 0:
+            raise ValueError(f"{label} row {row_number} has invalid frame key: {key}")
+        if key in indexed:
+            raise ValueError(f"{label} contains duplicate frame key: {key}")
+        indexed[key] = row
+    return indexed
 
 
 def _subproject_from_sample_key(sample_key: str) -> str:

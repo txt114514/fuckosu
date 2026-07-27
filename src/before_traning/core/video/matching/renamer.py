@@ -1,3 +1,5 @@
+"""按录像时间与 manifest 顺序移动文件，并保证异常时可回滚。"""
+
 from __future__ import annotations
 
 import re
@@ -146,6 +148,8 @@ class VideoPackageRenamer:
         temp_plan: list[tuple[Path, Path]] = []
         completed_plan: list[tuple[str, Path, Path]] = []
 
+        # 两阶段重命名先释放所有源名称，再逐个发布到 manifest 目标；这使
+        # 路径互换也不会覆盖尚未移动的录像，并为整体回滚保留原路径。
         for index, (_folder_name, source_path, _destination_path) in enumerate(plan):
             temp_path = source_path.with_name(f".__rename_tmp__{index}{source_path.suffix}")
             if temp_path.exists():
@@ -160,6 +164,8 @@ class VideoPackageRenamer:
             ):
                 temp_path.rename(destination_path)
                 completed_plan.append((folder_name, destination_path, original_path))
+                # 状态只在目标文件落盘后推进；后续失败时按逆序恢复文件并
+                # 将已推进项目重新标为 pending。
                 self.status_manager.mark_step_done(
                     folder_name,
                     "video_matched",
@@ -188,4 +194,4 @@ class VideoPackageRenamer:
 
 
 class VideoMatchRenamer(VideoPackageRenamer):
-    """Task-aligned name for sequence-based video matching."""
+    """与业务阶段名称一致的顺序录像匹配器别名。"""

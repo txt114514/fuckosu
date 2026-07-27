@@ -1,3 +1,5 @@
+"""提供前置步骤检查、产物完成态对齐与失败状态回写守卫。"""
+
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable

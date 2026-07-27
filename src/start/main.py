@@ -1,3 +1,5 @@
+"""实现统一命令行入口，并把 CLI 参数适配为启动与训练流程配置。"""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -64,6 +66,8 @@ def main(ctx: typer.Context) -> None:
 
 
 def select_device(device: str) -> torch.device:
+    """解析 CLI 设备；auto 仅在 PyTorch 可见 CUDA 时选择 cuda。"""
+
     selected = "cuda" if device == "auto" and torch.cuda.is_available() else device
     if selected == "auto":
         selected = "cpu"
@@ -79,6 +83,8 @@ def collect_startup_check_result(
     device: str = "auto",
     require_cuda: bool = False,
 ) -> tuple[object, dict]:
+    """执行只读检查；提供配置时额外检查训练设置、设备与数据输入。"""
+
     if config is None:
         report = run_startup_checks(require_cuda=require_cuda)
         return report, report.as_dict()
@@ -126,6 +132,8 @@ def run_training_startup_flow(
     gallery_output_root: Path | None = None,
     gallery_samples_per_group: int | None = None,
 ):
+    """把普通 Python 参数适配为 StartupFlowConfig，再交给业务编排层执行。"""
+
     selected = select_device(device)
     return run_startup_flow(
         StartupFlowConfig(
@@ -194,6 +202,8 @@ def run_training_ui_flow(
     gallery_output_root: Path | None = Path("traning_example"),
     gallery_samples_per_group: int | None = None,
 ) -> FullFlowResult:
+    """校验 UI/恢复选项，并把 CLI 参数适配为完整训练流程配置。"""
+
     if progress_ui not in {"auto", "gui", "rich", "plain", "off"}:
         raise CliParameterError("progress-ui must be auto, gui, rich, plain, or off")
     if resume_policy not in {"strict", "auto", "weights-only", "none"}:
@@ -277,6 +287,7 @@ def _maybe_attach_tmux_ui(**kwargs: object) -> None:
     if progress_ui != "rich":
         return
     if os.environ.get(TMUX_UI_ENV) == "1":
+        # 子终端通过哨兵变量阻止再次创建 tmux，避免递归启动 UI。
         return
     if os.environ.get("TMUX"):
         return
@@ -297,6 +308,8 @@ def _maybe_attach_tmux_ui(**kwargs: object) -> None:
 
 
 def _training_tmux_command(values: dict[str, object]) -> str:
+    """无损重建当前训练命令，供新 tmux pane 接管同一运行配置。"""
+
     env = f"{TMUX_UI_ENV}=1 PYTHONPATH=src:."
     args = [
         sys.executable,
@@ -360,6 +373,7 @@ def _training_tmux_command(values: dict[str, object]) -> str:
         args.append("--resume")
     else:
         args.append("--no-resume")
+    # 每个参数独立 shell quote，路径或用户字符串不能改变命令结构。
     return f"{env} " + " ".join(shlex.quote(str(arg)) for arg in args)
 
 
@@ -549,6 +563,7 @@ def _render_full_flow_table(result: FullFlowResult) -> None:
 
 
 def _write_full_flow_report(result: FullFlowResult, path: Path) -> None:
+    # 这是 CLI 末尾的人类可读副本，不作为训练恢复的一致性边界。
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(result.as_dict(), ensure_ascii=False, indent=2, default=str) + "\n",

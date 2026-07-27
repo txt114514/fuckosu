@@ -1,3 +1,5 @@
+"""定义参数搜索、课程训练和独立评估的持久化元数据。"""
+
 from __future__ import annotations
 
 from enum import StrEnum
@@ -6,6 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class SearchMethod(StrEnum):
+    RULE_BASED = "rule_based"
     RANDOM = "random"
     TPE = "tpe"
 
@@ -33,6 +36,8 @@ class TrialParameters(BaseModel):
 
 
 class TrialMetadata(BaseModel):
+    """记录单个 trial 的参数、预算、进度和课程位置。"""
+
     trial_id: str
     experiment_name: str
     seed: int
@@ -67,7 +72,7 @@ class EvaluationRunMetadata(BaseModel):
 
 class ExperimentMetadata(BaseModel):
     name: str
-    search_method: SearchMethod = SearchMethod.TPE
+    search_method: SearchMethod = SearchMethod.RULE_BASED
     objective_names: tuple[str, ...] = (
         "quality_score",
         "peak_vram_mb",

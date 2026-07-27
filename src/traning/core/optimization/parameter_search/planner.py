@@ -1,3 +1,5 @@
+"""综合评分、归因、历史试验与资源约束生成下一轮参数计划。"""
+
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
@@ -5,7 +7,10 @@ from dataclasses import dataclass, field
 from math import isfinite
 from typing import Any, Literal
 
-from traning.core.optimization.attribution import ATTRIBUTION_DOMAINS, AttributionSummary
+from traning.core.optimization.attribution import (
+    ATTRIBUTION_DOMAINS,
+    AttributionSummary,
+)
 from traning.core.optimization.parameter_search.objectives import (
     DEFAULT_OBJECTIVE_WEIGHTS,
     score_trial_objectives,
@@ -53,8 +58,9 @@ class ASHAConfig:
 
 @dataclass(frozen=True)
 class ParameterSearchConfig:
-    search_method: SearchMethod = SearchMethod.TPE
+    search_method: SearchMethod = SearchMethod.RULE_BASED
     asha: ASHAConfig = field(default_factory=ASHAConfig)
+    max_stage: CurriculumStage = CurriculumStage.FULL
     target_peak_vram_mb: float | None = None
     max_hard_examples: int = 64
     objective_weights: Mapping[str, float] = field(
@@ -62,6 +68,11 @@ class ParameterSearchConfig:
     )
 
     def __post_init__(self) -> None:
+        if self.search_method != SearchMethod.RULE_BASED:
+            raise ValueError(
+                "only rule_based parameter search is implemented; "
+                f"got {self.search_method.value}"
+            )
         if self.target_peak_vram_mb is not None and self.target_peak_vram_mb <= 0:
             raise ValueError("target_peak_vram_mb must be positive")
         if self.max_hard_examples < 0:
@@ -98,6 +109,8 @@ class OptimizationPlan:
     next_status: TrialStatus
     current_stage: CurriculumStage
     next_stage: CurriculumStage
+    current_rung: int
+    next_rung: int
     parameter_updates: Mapping[str, Mapping[str, Any]]
     hard_example_keys: tuple[str, ...]
     priority_domains: tuple[str, ...]
@@ -117,6 +130,8 @@ class OptimizationPlan:
             "next_status": self.next_status.value,
             "current_stage": self.current_stage.value,
             "next_stage": self.next_stage.value,
+            "current_rung": self.current_rung,
+            "next_rung": self.next_rung,
             "parameter_updates": {
                 section: dict(values)
                 for section, values in self.parameter_updates.items()
@@ -166,6 +181,7 @@ def _asha_action(
     if report.quality_score < config.prune_quality_floor:
         return "prune", ("quality below ASHA prune floor",)
 
+    # ASHA 只比较相同课程阶段和 rung，避免预算或任务难度不同的分数互相污染门槛。
     comparable = [
         entry.quality_score
         for entry in history
@@ -183,7 +199,9 @@ def _asha_action(
 
     stage_threshold = config.stage_quality_thresholds[current_stage]
     if report.quality_score >= stage_threshold:
-        reasons.append(f"quality reached {current_stage.value} threshold {stage_threshold:.4f}")
+        reasons.append(
+            f"quality reached {current_stage.value} threshold {stage_threshold:.4f}"
+        )
         return "promote", tuple(reasons)
     return "continue", tuple(reasons or ("quality needs more budget",))
 
@@ -197,9 +215,7 @@ def _priority_domains(attribution: AttributionSummary) -> tuple[str, ...]:
         ),
     )
     return tuple(
-        domain
-        for domain in ranked
-        if attribution.domain_counts.get(domain, 0) > 0
+        domain for domain in ranked if attribution.domain_counts.get(domain, 0) > 0
     )
 
 
@@ -227,7 +243,16 @@ def _set_update(
     name: str,
     value: Any,
 ) -> None:
-    updates.setdefault(section, {})[name] = value
+    section_updates = updates.setdefault(section, {})
+    previous = section_updates.get(name)
+    if isinstance(previous, (int, float)) and isinstance(value, (int, float)):
+        if name.endswith("_multiplier"):
+            section_updates[name] = float(previous) * float(value)
+            return
+        if name.endswith("_delta"):
+            section_updates[name] = float(previous) + float(value)
+            return
+    section_updates[name] = value
 
 
 def _apply_domain_updates(
@@ -238,23 +263,26 @@ def _apply_domain_updates(
     tags = attribution.tag_counts
     rates = attribution.domain_rates
     if rates.get("spatial", 0.0) > 0:
-        _set_update(updates, "training", "spatial_loss_weight_multiplier", 1.15)
+        _set_update(updates, "training", "spatial_learning_rate_multiplier", 1.10)
         _set_update(updates, "inference", "score_threshold_delta", -0.03)
         _set_update(updates, "inference", "max_candidates_delta", 4)
-        reasons.append("spatial attribution increases spatial loss and candidate recall")
+        reasons.append(
+            "spatial attribution increases spatial learning and candidate recall"
+        )
     if rates.get("temporal", 0.0) > 0:
-        _set_update(updates, "training", "temporal_loss_weight_multiplier", 1.20)
+        _set_update(updates, "training", "temporal_learning_rate_multiplier", 1.10)
         _set_update(updates, "training", "sequence_length_multiplier", 1.25)
-        if tags.get("early_click", 0) >= tags.get("late_click", 0):
-            _set_update(updates, "inference", "timing_bias_ms_delta", 10.0)
-        else:
-            _set_update(updates, "inference", "timing_bias_ms_delta", -10.0)
-        reasons.append("temporal attribution adjusts sequence length and timing bias")
+        timing_direction = (
+            "early"
+            if tags.get("early_click", 0) >= tags.get("late_click", 0)
+            else "late"
+        )
+        reasons.append(
+            f"temporal attribution ({timing_direction}) increases temporal learning and context"
+        )
     if rates.get("decision", 0.0) > 0:
-        _set_update(updates, "training", "decision_loss_weight_multiplier", 1.15)
-        _set_update(updates, "inference", "cooldown_ms_delta", 5.0)
-        _set_update(updates, "sampling", "hard_negative_multiplier", 1.20)
-        reasons.append("decision attribution increases cooldown and hard negatives")
+        _set_update(updates, "training", "temporal_learning_rate_multiplier", 1.15)
+        reasons.append("decision attribution increases temporal learning rate")
 
 
 def _apply_overall_updates(
@@ -264,14 +292,9 @@ def _apply_overall_updates(
     reasons: list[str],
 ) -> None:
     if report.quality_score < 0.5:
-        _set_update(updates, "training", "budget_steps_multiplier", 1.50)
-        _set_update(updates, "search", "exploration_probability", 0.35)
-        reasons.append("low overall quality asks for more budget and exploration")
-    if config.search_method == SearchMethod.TPE:
-        _set_update(updates, "search", "sampler", "tpe")
-        _set_update(updates, "search", "candidate_pool", "domain_weighted")
-    else:
-        _set_update(updates, "search", "sampler", "random")
+        _set_update(updates, "training", "spatial_learning_rate_multiplier", 1.10)
+        _set_update(updates, "training", "temporal_learning_rate_multiplier", 1.10)
+        reasons.append("low overall quality increases trainable learning rates")
     peak_vram = report.metrics.get("peak_vram_mb")
     if (
         peak_vram is not None
@@ -280,7 +303,9 @@ def _apply_overall_updates(
     ):
         _set_update(updates, "training", "patch_limit_delta", -1)
         _set_update(updates, "training", "candidate_slots_delta", -4)
-        reasons.append("peak VRAM exceeded target, reducing patch and candidate pressure")
+        reasons.append(
+            "peak VRAM exceeded target, reducing patch and candidate pressure"
+        )
 
 
 def plan_next_trial(
@@ -309,15 +334,34 @@ def plan_next_trial(
     _apply_domain_updates(updates, attribution, reasons)
     _apply_overall_updates(updates, report, config, reasons)
 
+    # 聚合分可能被大量无目标 no-op 帧抬高；只有完整样本门禁通过时才允许晋级。
+    if action == "promote" and not report.passed:
+        action = "continue"
+        asha_reasons = tuple(
+            dict.fromkeys((*asha_reasons, "strict sample gate has not passed"))
+        )
+        reasons = list(asha_reasons) + [
+            reason for reason in reasons if reason not in asha_reasons
+        ]
+
     if action == "prune":
         next_status = TrialStatus.PRUNED
         next_stage = current_stage
+        next_rung = rung
     elif action == "promote":
         next_status = TrialStatus.PROMOTED
-        next_stage = _next_stage(current_stage)
+        proposed_stage = _next_stage(current_stage)
+        next_stage = (
+            proposed_stage
+            if _STAGE_ORDER.index(proposed_stage)
+            <= _STAGE_ORDER.index(config.max_stage)
+            else current_stage
+        )
+        next_rung = rung + 1
     else:
         next_status = TrialStatus.RUNNING
         next_stage = current_stage
+        next_rung = rung
 
     return OptimizationPlan(
         trial_id=report.trial_id,
@@ -326,6 +370,8 @@ def plan_next_trial(
         next_status=next_status,
         current_stage=current_stage,
         next_stage=next_stage,
+        current_rung=rung,
+        next_rung=next_rung,
         parameter_updates=updates,
         hard_example_keys=_hard_example_keys(
             attribution,

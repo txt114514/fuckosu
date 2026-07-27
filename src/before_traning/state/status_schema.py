@@ -1,3 +1,5 @@
+"""定义处理步骤状态表，并规范化状态明细的 JSON 编解码。"""
+
 from __future__ import annotations
 
 import json

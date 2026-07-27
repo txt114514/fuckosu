@@ -1,4 +1,4 @@
-"""Parameter-search planning for optimization."""
+"""课程晋级、难例采样计划诊断和规则式参数搜索的公开入口。"""
 
 from traning.core.optimization.parameter_search.curriculum import (
     CurriculumGateResult,
@@ -16,6 +16,9 @@ from traning.core.optimization.parameter_search.executor import (
     TrainingJobSpec,
     create_trial_store,
     execute_optimization_plan,
+    normalize_trial_parameters,
+    trial_history_from_records,
+    training_job_from_dict,
 )
 from traning.core.optimization.parameter_search.hard_examples import (
     HardExampleSamplingPlan,
@@ -59,7 +62,10 @@ __all__ = [
     "create_trial_store",
     "evaluate_curriculum_gate",
     "execute_optimization_plan",
+    "normalize_trial_parameters",
+    "trial_history_from_records",
     "objective_values_from_report",
     "plan_next_trial",
     "score_trial_objectives",
+    "training_job_from_dict",
 ]

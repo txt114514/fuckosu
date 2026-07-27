@@ -1,10 +1,11 @@
-"""Optimization module facade for scoring, attribution, and parameter search."""
+"""评分、错误归因与参数搜索优化能力的统一门面。"""
 
 from traning.core.optimization.attribution import (
     ATTRIBUTION_DOMAINS,
     AttributionSummary,
     HardExample,
     analyze_trial_attribution,
+    classify_unresolved_sample_error,
 )
 from traning.core.optimization.parameter_search import (
     ASHAAction,
@@ -26,9 +27,12 @@ from traning.core.optimization.parameter_search import (
     create_trial_store,
     evaluate_curriculum_gate,
     execute_optimization_plan,
+    normalize_trial_parameters,
     objective_values_from_report,
     plan_next_trial,
     score_trial_objectives,
+    trial_history_from_records,
+    training_job_from_dict,
 )
 from traning.core.optimization.scoring import (
     AGGREGATE_SCORE_VERSION,
@@ -76,10 +80,14 @@ __all__ = [
     "create_trial_store",
     "evaluate_curriculum_gate",
     "execute_optimization_plan",
+    "normalize_trial_parameters",
     "objective_values_from_report",
     "plan_next_trial",
     "score_trial_objectives",
     "score_decision_outputs",
     "score_sample",
     "score_trial",
+    "trial_history_from_records",
+    "training_job_from_dict",
+    "classify_unresolved_sample_error",
 ]

@@ -1,5 +1,8 @@
+"""按时间引用读取 segment 视频帧并组装训练样本。"""
+
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 import torch
@@ -12,6 +15,8 @@ from traning.lib.data.video_reader import VideoReader
 
 
 class SegmentFrameDataset(Dataset[dict[str, Any]]):
+    """视频帧 Dataset；坐标规格按 ``record.key`` 随样本一起传播。"""
+
     def __init__(
         self,
         records: tuple[SegmentRecord, ...],
@@ -22,6 +27,7 @@ class SegmentFrameDataset(Dataset[dict[str, Any]]):
         visibility_post_ms: float = 100.0,
         normalize_images: bool = True,
         coordinate_transform: dict[str, Any] | None = None,
+        coordinate_transforms: Mapping[str, Mapping[str, Any]] | None = None,
     ):
         if not records:
             raise ValueError("records must not be empty")
@@ -34,7 +40,12 @@ class SegmentFrameDataset(Dataset[dict[str, Any]]):
         )
         self.visibility_post_ms = visibility_post_ms
         self.normalize_images = normalize_images
+        # 单个全局 transform 仅为旧调用方保留；逐记录映射具有更高优先级。
         self.coordinate_transform = coordinate_transform
+        self.coordinate_transforms = {
+            str(sample_key): dict(transform)
+            for sample_key, transform in (coordinate_transforms or {}).items()
+        }
         self._reader: VideoReader | None = None
 
     def __len__(self) -> int:
@@ -82,7 +93,11 @@ class SegmentFrameDataset(Dataset[dict[str, Any]]):
             ),
             "approach_preempt_ms": record.annotation.difficulty.approach_preempt_ms,
             "preprocessing_metadata": record.preprocessing_metadata,
-            "coordinate_transform": self.coordinate_transform,
+            # 下游训练、评分和渲染均优先消费该字段，避免再次从缺失设置中猜测。
+            "coordinate_transform": self.coordinate_transforms.get(
+                record.key,
+                self.coordinate_transform,
+            ),
         }
 
     def __getstate__(self) -> dict[str, Any]:

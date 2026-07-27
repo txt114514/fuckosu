@@ -1,3 +1,5 @@
+"""校验裁剪状态步骤与单个谱面目录的处理前置条件。"""
+
 from __future__ import annotations
 
 

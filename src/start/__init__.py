@@ -1,3 +1,5 @@
+"""提供仓库统一启动、自检、样本发现与模块登记入口。"""
+
 from start.checks import (
     StartupCheckReport,
     StartupCheckResult,

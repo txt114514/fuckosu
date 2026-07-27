@@ -1,4 +1,10 @@
+"""导出训练运行、实验、检查点和图集状态契约。"""
+
 from traning.state.checkpoint_schema import CheckpointMetadata
+from traning.state.candidate_cache_schema import (
+    CANDIDATE_CACHE_VERSION,
+    SUPPORTED_CANDIDATE_CACHE_VERSIONS,
+)
 from traning.state.experiment_schema import (
     CurriculumStage,
     EvaluationRunMetadata,
@@ -20,6 +26,7 @@ from traning.state.run_state import RunState
 
 __all__ = [
     "BatchGalleryRequest",
+    "CANDIDATE_CACHE_VERSION",
     "CheckpointMetadata",
     "CurriculumStage",
     "EVALUATION_SUBPROJECTS",
@@ -29,6 +36,7 @@ __all__ = [
     "FrameEvaluation",
     "RunState",
     "SearchMethod",
+    "SUPPORTED_CANDIDATE_CACHE_VERSIONS",
     "TrialGalleryEvaluation",
     "TrialMetadata",
     "TrialParameters",

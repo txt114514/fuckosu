@@ -1,3 +1,5 @@
+"""训练继承包 API 的兼容转发入口。"""
+
 from traning.core.training_inheritance import (
     InheritanceLoadResult,
     InheritancePackage,

@@ -1,3 +1,5 @@
+"""从单个 .osz 压缩包读取目标难度谱面及其音频字节。"""
+
 from __future__ import annotations
 
 import tempfile

@@ -1,3 +1,5 @@
+"""渲染训练停止摘要，并安全管理终端按键等待生命周期。"""
+
 from __future__ import annotations
 
 import select
@@ -39,6 +41,8 @@ def show_stop_summary(stop: TrainingStopState, *, wait_for_key: bool = True) -> 
 
 
 def wait_for_exit_key() -> None:
+    """临时切换终端为单字符模式，收到退出键后恢复原属性。"""
+
     fd = sys.stdin.fileno()
     old = termios.tcgetattr(fd)
     try:
@@ -51,5 +55,6 @@ def wait_for_exit_key() -> None:
             if char in {"q", "Q", "\n", "\r", "\x1b"}:
                 return
     finally:
+        # 即使读取按键期间发生异常，也必须恢复终端，否则调用方 shell 会保持异常模式。
         with suppress(Exception):
             termios.tcsetattr(fd, termios.TCSADRAIN, old)

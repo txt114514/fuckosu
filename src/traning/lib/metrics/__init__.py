@@ -1,4 +1,4 @@
-"""Spatial, temporal, and action metrics."""
+"""空间、时间、slider 路径与点击序列评分的公共入口。"""
 
 from traning.lib.metrics.scoring import (
     SCORE_VERSION,

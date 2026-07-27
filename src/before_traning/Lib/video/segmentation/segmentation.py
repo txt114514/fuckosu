@@ -1,3 +1,5 @@
+"""按显式分段参数生成原子片段与长序列计划集合。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

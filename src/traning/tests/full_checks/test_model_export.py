@@ -1,3 +1,5 @@
+"""验证模型导出、文件摘要、配置迁移和 artifact 校验。"""
+
 from __future__ import annotations
 
 import tempfile
@@ -23,6 +25,8 @@ class ModelExportTests(unittest.TestCase):
             temporal.write_bytes(b"temporal-checkpoint")
             metadata.write_text('{"trial_id": "trial-1"}\n', encoding="utf-8")
 
+            # 三种输入分别代表配置、权重和附加元数据，确保 manifest 摘要
+            # 覆盖整个 artifact，而不只是主 checkpoint。
             result = export_model_artifact(
                 ModelArtifactSpec(
                     artifact_id="artifact-smoke",

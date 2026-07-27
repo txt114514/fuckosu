@@ -1,3 +1,5 @@
+"""空间多任务监督及跨物件、全局/局部和相邻帧一致性损失。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -26,6 +28,8 @@ class LossWeights:
 
 @dataclass(frozen=True)
 class SpatialLossTargets:
+    """与 SpatialPrediction 各稠密分支逐网格对齐的监督张量。"""
+
     center_heatmap: torch.Tensor
     visible_heatmap: torch.Tensor
     xy_offset: torch.Tensor
@@ -46,6 +50,7 @@ def _masked_smooth_l1(
         while mask.ndim < prediction.ndim:
             mask = mask.unsqueeze(1)
     mask = mask.to(device=prediction.device, dtype=prediction.dtype)
+    # mask 通常只有一个通道，分母乘预测通道数后才是实际参与回归的元素数。
     denominator = mask.sum() * prediction.shape[1]
     if float(denominator.detach().cpu()) <= 0.0:
         return prediction.sum() * 0.0
@@ -59,7 +64,7 @@ def compute_spatial_loss(
     *,
     weights: LossWeights = LossWeights(),
 ) -> dict[str, torch.Tensor]:
-    """Compute first-version dense multi-task spatial losses."""
+    """计算首版稠密多任务空间损失，并返回各分项及加权 total。"""
 
     losses = {
         "center": F.binary_cross_entropy_with_logits(
@@ -70,6 +75,7 @@ def compute_spatial_loss(
             prediction.visible_heatmap,
             target.visible_heatmap,
         ),
+        # offset 只在中心邻域回归，避免背景单元的任意目标污染梯度。
         "offset": _masked_smooth_l1(
             prediction.xy_offset,
             target.xy_offset,
@@ -123,7 +129,7 @@ def cosine_embedding_consistency_loss(
     *,
     margin: float = 0.4,
 ) -> torch.Tensor:
-    """Pull embeddings for the same object together and push others apart."""
+    """拉近同一物件 embedding，并把不同物件推到 margin 之外。"""
 
     if embeddings.ndim != 2 or object_ids.ndim != 1:
         raise ValueError("embeddings must be NF and object_ids must be N")
@@ -151,7 +157,7 @@ def global_local_consistency_loss(
     local_logits: torch.Tensor,
     sampled_global_logits: torch.Tensor,
 ) -> torch.Tensor:
-    """Encourage local dense predictions to agree with sampled global context."""
+    """让局部稠密预测与同位置采样的全局上下文一致。"""
 
     return F.binary_cross_entropy_with_logits(
         local_logits,
@@ -165,7 +171,7 @@ def temporal_consistency_loss(
     *,
     mask: torch.Tensor | None = None,
 ) -> torch.Tensor:
-    """Penalize abrupt dense prediction changes between neighboring frames."""
+    """惩罚相邻帧稠密预测的突变；previous 被 detach 作为稳定目标。"""
 
     loss = F.smooth_l1_loss(current, previous.detach(), reduction="none")
     if mask is not None:

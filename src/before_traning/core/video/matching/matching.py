@@ -1,3 +1,5 @@
+"""在音频内容匹配与录像时间顺序匹配策略之间选择业务入口。"""
+
 from __future__ import annotations
 
 from before_traning.conf.defaults import DEFAULT_SETTINGS as DEFAULTS
@@ -7,7 +9,7 @@ from before_traning.conf.legacy_config import assign_group, forward_kwargs, sett
 
 
 class VideoMatchProcessor:
-    """Video matching entry point used by the video/match task."""
+    """供 video/match 业务阶段调用的录像匹配策略入口。"""
 
     def __init__(
         self,

@@ -1,3 +1,5 @@
+"""收集 Python 依赖、系统工具和 PyTorch/CUDA 的只读环境报告。"""
+
 from __future__ import annotations
 
 import importlib.metadata
@@ -11,6 +13,8 @@ from typing import Iterable
 
 @dataclass(frozen=True)
 class PackageSpec:
+    """描述一个发行包、可导入模块及其是否为硬依赖。"""
+
     label: str
     import_name: str | None
     distributions: tuple[str, ...]
@@ -19,6 +23,8 @@ class PackageSpec:
 
 @dataclass(frozen=True)
 class PackageCheck:
+    """单个依赖的可发现状态及已安装发行版本。"""
+
     spec: PackageSpec
     available: bool
     version: str | None
@@ -26,6 +32,8 @@ class PackageCheck:
 
 @dataclass(frozen=True)
 class TorchCheck:
+    """PyTorch 构建信息和零号 CUDA 设备能力；探测失败保存在 error。"""
+
     available: bool
     version: str | None
     torchvision_version: str | None
@@ -42,6 +50,8 @@ class TorchCheck:
 
 @dataclass(frozen=True)
 class EnvironmentReport:
+    """聚合不修改环境的依赖、工具链与加速设备检查结果。"""
+
     python_version: str
     python_executable: str
     platform: str
@@ -142,6 +152,7 @@ def collect_torch_check() -> TorchCheck:
             error="torch is not importable",
         )
 
+    # 延迟导入 torch：环境报告本身在 torch 损坏或未安装时仍应可运行。
     try:
         import torch
     except Exception as exc:  # pragma: no cover - import failure is env-specific.
@@ -168,6 +179,7 @@ def collect_torch_check() -> TorchCheck:
     free_vram_gib = None
     error = None
 
+    # CUDA 驱动异常是报告内容而不是检查器异常，调用方据 require_cuda 决定成败。
     try:
         cuda_available = bool(torch.cuda.is_available())
         if cuda_available:

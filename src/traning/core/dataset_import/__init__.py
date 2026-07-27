@@ -1,3 +1,5 @@
+"""训练数据发现、检查、Dataset 与 DataLoader 的公开入口。"""
+
 from traning.core.dataset_import.pipeline import (
     DataInputModule,
     build_dataloader,

@@ -1,7 +1,11 @@
+"""跨模块共享的 osu!、视频帧与屏幕坐标变换契约。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Literal, Mapping
+import hashlib
+import json
+from typing import Any, Literal, Mapping, Protocol
 
 
 OSU_PLAYFIELD_WIDTH = 512.0
@@ -55,6 +59,24 @@ class PlayfieldRect:
         )
 
 
+class OsuVideoCoordinateTransform(Protocol):
+    """轴对齐与仿射变换共同遵循的 ``osu -> 完整帧像素`` 契约。
+
+    调用方只依赖这里列出的操作，不能假定实现一定具有
+    ``playfield_left`` 等轴对齐专属字段。``rect`` 始终返回变换后
+    playfield 的轴对齐边界，因此 spinner 和可视化也能统一处理 affine。
+    """
+
+    @property
+    def rect(self) -> PlayfieldRect: ...
+
+    def osu_to_video(self, x: float, y: float) -> tuple[float, float]: ...
+
+    def video_to_osu(self, x: float, y: float) -> tuple[float, float]: ...
+
+    def osu_radius_to_video(self, radius: float) -> float: ...
+
+
 @dataclass(frozen=True)
 class ImageSize:
     width: float
@@ -77,7 +99,7 @@ class ImageSize:
 
 @dataclass(frozen=True)
 class CoordinateTransformSpec:
-    """Stable metadata for osu/video coordinate conversion."""
+    """可持久化的 osu/video 坐标规格；matrix 的方向为 osu -> 帧像素。"""
 
     version: str
     rect: PlayfieldRect
@@ -124,7 +146,7 @@ class CoordinateTransformSpec:
 
 @dataclass(frozen=True)
 class CoordinateTransformChain:
-    """Traceable osu -> source -> crop -> training-frame transform."""
+    """可追踪的 osu -> 原视频 -> 裁剪 -> 训练帧双向变换链。"""
 
     source_size: ImageSize
     crop_rect: PlayfieldRect
@@ -189,6 +211,7 @@ class CoordinateTransformChain:
         return OsuVideoTransform.from_rect(self.playfield_source_rect).video_to_osu(x, y)
 
     def osu_to_training_frame(self, x: float, y: float) -> tuple[float, float]:
+        # 顺序不能交换：先落到原视频像素，才能应用该 record 的裁剪与 resize。
         source_x, source_y = self.osu_to_source(x, y)
         crop_x, crop_y = self.source_to_crop(source_x, source_y)
         return self.crop_to_training_frame(crop_x, crop_y)
@@ -269,7 +292,7 @@ class CoordinateTransformChain:
 
 @dataclass(frozen=True)
 class OsuVideoTransform:
-    """Map osu!standard playfield coordinates to video pixels."""
+    """用轴对齐 playfield 矩形将 osu!standard 坐标映射到视频像素。"""
 
     playfield_left: float
     playfield_top: float
@@ -355,7 +378,7 @@ class OsuVideoTransform:
 
 @dataclass(frozen=True)
 class ScreenTransform:
-    """Map authoritative osu! playfield coordinates to desktop screen pixels."""
+    """把权威 osu! playfield 坐标映射到桌面屏幕像素矩形。"""
 
     playfield_rect: PlayfieldRect
 
@@ -395,7 +418,12 @@ class ScreenTransform:
 
 @dataclass(frozen=True)
 class AffineOsuVideoTransform:
-    """Map osu! playfield coordinates with a fitted 2x3 affine matrix."""
+    """用拟合的 2x3 矩阵将 osu! playfield 坐标映射到完整帧像素。
+
+    两行矩阵依次计算 ``video_x`` 和 ``video_y``：
+    ``video_x=a*osu_x+b*osu_y+c``，
+    ``video_y=d*osu_x+e*osu_y+f``。矩阵与标定时的帧分辨率绑定。
+    """
 
     matrix: tuple[tuple[float, float, float], tuple[float, float, float]]
 
@@ -422,6 +450,8 @@ class AffineOsuVideoTransform:
 
     @property
     def rect(self) -> PlayfieldRect:
+        """返回四个仿射角点的轴对齐外接矩形，而不是丢弃旋转/剪切。"""
+
         corners = (
             self.osu_to_video(0.0, 0.0),
             self.osu_to_video(OSU_PLAYFIELD_WIDTH, 0.0),
@@ -469,6 +499,50 @@ class AffineOsuVideoTransform:
         return radius * (scale_x + scale_y) / 2.0
 
 
+def frame_normalized_to_pixel(
+    x: float,
+    y: float,
+    *,
+    width: float,
+    height: float,
+) -> tuple[float, float]:
+    """把完整训练帧的归一化坐标转换为帧像素，不按 playfield 归一化。"""
+
+    size = ImageSize(width=float(width), height=float(height))
+    return float(x) * size.width, float(y) * size.height
+
+
+def frame_pixel_to_normalized(
+    x: float,
+    y: float,
+    *,
+    width: float,
+    height: float,
+) -> tuple[float, float]:
+    """把帧像素转换为完整训练帧归一化坐标，不按 playfield 归一化。"""
+
+    size = ImageSize(width=float(width), height=float(height))
+    return float(x) / size.width, float(y) / size.height
+
+
+def coordinate_transform_fingerprint(
+    value: CoordinateTransformSpec | Mapping[str, Any],
+) -> str:
+    """为完整变换方程生成稳定指纹，用于拒绝复用过期缓存或 checkpoint。"""
+
+    payload = value.as_dict() if isinstance(value, CoordinateTransformSpec) else dict(value)
+    # 固定键顺序和 JSON 分隔符，使相同规格不受字典插入顺序影响。
+    canonical = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
+    return f"transform-{digest}"
+
+
 __all__ = [
     "AffineOsuVideoTransform",
     "COORDINATE_CHAIN_VERSION",
@@ -476,10 +550,14 @@ __all__ = [
     "CoordinateSpace",
     "CoordinateTransformChain",
     "CoordinateTransformSpec",
+    "OsuVideoCoordinateTransform",
     "ImageSize",
     "OSU_PLAYFIELD_HEIGHT",
     "OSU_PLAYFIELD_WIDTH",
     "OsuVideoTransform",
     "PlayfieldRect",
     "ScreenTransform",
+    "coordinate_transform_fingerprint",
+    "frame_normalized_to_pixel",
+    "frame_pixel_to_normalized",
 ]

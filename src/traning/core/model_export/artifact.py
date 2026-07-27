@@ -1,3 +1,5 @@
+"""打包可恢复/推理模型产物，并写入文件摘要和版本清单。"""
+
 from __future__ import annotations
 
 import hashlib
@@ -143,6 +145,8 @@ def _manifest_file(item: ArtifactFile, artifact_dir: Path) -> dict[str, Any]:
 
 
 def export_model_artifact(spec: ModelArtifactSpec) -> ModelArtifactResult:
+    """复制选定文件并生成包含相对路径、摘要和契约版本的 manifest。"""
+
     artifact_dir = spec.output_dir / spec.artifact_id
     if artifact_dir.exists():
         shutil.rmtree(artifact_dir)
@@ -236,6 +240,8 @@ def validate_model_artifact(manifest_path: Path | str) -> tuple[str, ...]:
 
 
 def migrate_settings_file(settings_path: Path | str) -> tuple[Path, dict[str, Any]]:
+    """非破坏性生成新配置，并记录每项兼容迁移动作。"""
+
     settings_path = Path(settings_path)
     raw = yaml.safe_load(settings_path.read_text(encoding="utf-8")) or {}
     if not isinstance(raw, dict):
@@ -246,6 +252,7 @@ def migrate_settings_file(settings_path: Path | str) -> tuple[Path, dict[str, An
         migrated["schema_version"] = CONFIGURATION_VERSION
         log.append({"version": SETTINGS_MIGRATION_VERSION, "action": "add_schema_version"})
     if "coordinate_transform" not in migrated:
+        # 历史配置没有足够信息反推裁剪方程，只能显式标记其原有 centered 语义。
         migrated["coordinate_transform"] = {"mode": "legacy_centered"}
         log.append({"version": SETTINGS_MIGRATION_VERSION, "action": "add_legacy_transform"})
     output = settings_path.with_name("settings.migrated.yaml")

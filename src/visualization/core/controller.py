@@ -1,3 +1,5 @@
+"""根据运行环境选择 GUI、Rich 或纯文本渲染器并组装仪表盘句柄。"""
+
 from __future__ import annotations
 
 import os
@@ -31,6 +33,7 @@ def build_dashboard_handle(
 
             renderer = GuiDashboardRenderer(reporter)
         except Exception as error:
+            # 可视化是旁路能力；GUI 初始化失败不能中断训练或破坏状态持久化。
             reporter.emit_event(
                 TrainingEvent.create(
                     event_type="ui",
@@ -55,6 +58,7 @@ def build_dashboard_handle(
                 output_dir=output_dir,
             )
         except Exception as error:
+            # Rich/tmux 不可用时仍保留最低依赖的纯文本进度反馈。
             reporter.emit_event(
                 TrainingEvent.create(
                     event_type="ui",
@@ -81,6 +85,7 @@ def _launch_multi_terminal_panels(
     run_id: str,
     output_dir: Path,
 ) -> None:
+    # 被附加 tmux 会话中的训练进程不得再次递归创建观察窗格。
     if os.environ.get("OSU_AI_TMUX_UI_ATTACHED") == "1":
         return
     try:

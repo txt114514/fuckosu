@@ -1,3 +1,5 @@
+"""实现采样、相关搜索、命中校正和裁切窗口等 AV 对齐算法。"""
+
 from __future__ import annotations
 
 import ast
@@ -42,6 +44,8 @@ class AVCoreStepsMixin:
         return normalized
 
     def _normalize_series(self, values: np.ndarray) -> np.ndarray:
+        # 相关匹配只比较波形变化，去均值并按标准差缩放可消除录制音量
+        # 和直流偏置对配对分数的影响。
         normalized = values.astype(np.float32)
         normalized -= float(normalized.mean())
         std = float(normalized.std())
@@ -149,6 +153,8 @@ class AVCoreStepsMixin:
         )
         coarse_offset_seconds = coarse_start_frame / float(self.envelope_hz)
 
+        # 先用低频包络在全视频定位，再仅在粗定位附近用高频特征细化；
+        # 这样既控制计算量，也降低重复乐段造成远距离误匹配的概率。
         fine_video = self._build_music_refine_series(video_audio_samples)
         fine_song = self._build_music_refine_series(song_audio_samples)
         if fine_video.size < fine_song.size:
@@ -227,6 +233,8 @@ class AVCoreStepsMixin:
 
         best_delta_frames: int | None = None
         best_score: float | None = None
+        # verify 中的命中时间只用于粗音频偏移附近的小窗口校正，不能取代
+        # 音乐相关定位，否则游戏音效可能把结果拉到无关乐段。
         for delta_frames in range(-window_frames, window_frames + 1):
             start = base_frame + delta_frames
             end = start + click_train.size

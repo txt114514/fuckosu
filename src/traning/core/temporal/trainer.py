@@ -1,3 +1,5 @@
+"""训练因果时序模型，并管理多任务损失、恢复状态和检查点。"""
+
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
@@ -256,6 +258,7 @@ def run_temporal_training(
                     device=device,
                 )
     except BaseException:
+        # emergency 检查点只推进到最后一次完成 optimizer step 的提交边界。
         emergency = TemporalTrainingResult(
             run_dir=run_dir,
             checkpoint_path=run_dir / "temporal_emergency.pt",
@@ -398,6 +401,8 @@ def _compute_temporal_loss(
     frame_mask: torch.Tensor,
     weights,
 ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+    """按有效帧、候选真值和动作帧三种 mask 组合多任务损失。"""
+
     action_logits = torch.cat([output.action_logits for output in outputs], dim=0)
     candidate_logits = torch.cat(
         [output.selected_candidate_logits for output in outputs],
@@ -410,6 +415,7 @@ def _compute_temporal_loss(
     if not bool(valid.any()):
         raise ValueError("temporal loss requires at least one valid frame")
     action_loss = F.cross_entropy(action_logits[valid], action_target[valid])
+    # 候选分类只在目标候选确实进入槽位时监督，未匹配帧不伪造类别标签。
     candidate_frames = valid & (selected_candidate_target != IGNORE_CANDIDATE_ID)
     if bool(candidate_frames.any()):
         candidate_loss = F.cross_entropy(
@@ -418,6 +424,7 @@ def _compute_temporal_loss(
         )
     else:
         candidate_loss = action_logits.sum() * 0.0
+    # 坐标和时间偏移只对真实动作帧有定义，no_op 与尾部 padding 均不参与回归。
     action_frames = valid & (action_target != NO_OP_ACTION_ID)
     if bool(action_frames.any()):
         xy = torch.cat([xy_prediction, y_prediction], dim=1)

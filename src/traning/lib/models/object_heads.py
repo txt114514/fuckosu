@@ -1,3 +1,5 @@
+"""从融合后的 patch 特征生成多任务稠密空间预测。"""
+
 from __future__ import annotations
 
 import torch
@@ -27,7 +29,7 @@ def _group_count(channels: int) -> int:
 
 
 class SpatialPredictionHead(nn.Module):
-    """Multi-task dense heads for one fused high-resolution patch feature map."""
+    """为一个融合后的高分辨率 patch 特征图生成多任务稠密预测。"""
 
     def __init__(
         self,
@@ -49,6 +51,7 @@ class SpatialPredictionHead(nn.Module):
             nn.GroupNorm(_group_count(hidden), hidden),
             nn.SiLU(inplace=True),
         )
+        # 所有 head 共用同一 HxW 网格；xy/direction 为二维向量，其余通道见名称。
         head_specs = {
             "center_heatmap": 1,
             "visible_heatmap": 1,
@@ -82,6 +85,7 @@ class SpatialPredictionHead(nn.Module):
             ring_mask=self.heads["ring_mask"](hidden),
             ring_radius=F.softplus(self.heads["ring_radius"](hidden)),
             slider_mask=self.heads["slider_mask"](hidden),
+            # 方向和 embedding 在通道维单位化，其他分类图仍输出 logits。
             slider_direction=F.normalize(direction, dim=1, eps=1e-6),
             spinner_mask=self.heads["spinner_mask"](hidden),
             candidate_embedding=F.normalize(embedding, dim=1, eps=1e-6),

@@ -1,3 +1,5 @@
+"""按需公开训练前处理的持久化状态管理器。"""
+
 from __future__ import annotations
 
 

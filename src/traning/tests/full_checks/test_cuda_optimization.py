@@ -1,3 +1,5 @@
+"""验证 CUDA runtime 辅助函数的设备搬运、AMP 与降级语义。"""
+
 from __future__ import annotations
 
 import unittest
@@ -71,6 +73,8 @@ class CudaOptimizationTests(unittest.TestCase):
         self.assertIsNone(budget.vram_budget_gib)
 
     def test_cpu_memory_budget_rejects_unavailable_reserve(self) -> None:
+        # 以当前物理内存再加 1GiB 构造必然不可满足的保留量，避免测试依赖
+        # 某台机器的固定 RAM 容量。
         total_gib = psutil.virtual_memory().total / 1024**3
         with self.assertRaises(RuntimeError):
             enforce_runtime_memory_budget(

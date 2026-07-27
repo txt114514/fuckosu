@@ -1,3 +1,5 @@
+"""融合重叠 patch 的空间预测，并解码点候选与 slider 折线路径。"""
+
 from __future__ import annotations
 
 from collections import deque
@@ -13,6 +15,8 @@ from traning.lib.models import OBJECT_TYPE_NAMES, SpatialPrediction
 
 @dataclass(frozen=True)
 class SpatialPredictionMaps:
+    """融合后的完整帧 CPU 特征网格；x/y 候选最终以帧像素表示。"""
+
     center: torch.Tensor
     visible: torch.Tensor
     xy_offset: torch.Tensor
@@ -31,6 +35,8 @@ class SpatialPredictionMaps:
 
 @dataclass(frozen=True)
 class SpatialCandidate:
+    """由一个局部极大网格单元解码出的完整帧像素候选。"""
+
     x: float
     y: float
     score: float
@@ -48,6 +54,8 @@ class SpatialCandidate:
 
 @dataclass(frozen=True)
 class SliderPathCandidate:
+    """slider 连通分量恢复出的等弧长采样折线及歧义诊断。"""
+
     component_id: int
     score: float
     continuity: float
@@ -105,7 +113,7 @@ class SpatialDecodeDiagnostics:
 
 
 class SpatialPredictionCanvas:
-    """CPU canvas for fusing detached dense spatial predictions across patches."""
+    """在 CPU 上融合多个 patch 已 detach 的稠密空间预测。"""
 
     def __init__(
         self,
@@ -125,6 +133,7 @@ class SpatialPredictionCanvas:
         self.stride = stride
         self.dtype = dtype
         self.feather_edges = feather_edges
+        # canvas 覆盖完整帧；不能整除 stride 的右/下边缘仍保留一个特征单元。
         height = ceil(frame_height / stride)
         width = ceil(frame_width / stride)
         self._values = {
@@ -142,6 +151,8 @@ class SpatialPredictionCanvas:
         self._weights = torch.zeros((1, height, width), dtype=dtype)
 
     def write_patch(self, prediction: SpatialPrediction, meta: PatchMeta) -> None:
+        """裁掉 padding 后，按完整帧网格位置加权写入一个 patch 预测。"""
+
         payload = _prediction_to_payload(prediction, dtype=self.dtype)
         feature_height, feature_width = payload["center"].shape[-2:]
         region = _write_region(
@@ -155,6 +166,7 @@ class SpatialPredictionCanvas:
         if region is None:
             return
         crop_y, crop_x, target_y, target_x = region
+        # Hann 羽化降低重叠 patch 边缘的卷积 padding 伪影。
         weight = _patch_weight(
             crop_y.stop - crop_y.start,
             crop_x.stop - crop_x.start,
@@ -182,6 +194,8 @@ class SpatialPredictionCanvas:
         self._weights[..., target_y, target_x] += weight
 
     def to_maps(self) -> SpatialPredictionMaps:
+        """完成重叠区加权平均，并重新单位化向量型输出。"""
+
         weights = self._weights.clamp_min(1e-6)
         values = {name: tensor / weights for name, tensor in self._values.items()}
         values["slider_direction"] = F.normalize(
@@ -215,6 +229,8 @@ def decode_spatial_candidates(
     score_threshold: float = 0.05,
     nms_radius_px: float = 32.0,
 ) -> tuple[SpatialCandidate, ...]:
+    """从完整帧网格做局部极大值筛选、阈值过滤和像素空间 NMS。"""
+
     if max_candidates <= 0:
         raise ValueError("max_candidates must be positive")
     if nms_radius_px < 0:
@@ -224,6 +240,7 @@ def decode_spatial_candidates(
         return ()
     type_score, type_index = non_background.max(dim=0)
     object_type_id = type_index + 1
+    # 三项相乘要求候选同时像中心、确实可见且属于非背景类别。
     score_map = maps.center[0] * maps.visible[0].clamp_min(0.05) * type_score
     score_map = score_map * (maps.weights[0] > 0).to(score_map.dtype)
     local_max = score_map == F.max_pool2d(
@@ -244,6 +261,7 @@ def decode_spatial_candidates(
         col = int(coordinates[ordinal, 1])
         offset_x = float(maps.xy_offset[0, row, col].clamp(-0.75, 0.75))
         offset_y = float(maps.xy_offset[1, row, col].clamp(-0.75, 0.75))
+        # 网格整数索引代表 cell，0.5 移到中心，再加预测的 cell 单位 offset。
         x = (col + 0.5 + offset_x) * maps.stride
         y = (row + 0.5 + offset_y) * maps.stride
         x = min(max(x, 0.0), float(maps.frame_width - 1))
@@ -334,7 +352,7 @@ def decode_slider_paths(
     sample_points: int = 32,
     continuity_threshold: float = 0.75,
 ) -> tuple[SliderPathCandidate, ...]:
-    """Recover first-version slider path candidates from the fused CPU canvas."""
+    """从融合后的 CPU 画布恢复首版 slider 路径候选。"""
 
     if not 0.0 <= threshold <= 1.0:
         raise ValueError("threshold must be in [0, 1]")
@@ -348,6 +366,7 @@ def decode_slider_paths(
     slider = maps.slider[0].detach().to("cpu", dtype=torch.float32)
     valid = maps.weights[0].detach().to("cpu") > 0
     mask = (slider >= threshold) & valid
+    # 每个八邻域连通分量独立恢复一条路径，避免跨物件串线。
     components = _connected_components(mask)
     paths: list[SliderPathCandidate] = []
     for component_id, component in enumerate(components):
@@ -371,6 +390,7 @@ def _prediction_to_payload(
     *,
     dtype: torch.dtype,
 ) -> dict[str, torch.Tensor]:
+    # 分类分支在离开 GPU 前变为概率；连续回归和已单位化向量保持原值。
     tensors = {
         "center": torch.sigmoid(prediction.center_heatmap),
         "visible": torch.sigmoid(prediction.visible_heatmap),
@@ -400,6 +420,9 @@ def _write_region(
     frame_width: int,
     stride: int,
 ) -> tuple[slice, slice, slice, slice] | None:
+    """同时计算 patch 有效特征裁片和完整帧 canvas 目标切片。"""
+
+    # cell 尺寸来自含 padding 的固定 patch，但写入宽高只取未 padding 的有效区。
     cell_width = max(float(meta.padded_width) / feature_width, 1e-6)
     cell_height = max(float(meta.padded_height) / feature_height, 1e-6)
     valid_feature_width = min(feature_width, max(1, ceil(meta.valid_width / cell_width)))
@@ -432,6 +455,7 @@ def _patch_weight(
         return torch.ones((1, height, width), dtype=dtype)
     y = _hann_axis(height, dtype=dtype)
     x = _hann_axis(width, dtype=dtype)
+    # 最小权重防止单 patch 边缘被压成零，也保证除法数值稳定。
     return (y[:, None] * x[None, :]).clamp_min(0.05).unsqueeze(0)
 
 
@@ -458,6 +482,8 @@ def _is_suppressed(
 
 
 def _connected_components(mask: torch.Tensor) -> tuple[tuple[tuple[int, int], ...], ...]:
+    """用八邻域 BFS 提取二维布尔 mask 的确定性连通分量。"""
+
     if mask.ndim != 2:
         raise ValueError("connected components expect a 2D mask")
     height, width = mask.shape
@@ -490,6 +516,7 @@ def _decode_slider_component(
     sample_points: int,
     continuity_threshold: float,
 ) -> SliderPathCandidate:
+    # 把连通分量视为无向图：度数用于端点/分叉诊断，BFS 路径作为中心线近似。
     component_set = set(component)
     degrees = {
         cell: _component_degree(cell, component_set)
@@ -645,6 +672,7 @@ def _orient_slider_cells(
     probs = maps.object_type_probs.detach().to("cpu", dtype=torch.float32)
     start = cells[0]
     end = cells[-1]
+    # 连通图本身无方向，用 head/tail 类别概率决定折线朝向。
     forward = float(probs[head_index, start[0], start[1]] + probs[tail_index, end[0], end[1]])
     reverse = float(probs[head_index, end[0], end[1]] + probs[tail_index, start[0], start[1]])
     if reverse > forward:
@@ -667,6 +695,8 @@ def _sample_polyline(
     *,
     sample_points: int,
 ) -> tuple[tuple[float, float], ...]:
+    """按累计弧长等距重采样折线，使不同 cell 数的候选具有统一长度。"""
+
     if len(points) <= 1:
         point = points[0] if points else (0.0, 0.0)
         return tuple(point for _ in range(sample_points))

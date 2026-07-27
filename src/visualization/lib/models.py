@@ -1,3 +1,5 @@
+"""定义训练报告、资源、图集请求及仪表盘快照的共享数据契约。"""
+
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field

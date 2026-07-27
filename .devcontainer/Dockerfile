@@ -1,3 +1,4 @@
+# 主开发容器：CUDA/PyTorch 基础镜像上补齐训练、视频、X11 与中文 UI 依赖。
 FROM pytorch/pytorch:2.9.0-cuda13.0-cudnn9-devel
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -39,6 +40,7 @@ RUN if ! getent group ${USER_GID} >/dev/null; then \
     usermod -aG sudo ${USERNAME}
 
 COPY bin/host-exec /usr/local/bin/host-exec
+# host-exec 是受限的主机桥；仅授予该固定入口免密 sudo，不开放任意 root shell。
 RUN chmod 0755 /usr/local/bin/host-exec && \
     echo "${USERNAME} ALL=(root) NOPASSWD: /usr/local/bin/host-exec" > /etc/sudoers.d/host-exec && \
     chmod 0440 /etc/sudoers.d/host-exec && \

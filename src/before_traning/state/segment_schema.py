@@ -1,3 +1,5 @@
+"""定义视频片段训练数据集索引使用的 SQLModel 表。"""
+
 from __future__ import annotations
 
 from sqlmodel import Field, SQLModel, UniqueConstraint

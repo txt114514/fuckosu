@@ -1,3 +1,5 @@
+"""验证试验切换、阶段事件流与终态保护的实时状态契约。"""
+
 from __future__ import annotations
 
 import re

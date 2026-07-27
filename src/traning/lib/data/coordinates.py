@@ -1,16 +1,18 @@
+"""patch 局部像素、完整帧像素与步长特征网格之间的坐标换算。"""
+
 from __future__ import annotations
 
 from traning.lib.data.patch_stream import PatchMeta
 
 
 def local_to_global(meta: PatchMeta, x: float, y: float) -> tuple[float, float]:
-    """Convert patch-local image coordinates to full-frame image coordinates."""
+    """把 patch 局部图像像素平移到完整帧像素。"""
 
     return meta.x0 + x, meta.y0 + y
 
 
 def global_to_local(meta: PatchMeta, x: float, y: float) -> tuple[float, float]:
-    """Convert full-frame image coordinates to patch-local image coordinates."""
+    """把完整帧像素平移到 patch 局部图像像素。"""
 
     return x - meta.x0, y - meta.y0
 
@@ -20,8 +22,9 @@ def global_to_patch_indices(
     x: float,
     y: float,
 ) -> tuple[int, ...]:
-    """Return patch indices whose valid image area contains a full-frame point."""
+    """返回有效图像区包含该完整帧点的所有 patch 索引。"""
 
+    # x1/y1 是半开边界；重叠区中的点可以同时属于多个 patch。
     return tuple(
         meta.index
         for meta in metas
@@ -35,7 +38,7 @@ def image_to_feature_grid(
     *,
     stride: int,
 ) -> tuple[float, float]:
-    """Map image-pixel coordinates to a stride-based feature grid."""
+    """按 stride 把图像像素映射到连续特征网格坐标。"""
 
     if stride <= 0:
         raise ValueError("stride must be positive")
@@ -48,7 +51,7 @@ def feature_grid_to_image(
     *,
     stride: int,
 ) -> tuple[float, float]:
-    """Map stride-based feature-grid coordinates back to image pixels."""
+    """按 stride 把连续特征网格坐标还原为图像像素。"""
 
     if stride <= 0:
         raise ValueError("stride must be positive")

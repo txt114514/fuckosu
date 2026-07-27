@@ -1,3 +1,5 @@
+"""组装音频匹配处理器，并注入 AV 信号对齐与状态管理依赖。"""
+
 from __future__ import annotations
 
 import sys
@@ -86,7 +88,7 @@ class AudioMatchExperiment(
 
 
 class AudioMatchProcessor(AudioMatchExperiment):
-    """Task-aligned name for the audio-based video matching processor."""
+    """与业务阶段名称一致的音频录像匹配处理器别名。"""
 
 
 def main():

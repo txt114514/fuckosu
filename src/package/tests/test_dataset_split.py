@@ -1,3 +1,5 @@
+"""验证 item 级数据划分的引导、冻结和增量同步规则。"""
+
 from __future__ import annotations
 
 import tempfile

@@ -1,3 +1,4 @@
+# 1484x846 小显存 smoke profile：用于较短训练与启动/回归检查。
 input:
   width: 1484
   height: 846
@@ -7,9 +8,12 @@ input:
 coordinate_transform:
   version: osu-playfield-rect-v1
   mode: affine_matrix
+  # 仅适用于上方 1484x846、未 resize 的完整训练帧；输入尺寸变化后必须重新标定。
+  # 方向固定为 osu -> video_pixel：第一行计算 video_x，第二行计算 video_y。
+  # 即 video_x=a*x+b*y+c，video_y=d*x+e*y+f；反向映射由公共坐标 API 求逆。
   matrix:
-    - [2.2735733213463347, 0.027859135193225793, 167.78820336213877]
-    - [-0.06447297355444913, 2.1274820737035793, 42.093480414518524]
+    - [2.115860914627143, 0.0011971920855575358, 242.59057485632047]
+    - [0.0003418231662923798, 2.1166805757239477, 16.12108357719331]
 
 data_input:
   dataset_root: ../training_package/video_segments
@@ -137,11 +141,9 @@ visualization:
 
 optimization:
   enabled: true
-  max_generated_jobs: 1
   execute_generated_jobs: true
-  dry_run: false
-  job_only: true
-  max_trials: 2
+  # null 表示持续执行优化 job，直到严格样本门禁通过或用户中断。
+  max_trials: null
   max_stage: basic
   trial_store_path: ../runs/optimization/trials.jsonl
   trial_store_backend: sqlite

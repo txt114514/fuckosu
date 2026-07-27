@@ -1,1 +1,1 @@
-"""Tests for the top-level visualization package."""
+"""顶层训练可视化包的单元与集成测试。"""

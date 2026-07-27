@@ -1,3 +1,5 @@
+"""执行业务层录像匹配，并处理录像已齐全时的正常跳过。"""
+
 from __future__ import annotations
 
 from time import perf_counter

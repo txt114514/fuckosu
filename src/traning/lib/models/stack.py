@@ -1,3 +1,5 @@
+"""根据统一 Settings 组装局部、全局、融合与空间预测模型栈。"""
+
 from __future__ import annotations
 
 import torch
@@ -12,11 +14,12 @@ from traning.lib.models.object_heads import SpatialPredictionHead
 
 
 def build_model_stack(settings: Settings) -> dict[str, torch.nn.Module]:
-    """Build the shared local/global/fusion/spatial model stack from settings."""
+    """从配置构建共享的局部、全局、融合和空间预测模型栈。"""
 
     local_cfg = settings.local_encoder
     global_cfg = settings.global_encoder
     fusion_cfg = settings.fusion
+    # 局部和全局支路必须接收相同通道契约，才能在融合时保持同一输入语义。
     input_channels = 3 + color_cue_channel_count(settings.input.color_cues)
     local = SmallLocalEncoder(
         in_channels=input_channels,

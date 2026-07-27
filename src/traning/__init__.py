@@ -1,1 +1,1 @@
-"""Training package for osu! video recognition and causal action decisions."""
+"""实现 osu! 视频识别、空间候选学习与因果动作决策训练。"""

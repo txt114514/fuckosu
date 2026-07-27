@@ -1,3 +1,5 @@
+"""验证 CUDA 训练配置默认启用预期的性能与显存策略。"""
+
 from __future__ import annotations
 
 import unittest

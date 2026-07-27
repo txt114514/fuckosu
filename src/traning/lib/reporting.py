@@ -1,3 +1,5 @@
+"""控制训练进度日志频率，始终保留首尾步骤。"""
+
 from __future__ import annotations
 
 

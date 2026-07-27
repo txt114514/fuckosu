@@ -1,3 +1,5 @@
+"""实现训练配置、运行设备、数据输入与 core 入口检查项。"""
+
 from __future__ import annotations
 
 from pathlib import Path

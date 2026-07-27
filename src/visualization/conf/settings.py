@@ -1,3 +1,5 @@
+"""定义训练仪表盘配置及其启动前校验规则。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

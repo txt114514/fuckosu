@@ -1,3 +1,5 @@
+"""验证因果时序训练损失、状态、检查点和恢复路径。"""
+
 from __future__ import annotations
 
 import json
@@ -70,6 +72,8 @@ def _assert_nested_close(
     *,
     path: str = "root",
 ) -> None:
+    # 恢复等价性要求模型与优化器的嵌套状态逐项完全一致；路径信息用于
+    # 在大 state_dict 中快速定位首个漂移字段。
     if torch.is_tensor(left):
         case.assertTrue(
             torch.equal(left.cpu(), right.cpu()),
@@ -126,6 +130,8 @@ class TemporalTrainerTests(unittest.TestCase):
             settings.temporal.hidden_size = 8
             settings.temporal.layers = 1
 
+            # 同一 seed 下比较连续 4 step 与 2 step + strict resume；该构造
+            # 同时覆盖模型权重、优化器动量、训练位置和数据迭代恢复。
             continuous = run_temporal_training(
                 settings,
                 cache_dir=cache_dir,

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
+# 在真实容器 namespace 中只读验证驱动、PyTorch CUDA、BF16 与显存查询能力。
 set -euo pipefail
 
+# nvidia-smi 先验证宿主驱动桥；随后 Python 检查当前 PyTorch 构建能否实际使用设备。
 nvidia-smi
 
 python - <<'PY'

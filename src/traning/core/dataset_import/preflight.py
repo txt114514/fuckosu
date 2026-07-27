@@ -1,3 +1,5 @@
+"""发现指定数据划分的片段，并检查分布、密度和 slider 拓扑质量。"""
+
 from __future__ import annotations
 
 from collections import Counter
@@ -45,6 +47,7 @@ def _split_items(config, split: DataSplit) -> tuple[str, ...]:
     )
     manifest = load_split_manifest(manifest_path)
     if manifest is not None:
+        # 持久化 split manifest 是跨运行的数据划分真值；旧配置列表只作兼容回退。
         return manifest.split_items(split)
     if split == "train":
         return config.train_items

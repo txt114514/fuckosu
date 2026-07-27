@@ -1,9 +1,14 @@
+"""提供完整训练前七阶段流水线的兼容编排入口。"""
+
+# Prefect 会在任务模块导入时读取运行目录，因此必须先初始化环境再导入阶段任务。
+# ruff: noqa: E402
+
 from __future__ import annotations
 
 from collections.abc import Mapping
 from pathlib import Path
 
-from before_traning.conf import Settings, ensure_prefect_home, load_settings
+from before_traning.conf import Settings, ensure_prefect_home, load_settings  # noqa: F401
 
 
 ensure_prefect_home()

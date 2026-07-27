@@ -1,3 +1,5 @@
+"""记录 AV 阶段进度、完成参数与可定位的失败状态。"""
+
 from __future__ import annotations
 
 from before_traning.Lib.common.failures import exception_detail

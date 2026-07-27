@@ -1,3 +1,5 @@
+"""验证训练片段发现、过滤和输入问题报告。"""
+
 from __future__ import annotations
 
 import json
@@ -9,6 +11,8 @@ from traning.lib.data import discover_segments
 
 
 def _write_segment(root: Path, item_name: str, segment_id: str) -> None:
+    # placeholder 视频足以通过只读发现；beatmap 保留最小合法契约，避免
+    # 过滤测试被媒体解码或无关标签字段影响。
     segment = root / item_name / "single_point" / segment_id
     segment.mkdir(parents=True)
     (segment / "video.mp4").write_bytes(b"placeholder")

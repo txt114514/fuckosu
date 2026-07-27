@@ -1,3 +1,5 @@
+"""执行单个谱面目录的 AV 对齐、视频裁切与状态推进。"""
+
 from __future__ import annotations
 
 import tempfile
@@ -77,6 +79,8 @@ class AVProcessStepsMixin:
             if verify_adjustment is not None:
                 verify_adjustment_seconds, verify_detail = verify_adjustment
             global_offset_seconds = self.global_offset_ms / 1000.0
+            # 最终裁切起点由音乐相关结果、有限窗口内的命中校正和显式人工
+            # 全局偏移共同组成；三项分别保留到状态 detail 便于追溯。
             offset_seconds = (
                 raw_offset_seconds
                 + verify_adjustment_seconds

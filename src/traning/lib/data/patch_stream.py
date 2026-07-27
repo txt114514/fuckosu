@@ -1,3 +1,5 @@
+"""在 CPU 上流式切分完整帧，并保留可逆的全局 patch 像素元数据。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -11,10 +13,10 @@ from traning.lib.data.tiling import build_patch_windows
 
 @dataclass(frozen=True, slots=True)
 class PatchMeta:
-    """Full-frame coordinates for one CHW patch.
+    """一个 CHW patch 在完整帧中的像素位置。
 
-    Coordinates are image-pixel coordinates in the original frame. ``x1`` and
-    ``y1`` are exclusive bounds for the valid, unpadded image area.
+    ``x0/y0/x1/y1`` 使用原始完整帧像素，``x1/y1`` 是未填充有效区的
+    半开上界；``patch_width/patch_height`` 则包含右侧或底部 padding。
     """
 
     index: int
@@ -47,7 +49,7 @@ class PatchMeta:
 
 
 class PatchStream:
-    """Generate padded CHW patches on CPU without invoking model code."""
+    """在 CPU 上生成固定尺寸 CHW patch，不耦合任何模型执行。"""
 
     def __init__(
         self,
@@ -73,7 +75,7 @@ class PatchStream:
         self.padding_value = padding_value
 
     def metas(self, *, frame_width: int, frame_height: int) -> tuple[PatchMeta, ...]:
-        """Return deterministic patch metadata covering the full frame."""
+        """返回按行优先排列、完整覆盖全帧的确定性 patch 元数据。"""
 
         windows = build_patch_windows(
             frame_width,
@@ -114,10 +116,10 @@ class PatchStream:
         self,
         frame: torch.Tensor,
     ) -> Iterator[tuple[torch.Tensor, PatchMeta]]:
-        """Yield ``(patch, meta)`` pairs from a CHW image tensor.
+        """从 CHW 图像产生 ``(patch, meta)``。
 
-        The yielded patch always has shape ``C x patch_height x patch_width``.
-        Pixels outside ``meta.valid_width``/``meta.valid_height`` are padding.
+        patch 固定为 ``C x patch_height x patch_width``；超出
+        ``meta.valid_width/valid_height`` 的右侧或底部像素是 padding。
         """
 
         channels, height, width = self._shape(frame)
@@ -129,6 +131,7 @@ class PatchStream:
             if pad_right < 0 or pad_bottom < 0:
                 raise RuntimeError("patch window exceeded configured patch dimensions")
             if pad_right or pad_bottom:
+                # 只在右/下填充，保证 patch 原点仍对应 meta.x0/meta.y0。
                 patch = F.pad(
                     patch,
                     (0, pad_right, 0, pad_bottom),

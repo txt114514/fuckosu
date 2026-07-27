@@ -1,3 +1,5 @@
+"""提供配置字段读取规格与按谱面目录执行的批处理模板。"""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -171,7 +173,7 @@ class FolderWalkerLike(Protocol):
 
 
 class FolderBatchProcessor(ABC):
-    """Shared shell for folder-based batch processors."""
+    """按目录批量执行处理器的共享流程骨架。"""
 
     walker: FolderWalkerLike
 

@@ -1,3 +1,5 @@
+"""空间密集预测与逐帧动作预测的张量输出契约。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -7,7 +9,7 @@ import torch
 
 @dataclass(frozen=True)
 class SpatialPrediction:
-    """Dense spatial predictions on a patch feature grid."""
+    """patch 特征网格上的 BCHW 稠密空间预测。"""
 
     center_heatmap: torch.Tensor
     visible_heatmap: torch.Tensor
@@ -23,7 +25,7 @@ class SpatialPrediction:
 
 @dataclass(frozen=True)
 class ActionPrediction:
-    """Causal action prediction for one frame step."""
+    """单个因果帧步骤的 BF 动作、候选、坐标与时间预测。"""
 
     action_logits: torch.Tensor
     selected_candidate_logits: torch.Tensor

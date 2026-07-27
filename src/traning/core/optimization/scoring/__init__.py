@@ -1,4 +1,4 @@
-"""Trial-level scoring for optimization."""
+"""样本与试验级质量评分的公开入口。"""
 
 from traning.core.optimization.scoring.evaluator import (
     AGGREGATE_SCORE_VERSION,

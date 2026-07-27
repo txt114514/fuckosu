@@ -1,3 +1,5 @@
+"""完整训练流编排器、阶段规格和结果模型的公开入口。"""
+
 from traning.core.full_flow.orchestrator import (
     DEFAULT_FULL_FLOW_ROOT,
     FULL_FLOW_SCHEMA_VERSION,

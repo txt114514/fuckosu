@@ -1,3 +1,5 @@
+"""将错误归因中的难例转换为有上限的样本重加权计划。"""
+
 from __future__ import annotations
 
 from collections import defaultdict
@@ -41,6 +43,7 @@ def build_hard_example_sampling_plan(
     reasons: dict[str, list[str]] = defaultdict(list)
     for example in attribution.hard_examples[:max_examples]:
         weight = base_weight + severity_multiplier * max(0.0, example.severity)
+        # 同一样本可能出现多个错误；取最大严重度而非累加，避免长序列权重无上限膨胀。
         weights[example.sample_key] = max(
             weights.get(example.sample_key, base_weight),
             weight,

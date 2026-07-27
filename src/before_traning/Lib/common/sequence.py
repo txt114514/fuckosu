@@ -1,3 +1,5 @@
+"""生成带定宽正整数编号的稳定序列名称。"""
+
 from __future__ import annotations
 
 

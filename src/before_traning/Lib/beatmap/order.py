@@ -1,4 +1,4 @@
-"""Compatibility import for the retired order.txt walker."""
+"""保留已停用 order.txt 目录遍历器名称的兼容导入。"""
 
 from before_traning.Lib.beatmap.manifest import ManifestFolderWalker
 

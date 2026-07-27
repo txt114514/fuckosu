@@ -1,3 +1,5 @@
+"""验证小显存 smoke 路径不会持有无用 GPU 张量或越过预算。"""
+
 from __future__ import annotations
 
 import unittest
@@ -22,6 +24,8 @@ from traning.lib.models import (
 
 class MemorySmokeTests(unittest.TestCase):
     def run_smoke(self, device: torch.device) -> None:
+        # 使用最小但完整的 local -> fusion -> head 链路执行一次优化 step，
+        # 同时触达 channels-last、autocast、GradScaler 和 set_to_none 契约。
         runtime = configure_torch_runtime(
             device=device,
             amp_dtype="auto",

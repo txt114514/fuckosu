@@ -1,3 +1,5 @@
+"""把 osu! 标注经统一坐标变换栅格化为空间训练目标。"""
+
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
@@ -6,7 +8,7 @@ import math
 
 import torch
 
-from package.coordinates import OsuVideoTransform
+from package.coordinates import OsuVideoCoordinateTransform
 from traning.lib.coordinates import transform_from_settings_or_sample
 from traning.lib.data import PatchMeta
 from traning.lib.models import OBJECT_TYPE_NAMES
@@ -29,7 +31,7 @@ def build_spatial_loss_targets(
     device: torch.device | str | None = None,
     dtype: torch.dtype = torch.float32,
 ) -> SpatialLossTargets:
-    """Rasterize one frame sample into dense targets for one patch feature grid."""
+    """把一帧样本栅格化为单个 patch 特征网格的稠密监督目标。"""
 
     feature_height, feature_width = _normalize_feature_size(feature_size)
     selected_device = torch.device(device) if device is not None else torch.device("cpu")
@@ -46,6 +48,7 @@ def build_spatial_loss_targets(
         device=selected_device,
         dtype=dtype,
     )
+    # circle、slider、spinner 共用同一协议，确保标签与后续渲染采用相同映射。
     transform, _ = transform_from_settings_or_sample(
         settings,
         sample,
@@ -180,9 +183,11 @@ def _patch_grid(
     padded_height = max(float(patch_meta.padded_height), 1.0)
     cell_width = padded_width / feature_width
     cell_height = padded_height / feature_height
+    # 特征单元坐标取 cell 中心，单位是 patch 局部图像像素而不是网格索引。
     xs = (torch.arange(feature_width, device=device, dtype=dtype) + 0.5) * cell_width
     ys = (torch.arange(feature_height, device=device, dtype=dtype) + 0.5) * cell_height
     local_y, local_x = torch.meshgrid(ys, xs, indexing="ij")
+    # 固定尺寸 patch 的右/下 padding 不产生监督，即使对应特征单元实际存在。
     valid_mask = (
         (local_x < float(patch_meta.valid_width))
         & (local_y < float(patch_meta.valid_height))
@@ -241,9 +246,11 @@ def _set_heatmap_max(
 
 def _point_to_local(
     point: tuple[float, float],
-    transform: OsuVideoTransform,
+    transform: OsuVideoCoordinateTransform,
     grid: Mapping[str, torch.Tensor | float],
 ) -> tuple[float, float]:
+    """先从 osu 转到完整帧像素，再减去 patch 原点得到局部坐标。"""
+
     video_x, video_y = transform.osu_to_video(point[0], point[1])
     return video_x - float(grid["patch_x0"]), video_y - float(grid["patch_y0"])
 
@@ -346,7 +353,7 @@ def _paint_circle(
     grid: Mapping[str, torch.Tensor | float],
     item: Mapping[str, Any],
     *,
-    transform: OsuVideoTransform,
+    transform: OsuVideoCoordinateTransform,
     hit_radius: float,
     timestamp_ms: float,
     preempt_ms: float,
@@ -388,7 +395,7 @@ def _paint_slider(
     grid: Mapping[str, torch.Tensor | float],
     item: Mapping[str, Any],
     *,
-    transform: OsuVideoTransform,
+    transform: OsuVideoCoordinateTransform,
     hit_radius: float,
 ) -> None:
     points = _object_points(item)
@@ -481,6 +488,7 @@ def _paint_slider_body(
 
 
 def _unoriented_direction(vx: float, vy: float) -> tuple[float, float]:
+    # slider 局部切线的正反方向等价；使用二倍角让 θ 与 θ+π 得到相同编码。
     angle = math.atan2(vy, vx)
     return math.cos(2.0 * angle), math.sin(2.0 * angle)
 
@@ -509,7 +517,7 @@ def _paint_spinner(
     target: dict[str, torch.Tensor],
     grid: Mapping[str, torch.Tensor | float],
     *,
-    transform: OsuVideoTransform,
+    transform: OsuVideoCoordinateTransform,
 ) -> None:
     valid_mask = grid["valid_mask"]
     if not isinstance(valid_mask, torch.Tensor):
@@ -518,9 +526,11 @@ def _paint_spinner(
     _set_heatmap_max(target["spinner_mask"], ones, valid_mask)
     _set_heatmap_max(target["visible_heatmap"], ones, valid_mask)
     _set_type(target, valid_mask, "spinner")
+    # spinner 没有谱面 x/y；通过公共 rect 取得轴对齐或 affine 的 playfield 外接框。
+    rect = transform.rect
     center = (
-        transform.playfield_left + transform.playfield_width * 0.5,
-        transform.playfield_top + transform.playfield_height * 0.5,
+        rect.left + rect.width * 0.5,
+        rect.top + rect.height * 0.5,
     )
     local_x = center[0] - float(grid["patch_x0"])
     local_y = center[1] - float(grid["patch_y0"])
@@ -529,7 +539,7 @@ def _paint_spinner(
         grid,
         local_x=local_x,
         local_y=local_y,
-        radius=min(transform.playfield_width, transform.playfield_height) * 0.2,
+        radius=min(rect.width, rect.height) * 0.2,
         object_type="spinner",
     )
 

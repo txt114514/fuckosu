@@ -1,3 +1,5 @@
+"""按谱面规划并生成分类视频片段，登记数据集产物与完成状态。"""
+
 from __future__ import annotations
 
 from collections import Counter
@@ -400,6 +402,8 @@ class VideoSegmentationProcessor(FolderBatchProcessor):
 
         rows: list[dict[str, object]] = []
         directory_indexes: Counter[str] = Counter()
+        # 一个谱面的全部视频、标签和 CSV 先写入临时目录；只有循环完整
+        # 成功后 atomic_output_folder 才整体发布，避免残缺样本进入数据集。
         with self.store.atomic_output_folder(
             self.segment_root,
             folder_name,
@@ -456,6 +460,8 @@ class VideoSegmentationProcessor(FolderBatchProcessor):
                 )
             self.dataset.write_table(temporary, rows)
 
+        # 文件目录发布成功后再提交 SQLite 索引，最后推进完成状态；启动时
+        # 的完整性对齐可以修复在这三个提交边界之间意外中断的情况。
         self.dataset.replace_folder(folder_name, rows)
         output_directory = self.segment_root / folder_name
         self.status_manager.mark_step_done(

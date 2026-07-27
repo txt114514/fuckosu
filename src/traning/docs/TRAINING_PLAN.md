@@ -65,7 +65,7 @@ main.py
   `SegmentFrameDataset` 和 `DataLoader`。
 - `spatial`：原分辨率帧、重叠 patch、全局/局部编码、稠密空间头、单帧训练 smoke 和单帧推理。
 - `decision`：离线候选缓存 JSONL/manifest，保留候选、embedding、slider polyline 和歧义标记。
-- `optimization`：trial/sample 级评分聚合、空间/时间/决策归因、ASHA/TPE 参数调整计划、连续通过 gate、难例采样权重、JSONL/SQLite trial 记录和多目标排序。
+- `optimization`：trial/sample 级评分聚合、空间/时间/决策归因、ASHA + 规则式参数调整、严格连续通过 gate、难例诊断、JSONL/SQLite trial 记录和多目标排序。
 - `result_export`：单帧标注预览、最佳 trial 图集、`passed/failed` 分类和稳定输出目录。
 - `state`：trial 参数、checkpoint lineage、课程阶段、gallery request 和 frame evaluation schema。
 - `lib.metrics`：`point-slider-v2` 单对象评分和 `click-sequence-v1` 序列模拟底层 API。

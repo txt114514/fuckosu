@@ -1,3 +1,5 @@
+"""验证图集请求模型的字段校验、版本一致性和最佳 trial 选择。"""
+
 from __future__ import annotations
 
 import unittest
@@ -32,6 +34,8 @@ class BatchGalleryRequestTests(unittest.TestCase):
         )
 
     def test_trials_must_share_score_version(self) -> None:
+        # 分数看似都合法但来自不同协议，必须在选择 best trial 之前拒绝，
+        # 否则数值大小没有可比性。
         with self.assertRaises(ValidationError):
             BatchGalleryRequest.model_validate(
                 {

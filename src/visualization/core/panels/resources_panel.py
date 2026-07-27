@@ -1,3 +1,5 @@
+"""渲染 GPU、CPU、内存和磁盘资源状态。"""
+
 from rich.panel import Panel
 from rich.table import Table
 

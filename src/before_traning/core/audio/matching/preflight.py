@@ -1,3 +1,5 @@
+"""同步视频匹配状态，并收集待匹配谱面目录与候选录像。"""
+
 from __future__ import annotations
 
 from pathlib import Path

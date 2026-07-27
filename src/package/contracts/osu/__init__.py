@@ -1,3 +1,5 @@
+"""定义 osu! 难度、时间点和击打对象的稳定数据契约。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

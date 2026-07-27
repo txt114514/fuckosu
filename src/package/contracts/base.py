@@ -1,3 +1,5 @@
+"""提供所有共享 dataclass 契约的递归序列化与反序列化基类。"""
+
 from __future__ import annotations
 
 from dataclasses import asdict, fields, is_dataclass
@@ -10,7 +12,7 @@ ContractT = TypeVar("ContractT", bound="ContractMixin")
 
 
 def contract_to_dict(value: Any) -> Any:
-    """Convert contract dataclasses into JSON-friendly containers."""
+    """递归把契约 dataclass、枚举和路径转换为 JSON 友好容器。"""
     if is_dataclass(value):
         return {
             key: contract_to_dict(item)
@@ -33,12 +35,13 @@ def contract_to_dict(value: Any) -> Any:
 
 
 class ContractMixin:
-    """Small shared constructor/serializer for stable dataclass contracts."""
+    """为稳定 dataclass 契约提供容错字段构造与统一序列化。"""
 
     @classmethod
     def from_mapping(cls: type[ContractT], data: dict[str, Any]) -> ContractT:
         if not isinstance(data, dict):
             raise TypeError("contract data must be a mapping")
+        # 忽略未来版本增加的未知字段，使旧消费者能读取向前扩展的 manifest。
         valid_names = {
             field.name
             for field in fields(cls)

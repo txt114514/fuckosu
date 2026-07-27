@@ -1,3 +1,5 @@
+"""通过独立 pytest 子进程运行训练前处理全面检测。"""
+
 from __future__ import annotations
 
 import os

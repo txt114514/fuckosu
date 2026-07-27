@@ -1,3 +1,5 @@
+"""Rich 仪表盘独立信息面板的公开入口。"""
+
 from visualization.core.panels.best_parameters_panel import render_best_parameters_panel
 from visualization.core.panels.current_learning_panel import render_current_learning_panel
 from visualization.core.panels.events_panel import render_events_panel

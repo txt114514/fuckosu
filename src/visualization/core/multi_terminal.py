@@ -1,3 +1,5 @@
+"""用 tmux 创建训练主窗格及多个只读仪表盘观察窗格。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -31,6 +33,8 @@ def launch_panel_terminals(
     dashboard_dir: Path,
     cwd: Path,
 ) -> MultiTerminalLaunchResult:
+    """在当前或新 tmux 会话中启动只读状态观察面板。"""
+
     tmux = shutil.which("tmux")
     if tmux is None:
         return MultiTerminalLaunchResult(
@@ -72,6 +76,8 @@ def launch_attached_training_terminals(
     cwd: Path,
     training_command: str,
 ) -> MultiTerminalLaunchResult:
+    """创建包含主训练命令的独立会话，并将当前终端附加到该会话。"""
+
     tmux = shutil.which("tmux")
     if tmux is None:
         return MultiTerminalLaunchResult(
@@ -116,6 +122,7 @@ def _watch_command(
     panel: str,
     title: str,
 ) -> str:
+    # 所有观察窗格只读取同一原子快照，不与训练进程共享内存或控制权。
     return (
         _command_prefix(cwd=cwd, title=title)
         + f"PYTHONPATH=src:. python -m visualization.core.panel_watcher "

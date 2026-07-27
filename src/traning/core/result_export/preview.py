@@ -1,3 +1,5 @@
+"""从训练 Dataset 选择目标帧并渲染预览或批次最佳图集。"""
+
 from __future__ import annotations
 
 from pathlib import Path

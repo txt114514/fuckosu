@@ -1,3 +1,5 @@
+"""可视化执行结果、gallery 结果和选中帧的不可变契约。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -16,6 +18,8 @@ VisualizationStatus = Literal[
 
 @dataclass(frozen=True)
 class VisualizationResult:
+    """单帧保存/显示结果；warning 用于可恢复的可视化失败。"""
+
     status: VisualizationStatus
     output_path: Path | None = None
     warning: str | None = None
@@ -27,6 +31,8 @@ class VisualizationResult:
 
 @dataclass(frozen=True)
 class GalleryResult:
+    """gallery 导出结果及实际保存帧数。"""
+
     status: VisualizationStatus
     output_dir: Path | None = None
     selected_trial_id: str | None = None
@@ -40,6 +46,8 @@ class GalleryResult:
 
 @dataclass(frozen=True)
 class SelectedFrame:
+    """用户物件索引解析到的 Dataset 帧引用。"""
+
     dataset_index: int
     segment_index: int
     object_index: int

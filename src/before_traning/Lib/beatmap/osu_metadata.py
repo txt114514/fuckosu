@@ -1,3 +1,5 @@
+"""从 .osu 指定区段读取音频文件名和总体难度等元数据。"""
+
 from __future__ import annotations
 
 from pathlib import Path

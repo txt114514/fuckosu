@@ -1,3 +1,5 @@
+"""定义带显式坐标空间的点、尺寸和矩形几何契约。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

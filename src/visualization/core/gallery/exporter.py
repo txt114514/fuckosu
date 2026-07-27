@@ -1,6 +1,9 @@
+"""按评估分组渲染最佳试验，并以原子目录提交完整结果图集。"""
+
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import random
 import re
@@ -32,6 +35,19 @@ OUTCOME_DIRECTORIES = {
 DIMENSION_SUBPROJECTS = {
     "long_sequence": "long_sequence",
 }
+ERROR_DOMAIN_NAMES = {
+    "none": "无",
+    "spatial": "空间",
+    "temporal": "时间",
+    "decision": "决策",
+}
+ACTION_NAMES = {
+    "no_op": "不操作",
+    "press": "按下",
+    "hold": "持续按住",
+    "release": "释放",
+}
+MAX_SAFE_NAME_LENGTH = 72
 
 
 @dataclass
@@ -48,7 +64,13 @@ class _SampleFrameGroup:
 
 def _safe_name(value: str) -> str:
     cleaned = re.sub(r"[^A-Za-z0-9._-]+", "_", value).strip("._")
-    return cleaned or "unnamed"
+    cleaned = cleaned or "unnamed"
+    if len(cleaned) <= MAX_SAFE_NAME_LENGTH:
+        return cleaned
+    digest = hashlib.sha256(cleaned.encode("utf-8")).hexdigest()[:12]
+    prefix_length = MAX_SAFE_NAME_LENGTH - len(digest) - 2
+    prefix = cleaned[:prefix_length].rstrip("._-") or "name"
+    return f"{prefix}__{digest}"
 
 
 def _subproject_for_record(record: SegmentRecord) -> str:
@@ -77,6 +99,32 @@ def _metric_lines(metrics: Mapping[str, float]) -> tuple[str, ...]:
     return tuple(f"指标 {name}={value:.6g}" for name, value in sorted(metrics.items()))
 
 
+def _diagnostic_lines(frame: FrameEvaluation) -> tuple[str, ...]:
+    """把机器可读评估字段转换成不会误认真值为预测的图内说明。"""
+
+    lines = ["图例 红色=评分真值目标 紫色=模型点击 黄色/青色=其他真值物件"]
+    if frame.action is not None:
+        probability = (
+            ""
+            if frame.action_probability is None
+            else f" 概率={frame.action_probability:.6f}"
+        )
+        lines.append(
+            f"模型动作={ACTION_NAMES.get(frame.action, frame.action)}{probability}"
+        )
+    if frame.predicted_osu_xy is None and frame.predicted_video_xy is None:
+        lines.append("模型点击=无")
+    if frame.primary_error != "none":
+        lines.append(
+            f"错误域={ERROR_DOMAIN_NAMES.get(frame.primary_error, frame.primary_error)}"
+        )
+    if frame.error_tags:
+        lines.append(f"错误标签={','.join(frame.error_tags)}")
+    if frame.failure_reason:
+        lines.append(f"失败原因={frame.failure_reason}")
+    return tuple(lines)
+
+
 def _is_export_frame(frame: FrameEvaluation) -> bool:
     return (
         frame.target_source_index is not None
@@ -92,8 +140,11 @@ def _frame_identity(frame: FrameEvaluation) -> tuple[Any, ...]:
         frame.target_source_index,
         frame.predicted_osu_xy,
         frame.predicted_video_xy,
+        frame.action,
+        frame.action_probability,
         frame.primary_error,
         frame.error_tags,
+        frame.failure_reason,
     )
 
 
@@ -104,8 +155,10 @@ def _frame_order_key(frame: FrameEvaluation) -> tuple[Any, ...]:
         frame.target_source_index if frame.target_source_index is not None else -1,
         str(frame.predicted_video_xy),
         str(frame.predicted_osu_xy),
+        str(frame.action),
         frame.primary_error,
         frame.error_tags,
+        str(frame.failure_reason),
     )
 
 
@@ -126,18 +179,18 @@ def save_best_trial_gallery(
     output_root: Path,
     samples_per_group: int = 10,
 ) -> tuple[Path, int, tuple[str, ...]]:
+    """导出最佳试验图集，返回最终目录、图片数及可恢复的数据问题。"""
+
     if samples_per_group <= 0:
         raise ValueError("每组样本数必须为正数")
 
     best_trial = request.best_trial
+    # 序号只有在完整目录发布成功后才提交，失败导出不会占用正式输出身份。
     with reserve_output_identity_for_commit(output_root) as reservation:
         output_identity = reservation.identity
-        gallery_dir = (
-            output_root
-            / (
-                f"{output_identity.prefix}__{_safe_name(request.batch_id)}"
-                f"__{_safe_name(best_trial.trial_id)}"
-            )
+        gallery_dir = output_root / (
+            f"{output_identity.prefix}__{_safe_name(request.batch_id)}"
+            f"__{_safe_name(best_trial.trial_id)}"
         )
         working_dir = gallery_dir.with_name(f".{gallery_dir.name}.tmp")
         if working_dir.exists():
@@ -156,6 +209,7 @@ def save_best_trial_gallery(
             working_dir.replace(gallery_dir)
             reservation.commit()
         except Exception:
+            # 临时目录从不作为有效产物暴露；异常时清理并保留原始错误语义。
             if working_dir.exists():
                 shutil.rmtree(working_dir)
             raise
@@ -171,6 +225,8 @@ def _write_gallery_artifact(
     working_dir: Path,
     samples_per_group: int,
 ) -> tuple[int, list[str]]:
+    """仅在临时目录内构建图片、索引和 manifest，不负责最终发布。"""
+
     best_trial = request.best_trial
     lookup = _frame_lookup(dataset)
     grouped_by_sample: dict[tuple[str, str], _SampleFrameGroup] = {}
@@ -180,9 +236,7 @@ def _write_gallery_artifact(
     for frame in best_trial.frames:
         resolved = lookup.get((frame.sample_key, frame.frame_index))
         if resolved is None:
-            issues.append(
-                f"缺少数据集帧 {frame.sample_key}:{frame.frame_index}"
-            )
+            issues.append(f"缺少数据集帧 {frame.sample_key}:{frame.frame_index}")
             continue
         _, subproject = resolved
         if subproject not in EVALUATION_SUBPROJECTS:
@@ -207,6 +261,7 @@ def _write_gallery_artifact(
             grouped_by_sample[sample_key] = group
         group.add(frame)
 
+    # 使用请求携带的局部随机源，使相同批次的抽样可复现且不污染全局随机状态。
     rng = random.Random(request.random_seed)
     sample_groups: dict[tuple[bool, str], list[_SampleFrameGroup]] = defaultdict(list)
     for group in grouped_by_sample.values():
@@ -222,17 +277,13 @@ def _write_gallery_artifact(
         selected[key] = tuple(rng.sample(ordered_groups, count))
 
     working_dir.mkdir(parents=True, exist_ok=True)
-    reached_subprojects = {
-        subproject for _, subproject in sample_groups
-    }
+    reached_subprojects = {subproject for _, subproject in sample_groups}
     for passed in (True, False):
         for subproject in EVALUATION_SUBPROJECTS:
             if subproject in reached_subprojects:
-                (
-                    working_dir
-                    / OUTCOME_DIRECTORIES[passed]
-                    / subproject
-                ).mkdir(parents=True, exist_ok=True)
+                (working_dir / OUTCOME_DIRECTORIES[passed] / subproject).mkdir(
+                    parents=True, exist_ok=True
+                )
 
     saved_frames: list[dict[str, Any]] = []
     saved_sample_groups: list[dict[str, Any]] = []
@@ -260,6 +311,7 @@ def _write_gallery_artifact(
                         f"样本组={group_index:02d}",
                         f"子项目={display_text(subproject)}",
                         f"结果={display_text(OUTCOME_DIRECTORIES[passed])}",
+                        *_diagnostic_lines(frame),
                         *_metric_lines(frame.metrics),
                     )
                     image = render_annotated_frame(
@@ -280,8 +332,11 @@ def _write_gallery_artifact(
                         "target_source_index": frame.target_source_index,
                         "predicted_osu_xy": frame.predicted_osu_xy,
                         "predicted_video_xy": frame.predicted_video_xy,
+                        "action": frame.action,
+                        "action_probability": frame.action_probability,
                         "primary_error": frame.primary_error,
                         "error_tags": frame.error_tags,
+                        "failure_reason": frame.failure_reason,
                         "frequency_limited": frame.frequency_limited,
                         "metrics": frame.metrics,
                     }
@@ -322,6 +377,7 @@ def _write_gallery_artifact(
     )
     index_path = working_dir / "index.csv"
     with index_path.open("w", encoding="utf-8", newline="") as handle:
+        # 图集索引同时保留协议版本和方程指纹，便于确认历史图片采用的确切坐标契约。
         writer = csv.DictWriter(
             handle,
             fieldnames=(
@@ -338,11 +394,13 @@ def _write_gallery_artifact(
                 "predicted_video_xy",
                 "action_type",
                 "ambiguity_reason",
+                "failure_reason",
                 "score_version",
                 "dataset_version",
                 "evaluation_dataset_version",
                 "candidate_cache_version",
                 "transform_version",
+                "transform_fingerprint",
                 "configuration_version",
             ),
         )
@@ -365,6 +423,7 @@ def _write_gallery_artifact(
                     "predicted_video_xy": frame.get("predicted_video_xy"),
                     "action_type": frame.get("action") or "",
                     "ambiguity_reason": frame.get("ambiguity_reason") or "",
+                    "failure_reason": frame.get("failure_reason") or "",
                     "score_version": best_trial.score_version,
                     "dataset_version": metadata.get("dataset_version", ""),
                     "evaluation_dataset_version": metadata.get(
@@ -374,6 +433,8 @@ def _write_gallery_artifact(
                         "candidate_cache_version", ""
                     ),
                     "transform_version": metadata.get("transform_version", ""),
+                    # 指纹包含完整变换配置与训练帧尺寸，不能用 transform_version 替代。
+                    "transform_fingerprint": metadata.get("transform_fingerprint", ""),
                     "configuration_version": metadata.get("configuration_version", ""),
                 }
             )

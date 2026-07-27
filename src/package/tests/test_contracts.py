@@ -1,3 +1,5 @@
+"""验证共享契约的校验、嵌套转换与 JSON 往返行为。"""
+
 from __future__ import annotations
 
 import unittest
@@ -153,7 +155,7 @@ class ContractTests(unittest.TestCase):
             trial_id="trial-1",
             experiment_name="exp",
             seed=2026,
-            search_method=SearchMethod.TPE,
+            search_method=SearchMethod.RULE_BASED,
             budget_steps=100,
             metrics={"quality_score": 0.8},
         )
@@ -164,8 +166,9 @@ class ContractTests(unittest.TestCase):
             global_step=100,
         )
 
-        self.assertEqual(trial.as_dict()["search_method"], "tpe")
+        self.assertEqual(trial.as_dict()["search_method"], "rule_based")
         self.assertEqual(checkpoint.trial_id, "trial-1")
+        self.assertEqual(SearchMethod("tpe"), SearchMethod.TPE)
 
 
 if __name__ == "__main__":

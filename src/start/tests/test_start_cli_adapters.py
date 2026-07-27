@@ -1,3 +1,5 @@
+"""验证统一 CLI 只做参数适配，并正确调用底层业务流程。"""
+
 from __future__ import annotations
 
 from pathlib import Path

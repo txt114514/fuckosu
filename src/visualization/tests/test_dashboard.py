@@ -1,3 +1,5 @@
+"""验证报告器公开 API、状态持久化、事件记录和停止摘要生命周期。"""
+
 from __future__ import annotations
 
 import json

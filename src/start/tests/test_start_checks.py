@@ -1,3 +1,5 @@
+"""验证顶层模块登记以及训练启动检查的聚合结果。"""
+
 from __future__ import annotations
 
 import unittest

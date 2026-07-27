@@ -1,3 +1,5 @@
+"""计算歌曲与录像的音频配对分数，并执行贪心一对一选择。"""
+
 from __future__ import annotations
 
 import tempfile
@@ -42,6 +44,8 @@ class AudioMatchStepsMixin:
         )
         coarse_offset_seconds = coarse_start_frame / float(self.aligner.envelope_hz)
 
+        # 配对实验与正式 AV 裁切共享“全局粗定位、局部细定位”契约，
+        # 确保候选得分与最终应用时的偏移含义一致。
         fine_video = video_features["fine"]
         fine_song = song_features["fine"]
         if fine_video.size < fine_song.size:
@@ -179,6 +183,8 @@ class AudioMatchStepsMixin:
         matches: list[dict[str, Any]] = []
         used_videos: set[str] = set()
         used_folders: set[str] = set()
+        # 每个录像和谱面只能消费一次；按统一排序键贪心选择，使打印建议与
+        # 实际应用使用完全相同的一对一结果。
         for result in sorted(
             pair_results,
             key=self._result_sort_key,

@@ -1,3 +1,5 @@
+"""在 Rich 可渲染对象的最终边界统一应用中文显示名替换。"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -11,7 +13,7 @@ from visualization.conf.messages import display_text
 
 
 def apply_display_overrides(renderable: Any) -> Any:
-    """Apply display-name overrides at the final Rich renderable boundary."""
+    """递归替换最终 Rich 对象中的显示文本，并保留原有样式。"""
 
     return _apply(renderable, seen=set())
 
@@ -22,6 +24,7 @@ def _apply(value: Any, *, seen: set[int]) -> Any:
     if isinstance(value, Text):
         return _text_with_overrides(value)
     identity = id(value)
+    # Rich 容器可能复用或循环引用子对象，按身份去重可避免无限递归和重复改写。
     if identity in seen:
         return value
     seen.add(identity)

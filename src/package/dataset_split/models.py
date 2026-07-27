@@ -1,3 +1,5 @@
+"""定义按 item 冻结归属的数据划分清单及比例配置。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -12,6 +14,8 @@ SPLIT_ORDER: tuple[DatasetSplit, ...] = ("train", "validation", "test")
 
 @dataclass(frozen=True)
 class SplitRatios:
+    """train/validation/test 的相对权重；同步前会归一化，不要求输入和为 1。"""
+
     train: float = 0.8
     validation: float = 0.1
     test: float = 0.1
@@ -52,6 +56,8 @@ class SplitRatios:
 
 @dataclass(frozen=True)
 class DatasetSplitItem:
+    """一个 item 的冻结归属；segment_count 可刷新，但 split 不随比例重排。"""
+
     item_name: str
     split: DatasetSplit
     segment_count: int
@@ -90,6 +96,8 @@ class DatasetSplitItem:
 
 @dataclass(frozen=True)
 class DatasetSplitManifest:
+    """以 item 为最小单位的版本化划分清单，防止同一谱面跨 split 泄漏。"""
+
     seed: int
     ratios: SplitRatios
     items: Mapping[str, DatasetSplitItem]
@@ -147,6 +155,8 @@ class DatasetSplitManifest:
 
 @dataclass(frozen=True)
 class DatasetSplitSyncResult:
+    """一次增量同步的结果；dry_run 时 manifest 是预测结果但磁盘未更新。"""
+
     manifest_path: Path
     created: bool
     changed: bool

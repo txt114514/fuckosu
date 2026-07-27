@@ -1,3 +1,5 @@
+"""验证全局编码器的多尺度特征形状和反向传播。"""
+
 from __future__ import annotations
 
 import unittest

@@ -1,3 +1,5 @@
+"""验证单对象空间/时间命中评分及 slider 路径覆盖。"""
+
 from __future__ import annotations
 
 import unittest
@@ -32,6 +34,7 @@ class PointScoringTests(unittest.TestCase):
         self.assertEqual(spatial_coefficient(1.5), 0.0)
 
     def test_temporal_boundaries_follow_v2_bands(self) -> None:
+        # 同时取每个分段端点及 150ms 后的最小越界量，捕获 < 与 <= 写反。
         values = [
             temporal_coefficient(error)
             for error in (20, 50, 100, 150, 150.1, 200)
@@ -45,6 +48,8 @@ class PointScoringTests(unittest.TestCase):
         self.assertEqual(values[5], 0.0)
 
     def test_point_pass_requires_space_and_time(self) -> None:
+        # 10px/150ms 是精确通过边界，另两项分别只越界 0.1，隔离空间和
+        # 时间门限是否都参与 passed 判定。
         passing = score_point(
             (0.0, 0.0),
             (10.0, 0.0),
@@ -105,6 +110,8 @@ class SliderScoringTests(unittest.TestCase):
             reference_start_ms=1000.0,
             predicted_start_ms=1000.0,
         )
+        # 多余远端点测试 prediction precision，缺失路径测试 reference
+        # coverage；两者共同防止单向 Hausdorff/覆盖率误判为通过。
         stray_prediction = score_slider(
             (0.0, 0.0),
             (0.0, 0.0),
@@ -140,6 +147,7 @@ class SliderScoringTests(unittest.TestCase):
 
     def test_slider_corridor_uses_one_point_five_radius(self) -> None:
         reference = ((0.0, 0.0), (100.0, 0.0))
+        # 14.9/15.1 分居 1.5×radius 两侧，专门捕获走廊边界舍入或倍率回归。
         inside_corridor = score_slider(
             (0.0, 0.0),
             (0.0, 0.0),

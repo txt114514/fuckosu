@@ -1,3 +1,5 @@
+"""segment 标注的数据模型、文件校验与按时间可见物件筛选。"""
+
 from __future__ import annotations
 
 import json
@@ -84,7 +86,10 @@ def visible_hit_objects(
     *,
     visibility_post_ms: float,
 ) -> tuple[HitObjectAnnotation, ...]:
+    """返回当前帧应可见的物件，时间均为 segment 内相对毫秒。"""
+
     preempt = annotation.difficulty.approach_preempt_ms
+    # 起点前的 approach 时间要纳入；结束后短暂保留，避免采样边界闪断监督。
     return tuple(
         hit_object
         for hit_object in annotation.hit_objects

@@ -1,3 +1,5 @@
+"""按时间顺序匹配预测点击与目标，并归因空间、时间或决策错误。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -32,6 +34,8 @@ ErrorTag = Literal[
 
 @dataclass(frozen=True)
 class SequenceScoreSpec:
+    """序列级点击频率限制与单物件评分规格。"""
+
     min_click_interval_ms: float = 50.0
     object_score_spec: ScoreSpec = field(default_factory=ScoreSpec)
 
@@ -241,6 +245,7 @@ def _error_attribution(
         return "temporal", tuple(tags), spatial_error, temporal_error
     if temporal_passed:
         return "spatial", tuple(tags), spatial_error, temporal_error
+    # 两维都失败时比较相对各自通过线的归一化超量，避免像素和毫秒直接比较。
     primary: ErrorDomain = (
         "temporal"
         if _temporal_excess(score, spec) >= _spatial_excess(score, spec)
@@ -280,9 +285,12 @@ def score_click_sequence(
     circle_radius: float,
     spec: SequenceScoreSpec = SequenceScoreSpec(),
 ) -> SequenceScore:
+    """按时间稳定排序点击，每个目标最多解析一次，并记录未解析目标。"""
+
     if not isfinite(circle_radius) or circle_radius <= 0:
         raise ValueError("circle_radius must be finite and positive")
 
+    # active_targets 是尚未命中的集合；命中后移除可阻止一个目标被重复消费。
     active_targets = {
         target.target_id: target for target in sorted(targets, key=_target_sort_key)
     }
@@ -293,12 +301,14 @@ def score_click_sequence(
     resolutions: list[TargetResolution] = []
     resolved_targets: dict[str, tuple[TargetObject, TargetResolution]] = {}
     last_accepted_click_ms: float | None = None
+    # 同时刻点击保留输入索引顺序，使评分和错误归因可重复。
     ordered_clicks = sorted(
         enumerate(clicks),
         key=lambda item: (item[1].time_ms, item[0]),
     )
 
     for click_index, click in ordered_clicks:
+        # 频率限制先于目标匹配；被限制的点击不更新时间窗口之外的任何目标状态。
         if (
             last_accepted_click_ms is not None
             and click.time_ms - last_accepted_click_ms < spec.min_click_interval_ms
@@ -327,6 +337,7 @@ def score_click_sequence(
                 passing.append((target, score))
 
         if not passing:
+            # 先识别重复点击已命中目标，再用仍活跃的最接近目标解释真实 miss。
             duplicate = _best_scored_target(
                 tuple(item[0] for item in resolved_targets.values()),
                 click,
@@ -395,6 +406,7 @@ def score_click_sequence(
             )
             continue
 
+        # active_targets 已按开始时间稳定排序；多个目标同时通过时选择时间最早者。
         target, score = passing[0]
         active_targets.pop(target.target_id)
         resolution = TargetResolution(

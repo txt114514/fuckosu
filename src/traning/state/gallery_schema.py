@@ -1,3 +1,5 @@
+"""定义批次最佳结果图集所需的帧、trial 与请求契约。"""
+
 from __future__ import annotations
 
 import json
@@ -22,14 +24,19 @@ ErrorDomain = Literal["none", "spatial", "temporal", "decision"]
 
 
 class FrameEvaluation(BaseModel):
+    """保存一帧的通过状态、错误归因和显式 osu/video 预测坐标。"""
+
     sample_key: str
     frame_index: int
     passed: bool
     target_source_index: int | None = None
     predicted_osu_xy: tuple[float, float] | None = None
     predicted_video_xy: tuple[float, float] | None = None
+    action: str | None = None
+    action_probability: float | None = None
     primary_error: ErrorDomain = "none"
     error_tags: tuple[str, ...] = ()
+    failure_reason: str | None = None
     spatial_error: float | None = None
     temporal_error_ms: float | None = None
     frequency_limited: bool = False
@@ -59,6 +66,13 @@ class FrameEvaluation(BaseModel):
             raise ValueError("error metrics must be finite")
         return value
 
+    @field_validator("action_probability")
+    @classmethod
+    def _optional_probability(cls, value: float | None) -> float | None:
+        if value is not None and (not isfinite(value) or not 0.0 <= value <= 1.0):
+            raise ValueError("action_probability must be finite and in 0..1")
+        return value
+
 
 class TrialGalleryEvaluation(BaseModel):
     trial_id: str
@@ -77,6 +91,8 @@ class TrialGalleryEvaluation(BaseModel):
 
 
 class BatchGalleryRequest(BaseModel):
+    """聚合同一批次可比较的 trial，并提供确定性的最佳 trial 选择。"""
+
     batch_id: str
     trials: tuple[TrialGalleryEvaluation, ...]
     random_seed: int = 2026
@@ -94,11 +110,10 @@ class BatchGalleryRequest(BaseModel):
 
     @model_validator(mode="after")
     def _require_one_score_version(self) -> BatchGalleryRequest:
+        # 不同评分语义的数值不可直接排序，必须先在上游完成版本迁移。
         versions = {trial.score_version for trial in self.trials}
         if len(versions) != 1:
-            raise ValueError(
-                "all trials in one batch must use the same score_version"
-            )
+            raise ValueError("all trials in one batch must use the same score_version")
         return self
 
     @property

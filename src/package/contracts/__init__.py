@@ -1,4 +1,4 @@
-"""Stable data contracts shared across top-level src modules."""
+"""汇总 ``src`` 顶层模块之间共享的稳定、可持久化数据契约。"""
 
 from package.contracts.artifacts import ArtifactFileRef, VersionedArtifactRef
 from package.contracts.base import ContractMixin, contract_to_dict

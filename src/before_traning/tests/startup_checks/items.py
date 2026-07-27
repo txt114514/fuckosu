@@ -1,3 +1,5 @@
+"""定义配置、阶段注册、分段契约和原始数据扫描启动检测项。"""
+
 from __future__ import annotations
 
 from pathlib import Path

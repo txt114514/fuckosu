@@ -1,3 +1,5 @@
+"""CUDA/CPU 内存预算、AMP、设备搬运与运行时配置公共入口。"""
+
 from traning.lib.runtime.memory import (
     CudaRuntimeConfig,
     CudaRuntimeState,

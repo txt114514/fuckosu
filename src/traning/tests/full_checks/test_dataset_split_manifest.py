@@ -1,3 +1,5 @@
+"""验证训练数据发现严格遵守 item 级 split manifest。"""
+
 from __future__ import annotations
 
 import tempfile
@@ -33,6 +35,8 @@ class DatasetSplitManifestTests(unittest.TestCase):
                     "item_000002": "validation",
                 },
             )
+            # legacy include 列表故意与 manifest 不相交，确保 manifest 存在时
+            # 它才是 item 归属的唯一权威来源。
             settings = Settings(
                 data_input={
                     "dataset_root": root,
@@ -42,6 +46,7 @@ class DatasetSplitManifestTests(unittest.TestCase):
                 }
             )
 
+            # 截断实际视频发现，只检查 preflight 传入的 include_items 契约。
             with patch(
                 "traning.core.dataset_import.preflight.discover_segments",
                 return_value=DiscoveryResult(records=(), issues=()),

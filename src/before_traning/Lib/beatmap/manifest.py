@@ -1,3 +1,5 @@
+"""管理训练包 SQLite manifest、稳定内部目录编号与谱面解析缓存。"""
+
 from __future__ import annotations
 
 import csv
@@ -33,7 +35,7 @@ class ManifestEntry:
 
 
 class PackageManifest:
-    """Small SQLite manifest for stable internal folder IDs and processing order."""
+    """以 SQLite 保存稳定内部目录 ID 与处理顺序的清单仓储。"""
 
     def __init__(
         self,
@@ -105,6 +107,8 @@ class PackageManifest:
         completed: list[tuple[Path, Path]] = []
         renamed_videos: list[tuple[Path, Path]] = []
 
+        # 所有源目录先退出原命名空间，避免旧名称与新内部编号交叉时发生
+        # 路径碰撞；第二阶段才把临时目录发布到最终名称。
         for source_name, folder_name in mappings:
             source_path = self.target_root / source_name
             destination_path = self.target_root / folder_name
@@ -191,6 +195,8 @@ class PackageManifest:
         }
         self._rename_legacy_folders(mappings)
 
+        # 文件系统迁移先完成，数据库再整体提交；数据库失败时恢复旧目录，
+        # 避免 manifest 与磁盘名称分别停留在不同版本。
         try:
             with Session(self.engine) as session:
                 for sequence, (source_name, folder_name) in enumerate(mappings, start=1):
@@ -244,6 +250,8 @@ class PackageManifest:
                 if not item.active:
                     continue
                 writer.writerow((item.folder_name, item.source_name))
+        # CSV 是供人读取的 manifest 镜像，临时文件完整写入后再原子替换，
+        # 防止读取方看到只写了一半的表。
         temp_path.replace(table_path)
         return table_path
 
@@ -257,6 +265,8 @@ class PackageManifest:
             by_source = {item.source_name: item for item in existing}
             next_number = self._next_folder_number(existing)
 
+            # 不删除历史条目，以 source_name 复用稳定内部 ID；本轮未出现的
+            # 条目只标记 inactive，未来重新导入仍能回到原编号。
             for item in existing:
                 item.active = False
 

@@ -1,3 +1,5 @@
+"""把训练配置或样本元数据解析为共享坐标变换契约。"""
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -9,6 +11,7 @@ from package.coordinates import (
     CoordinateTransformChain,
     CoordinateTransformSpec,
     ImageSize,
+    OsuVideoCoordinateTransform,
     OsuVideoTransform,
     PlayfieldRect,
 )
@@ -20,9 +23,15 @@ def transform_from_settings_or_sample(
     *,
     frame_width: int | None = None,
     frame_height: int | None = None,
-) -> tuple[OsuVideoTransform, CoordinateTransformSpec]:
-    """Resolve the playfield transform in training-frame pixels."""
+) -> tuple[OsuVideoCoordinateTransform, CoordinateTransformSpec]:
+    """解析以完整训练帧像素为目标空间的 playfield 变换。
 
+    样本携带的规格优先级最高，以保证 Dataset、训练、评分和离线 gallery
+    使用同一条映射；随后才读取全局配置、预处理链或显式 legacy fallback。
+    返回公共协议而非轴对齐具体类，因此调用方也能透明使用 affine。
+    """
+
+    # 逐记录规格已经包含当时解析出的 matrix/rect；不能被当前全局设置覆盖。
     sample_spec = _sample_transform_spec(sample)
     if sample_spec is not None:
         if sample_spec.matrix is not None:
@@ -31,6 +40,7 @@ def transform_from_settings_or_sample(
 
     config = getattr(settings, "coordinate_transform", None)
     if config is not None and getattr(config, "mode", None) == "affine_matrix":
+        # 配置行的正向是 osu -> 完整训练帧像素，逆向由实现统一求解。
         transform = AffineOsuVideoTransform.from_rows(getattr(config, "matrix", None))
         return transform, transform.spec(source="settings.affine_matrix", status="calibrated")
 
@@ -66,7 +76,7 @@ def coordinate_chain_from_settings_or_sample(
     frame_width: int | None = None,
     frame_height: int | None = None,
 ) -> CoordinateTransformChain | None:
-    """Build the shared osu -> source -> crop -> training-frame chain."""
+    """构建 osu -> 原视频 -> 裁剪 -> 完整训练帧的可追踪变换链。"""
 
     config = getattr(settings, "coordinate_transform", None)
     if config is None:
@@ -122,6 +132,8 @@ def coordinate_chain_from_settings_or_sample(
 def _sample_transform_spec(
     sample: Mapping[str, Any] | None,
 ) -> CoordinateTransformSpec | None:
+    """从单个样本恢复可持久化规格，包括 affine matrix。"""
+
     if sample is None:
         return None
     raw = sample.get("coordinate_transform") or sample.get("playfield_transform")

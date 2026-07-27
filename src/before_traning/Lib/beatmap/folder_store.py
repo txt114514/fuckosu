@@ -1,3 +1,5 @@
+"""提供受 manifest 约束的谱面文件读写与原子输出目录事务。"""
+
 from __future__ import annotations
 
 import shutil
@@ -199,10 +201,13 @@ class BeatmapFolderStore:
             remainder = backup.name.removeprefix(backup_prefix)
             folder_name = remainder.rsplit("__", 1)[0]
             destination = output_root / folder_name
+            # destination 已存在说明提交完成，backup 只是中断后的残留；否则
+            # backup 是最后一份完整产物，必须恢复而不能直接清理。
             if destination.exists():
                 shutil.rmtree(backup)
             else:
                 backup.rename(destination)
+        # 临时目录从未成为正式产物，进程中断后可无条件丢弃。
         for temporary in output_root.glob(f"{temporary_prefix}*"):
             shutil.rmtree(temporary)
 
@@ -223,6 +228,8 @@ class BeatmapFolderStore:
         temporary.mkdir(parents=True)
         try:
             yield temporary
+            # 先保留旧目录，再一次性发布完整临时目录；任何一步失败都能用
+            # backup 恢复调用前可见的文件集合。
             if destination.exists():
                 destination.rename(backup)
             temporary.rename(destination)

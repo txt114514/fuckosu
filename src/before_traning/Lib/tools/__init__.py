@@ -1,3 +1,5 @@
+"""公开 ffmpeg 与 ffprobe 参数构造和媒体处理接口。"""
+
 from before_traning.Lib.tools.ffmpeg import (
     build_crop_video_args,
     build_extract_wav_args,

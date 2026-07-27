@@ -1,3 +1,5 @@
+"""空间监督目标、损失、跨 patch 画布和候选解码公共入口。"""
+
 from traning.lib.training.feature_canvas import FeatureCanvas
 from traning.lib.training.losses import (
     LossWeights,

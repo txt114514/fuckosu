@@ -1,3 +1,5 @@
+"""局部、全局、融合、空间和因果时序模型的公共入口。"""
+
 from traning.lib.models.gated_sparse_fusion import (
     FusedPatchFeatures,
     GatedSparseFusion,

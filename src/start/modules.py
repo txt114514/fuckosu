@@ -1,3 +1,5 @@
+"""描述并发现 ``src`` 顶层模块的源码、文档和 CLI 入口。"""
+
 from __future__ import annotations
 
 import importlib.util
@@ -11,6 +13,8 @@ SRC_ROOT = Path(__file__).resolve().parents[1]
 
 @dataclass(frozen=True)
 class SourceModuleEntry:
+    """顶层模块的稳定发现元数据；importable 只解析 spec，不导入模块。"""
+
     key: str
     import_name: str
     source_dir: Path

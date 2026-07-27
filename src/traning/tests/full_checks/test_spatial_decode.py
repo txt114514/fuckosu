@@ -1,3 +1,5 @@
+"""验证空间概率画布融合、NMS、候选与 slider 路径解码。"""
+
 from __future__ import annotations
 
 import unittest
@@ -22,6 +24,8 @@ def _prediction(
     embedding_dim: int = 4,
 ) -> SpatialPrediction:
     object_types = len(OBJECT_TYPE_NAMES)
+    # 默认 logits 让中心、圆环和滑条均明确为背景，仅 visible 为前景；
+    # 各测试只抬高目标单元，避免随机候选干扰解码断言。
     return SpatialPrediction(
         center_heatmap=torch.full((1, 1, height, width), -12.0),
         visible_heatmap=torch.full((1, 1, height, width), 8.0),
@@ -44,6 +48,8 @@ class SpatialDecodeTests(unittest.TestCase):
         prediction = _prediction()
         row, col = 5, 4
         prediction.center_heatmap[0, 0, row, col] = 12.0
+        # 非整数 cell offset 与非零 patch 原点共同约束
+        # local feature cell -> global frame pixel 的完整换算。
         prediction.xy_offset[0, 0, row, col] = 0.25
         prediction.xy_offset[0, 1, row, col] = -0.25
         prediction.object_type_logits[
@@ -79,6 +85,8 @@ class SpatialDecodeTests(unittest.TestCase):
     def test_padding_region_is_not_written_to_global_canvas(self) -> None:
         prediction = _prediction(height=8, width=8)
         hit_circle = OBJECT_TYPE_NAMES.index("hit_circle")
+        # 第一个峰位于 valid_width 内，第二个峰只存在于补齐区域；融合后
+        # 必须只留下真实帧范围内的候选。
         prediction.center_heatmap[0, 0, 2, 1] = 12.0
         prediction.object_type_logits[0, hit_circle, 2, 1] = 10.0
         prediction.center_heatmap[0, 0, 2, 6] = 12.0
@@ -132,6 +140,8 @@ class SpatialDecodeTests(unittest.TestCase):
     def test_decode_slider_paths_recovers_ordered_polyline(self) -> None:
         height, width, stride = 12, 16, 8
         object_types = len(OBJECT_TYPE_NAMES)
+        # 构造无分支的水平单像素连通分量，并在两端给出 head/tail 语义，
+        # 用于隔离验证路径排序而非复杂骨架化质量。
         object_type_probs = torch.zeros((object_types, height, width))
         object_type_probs[OBJECT_TYPE_NAMES.index("slider_body"), 4, 2:10] = 0.8
         object_type_probs[OBJECT_TYPE_NAMES.index("slider_head"), 4, 2] = 0.9

@@ -1,3 +1,5 @@
+"""数据发现和帧采样阶段使用的不可变记录类型。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

@@ -1,3 +1,5 @@
+"""只读盘点未匹配原始样本、候选录像与已匹配训练清单。"""
+
 from __future__ import annotations
 
 import json

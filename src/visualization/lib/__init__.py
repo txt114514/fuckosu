@@ -1,3 +1,5 @@
+"""训练模块可依赖的稳定可视化 API、协议和状态模型入口。"""
+
 from visualization.lib.api import create_dashboard_reporter
 from visualization.lib.models import (
     BestParameterRecord,

@@ -1,3 +1,5 @@
+"""训练分块空间模型，并管理 CUDA 运行时、恢复状态和检查点。"""
+
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -101,7 +103,7 @@ def run_spatial_training(
     resume_checkpoint_path: Path | None = None,
     resume_policy: str = "none",
 ) -> SpatialTrainingResult:
-    """Run the first-version single-frame spatial training loop."""
+    """运行逐帧、逐 patch 梯度累积的空间训练循环。"""
 
     if max_steps <= 0:
         raise ValueError("max_steps must be positive")
@@ -143,6 +145,7 @@ def run_spatial_training(
         raise ValueError("training dataset must not be empty")
 
     modules = build_model_stack(settings)
+    # 全局与结构编码器作为固定上下文，不构建跨整帧的反向图，从而控制显存峰值。
     for frozen_name in ("global", "structure"):
         for parameter in modules[frozen_name].parameters():
             parameter.requires_grad_(False)
@@ -245,6 +248,7 @@ def run_spatial_training(
                         target=target,
                         weights=settings.training.spatial_consistency_loss_weights,
                     )
+                    # 一个视频帧对应一次 optimizer step；按计划 patch 数归一化后再逐 patch backward。
                     loss = loss_dict["total"] / planned_patch_count
                 if not torch.isfinite(loss.detach()).all():
                     raise FloatingPointError("spatial loss became NaN or Inf")
@@ -274,6 +278,7 @@ def run_spatial_training(
                     device=device,
                 )
     except BaseException:
+        # 仅记录已经完成 optimizer step 的位置，恢复时不会重复提交半完成梯度。
         _write_checkpoint(
             SpatialTrainingResult(
                 run_dir=run_dir,

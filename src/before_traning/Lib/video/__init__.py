@@ -1,1 +1,1 @@
-"""Reusable video algorithms, codecs, geometry and dataset APIs."""
+"""汇总视频信号算法、裁剪几何、编解码与片段数据集接口。"""

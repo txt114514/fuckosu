@@ -1,3 +1,5 @@
+"""训练继承包与检查点恢复契约的公开入口。"""
+
 from traning.core.training_inheritance.manager import (
     InheritanceLoadResult,
     InheritancePackage,

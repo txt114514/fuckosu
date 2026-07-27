@@ -1,3 +1,5 @@
+"""验证 GPU 监控后端降级、主机桥采样及不可用状态显示。"""
+
 from __future__ import annotations
 
 import subprocess
