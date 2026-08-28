@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
 
 class HitObjectAnnotation(BaseModel):
@@ -25,7 +24,7 @@ class HitObjectAnnotation(BaseModel):
 
     @field_validator("end_ms")
     @classmethod
-    def _valid_end(cls, value: int, info: Any) -> int:
+    def _valid_end(cls, value: int, info: ValidationInfo) -> int:
         start = info.data.get("start_ms")
         if start is not None and value < start:
             raise ValueError("end_ms must not be earlier than start_ms")
@@ -49,7 +48,7 @@ class SourceAnnotation(BaseModel):
 
     @field_validator("clip_end_ms")
     @classmethod
-    def _valid_clip_end(cls, value: int, info: Any) -> int:
+    def _valid_clip_end(cls, value: int, info: ValidationInfo) -> int:
         start = info.data.get("clip_start_ms")
         if start is not None and value <= start:
             raise ValueError("clip_end_ms must be later than clip_start_ms")

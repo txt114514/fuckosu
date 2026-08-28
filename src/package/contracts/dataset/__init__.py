@@ -10,9 +10,12 @@ from package.contracts.base import ContractMixin
 
 
 class DataSplit(StrEnum):
+    """跨 before/start/traning 共享的唯一数据切分枚举。"""
+
     ALL = "all"
     TRAIN = "train"
     VALIDATION = "validation"
+    TEST = "test"
 
 
 class DatasetDimension(StrEnum):

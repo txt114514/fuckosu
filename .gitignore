@@ -5,6 +5,7 @@
 !/.gitignore
 !/README.md
 !/AGENTS.md
+!/V2_MIGRATION_STATUS.md
 
 # 保留 Codex 工程索引及其生成器
 !/project_index/
@@ -26,3 +27,7 @@
 
 !/src/
 !/src/**
+
+# Python 运行缓存是本地生成物，不属于源码或 V2 冻结制品。
+**/__pycache__/
+**/*.py[cod]

@@ -1,0 +1,93 @@
+# OSU Decision Model V2 的严格、可复现基线配置。
+schema_version: 1
+
+perception:
+  input_channels: 3
+  frame_width: 512
+  frame_height: 288
+  embedding_dim: 32
+  max_candidates: 64
+  score_threshold: 0.05
+  nms_radius_px: 24.0
+  global_frozen: false
+  global_pretrained: false
+
+tracking:
+  max_distance_px: 64.0
+  max_embedding_distance: 0.5
+  max_missed_frames: 6
+  min_association_confidence: 0.05
+  spatial_weight: 0.55
+  embedding_weight: 0.35
+  type_weight: 0.10
+  max_total_cost: 0.95
+
+belief:
+  input_dim: 64
+  hidden_dim: 128
+  layers: 1
+  max_time_since_seen_ms: 500
+
+outcome:
+  hidden_dims: [128, 64]
+  category_count: 5
+  horizons_ms: [0, 16, 32, 48, 64]
+  calibration_bins: 15
+
+decision:
+  horizons_ms: [0, 16, 32, 48, 64]
+  click_cost: 0.0
+  invalid_penalty: 1.0
+  miss_penalty: 0.75
+  expire_penalty: 0.5
+  min_confidence: 0.0
+  risk_lambda: 0.1
+  wait_cost: 0.0
+
+data:
+  seed: 2026
+  dataset_root: training_package/video_segments
+  split_manifest: training_package/splits/dataset_split_manifest.json
+  sample_fps: 60.0
+  frame_step: 1
+  max_segments_per_split: null
+  max_frames_per_segment: null
+  visibility_post_ms: 100.0
+  loader:
+    workers: 2
+    pin_memory: true
+
+# 该 legacy 方程由五个独立 ROI 控制点验证，只适用于 1484×846 原帧；
+# 原始拟合集未入库，完整限制见 calibration_evidence_path 指向的证据制品。
+coordinates:
+  source_width: 1484
+  source_height: 846
+  transform_identity: legacy-control-validated-v1
+  calibration_evidence_path: configs/traning_coordinate_evidence.json
+  affine_matrix:
+    - [2.115860914627143, 0.0011971920855575358, 242.59057485632047]
+    - [0.0003418231662923798, 2.1166805757239477, 16.12108357719331]
+
+cache:
+  schema_version: 2
+  directory: .cache/traning
+
+runtime:
+  device: cuda
+  require_cuda: true
+  amp: true
+
+telemetry:
+  schema_version: 2
+  directory: output/v2/telemetry
+
+training:
+  seed: 2026
+  batch_size: 16
+  epochs: 1
+  learning_rate: 0.001
+  weight_decay: 0.0
+
+# null 表示未全门禁通过时持续提出合法且未重复的参数；显式正整数才是 trial 预算。
+optimization:
+  max_trials: null

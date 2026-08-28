@@ -970,25 +970,25 @@ tests/full_checks/runner.py -> full pytest checks
 
 职责：实现点与 slider 的空间、时间、1.5x 膨胀路径覆盖和组合评分。
 
-- `C L15-L69` `ScoreSpec` [CLASS]：连续评分分段阈值；空间量均以 circle radius 为单位，时间量为毫秒。
-- `M L33-L60` `ScoreSpec.__post_init__(self) -> None`：完成 dataclass 初始化后的派生字段设置。
-- `M L63-L64` `ScoreSpec.maximum_coefficient(self) -> float` [PROPERTY]：执行 `maximum coefficient` 对应逻辑。
-- `M L67-L69` `ScoreSpec.maximum_raw_score(self) -> float` [PROPERTY]：执行 `maximum raw score` 对应逻辑。
-- `C L73-L77` `CombinedScore` [CLASS]：封装 `CombinedScore` 相关数据或行为。
-- `C L81-L86` `PointScore` [CLASS]：封装 `PointScore` 相关数据或行为。
-- `C L90-L97` `PathScore` [CLASS]：封装 `PathScore` 相关数据或行为。
-- `C L101-L105` `SliderScore` [CLASS]：封装 `SliderScore` 相关数据或行为。
-- `F L108-L116` `_interpolate(value: float, start: float, end: float, start_score: float, end_score: float) -> float`：执行 `interpolate` 对应逻辑。
-- `F L119-L145` `spatial_coefficient(distance_ratio: float, *, spec: ScoreSpec=ScoreSpec()) -> float`：把非负距离半径比映射为连续空间系数。
-- `F L148-L192` `temporal_coefficient(time_error_ms: float, *, spec: ScoreSpec=ScoreSpec()) -> float`：按绝对时间误差分段插值为连续时间系数。 调用：`_interpolate`。
-- `F L195-L214` `combine_coefficients(spatial: float, temporal: float, *, spec: ScoreSpec=ScoreSpec()) -> CombinedScore`：组合空间与时间系数，并按理论最大值归一化。 调用：`CombinedScore`。
-- `F L217-L250` `score_point(reference_xy: Point, predicted_xy: Point, *, circle_radius: float, reference_time_ms: float, predicted_time_ms: float, spec: ScoreSpec=ScoreSpec()) -> PointScore`：在同一坐标空间内评分点位置，并结合毫秒级打击时间。 调用：`PointScore`, `combine_coefficients`, `spatial_coefficient`, `temporal_coefficient`。
-- `F L253-L272` `_point_to_segment_distance(point: Point, start: Point, end: Point) -> float`：执行 `point to segment distance` 对应逻辑。
-- `F L275-L281` `_minimum_distance(point: Point, path: PathPoints) -> float`：执行 `minimum distance` 对应逻辑。 调用：`_point_to_segment_distance`。
-- `F L284-L298` `_densify_path(path: PathPoints, *, maximum_step: float) -> PathPoints`：执行 `densify path` 对应逻辑。
-- `F L301-L312` `_directed_path_statistics(source: PathPoints, target: PathPoints, *, distance_limit: float) -> tuple[float, float]`：统计 source 中落入 target 膨胀走廊的中心线采样点。 调用：`_minimum_distance`。
-- `F L315-L384` `score_slider_path(reference_path: PathPoints, predicted_path: PathPoints, *, circle_radius: float, spec: ScoreSpec=ScoreSpec()) -> PathScore`：执行 `score slider path` 对应逻辑。 调用：`PathScore`, `_densify_path`, `_directed_path_statistics`。
-- `F L387-L435` `score_slider(reference_head_xy: Point | None, predicted_head_xy: Point | None, reference_path: PathPoints, predicted_path: PathPoints, *, circle_radius: float, reference_start_ms: float, predicted_start_ms: float, spec: ScoreSpec=ScoreSpec()) -> SliderScore`：执行 `score slider` 对应逻辑。 调用：`SliderScore`, `combine_coefficients`, `score_point`, `score_slider_path`。
+- `C L13-L67` `ScoreSpec` [CLASS]：连续评分分段阈值；空间量均以 circle radius 为单位，时间量为毫秒。
+- `M L31-L58` `ScoreSpec.__post_init__(self) -> None`：完成 dataclass 初始化后的派生字段设置。
+- `M L61-L62` `ScoreSpec.maximum_coefficient(self) -> float` [PROPERTY]：执行 `maximum coefficient` 对应逻辑。
+- `M L65-L67` `ScoreSpec.maximum_raw_score(self) -> float` [PROPERTY]：执行 `maximum raw score` 对应逻辑。
+- `C L71-L75` `CombinedScore` [CLASS]：封装 `CombinedScore` 相关数据或行为。
+- `C L79-L84` `PointScore` [CLASS]：封装 `PointScore` 相关数据或行为。
+- `C L88-L95` `PathScore` [CLASS]：封装 `PathScore` 相关数据或行为。
+- `C L99-L103` `SliderScore` [CLASS]：封装 `SliderScore` 相关数据或行为。
+- `F L106-L114` `_interpolate(value: float, start: float, end: float, start_score: float, end_score: float) -> float`：执行 `interpolate` 对应逻辑。
+- `F L117-L143` `spatial_coefficient(distance_ratio: float, *, spec: ScoreSpec=ScoreSpec()) -> float`：把非负距离半径比映射为连续空间系数。
+- `F L146-L190` `temporal_coefficient(time_error_ms: float, *, spec: ScoreSpec=ScoreSpec()) -> float`：按绝对时间误差分段插值为连续时间系数。 调用：`_interpolate`。
+- `F L193-L212` `combine_coefficients(spatial: float, temporal: float, *, spec: ScoreSpec=ScoreSpec()) -> CombinedScore`：组合空间与时间系数，并按理论最大值归一化。 调用：`CombinedScore`。
+- `F L215-L248` `score_point(reference_xy: Point, predicted_xy: Point, *, circle_radius: float, reference_time_ms: float, predicted_time_ms: float, spec: ScoreSpec=ScoreSpec()) -> PointScore`：在同一坐标空间内评分点位置，并结合毫秒级打击时间。 调用：`PointScore`, `combine_coefficients`, `spatial_coefficient`, `temporal_coefficient`。
+- `F L251-L270` `_point_to_segment_distance(point: Point, start: Point, end: Point) -> float`：执行 `point to segment distance` 对应逻辑。
+- `F L273-L279` `_minimum_distance(point: Point, path: PathPoints) -> float`：执行 `minimum distance` 对应逻辑。 调用：`_point_to_segment_distance`。
+- `F L282-L296` `_densify_path(path: PathPoints, *, maximum_step: float) -> PathPoints`：执行 `densify path` 对应逻辑。
+- `F L299-L310` `_directed_path_statistics(source: PathPoints, target: PathPoints, *, distance_limit: float) -> tuple[float, float]`：统计 source 中落入 target 膨胀走廊的中心线采样点。 调用：`_minimum_distance`。
+- `F L313-L382` `score_slider_path(reference_path: PathPoints, predicted_path: PathPoints, *, circle_radius: float, spec: ScoreSpec=ScoreSpec()) -> PathScore`：执行 `score slider path` 对应逻辑。 调用：`PathScore`, `_densify_path`, `_directed_path_statistics`。
+- `F L385-L433` `score_slider(reference_head_xy: Point | None, predicted_head_xy: Point | None, reference_path: PathPoints, predicted_path: PathPoints, *, circle_radius: float, reference_start_ms: float, predicted_start_ms: float, spec: ScoreSpec=ScoreSpec()) -> SliderScore`：执行 `score slider` 对应逻辑。 调用：`SliderScore`, `combine_coefficients`, `score_point`, `score_slider_path`。
 
 ## `src/traning/lib/metrics/sequence.py`
 

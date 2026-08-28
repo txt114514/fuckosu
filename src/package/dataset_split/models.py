@@ -4,12 +4,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal, Mapping
+from typing import Any, Mapping
+
+from package.contracts import DataSplit
 
 
 DATASET_SPLIT_SCHEMA_VERSION = 1
-DatasetSplit = Literal["train", "validation", "test"]
-SPLIT_ORDER: tuple[DatasetSplit, ...] = ("train", "validation", "test")
+DatasetSplit = DataSplit
+"""旧公开名称指向 canonical DataSplit 本身，不再定义第二套类型。"""
+SPLIT_ORDER: tuple[DataSplit, ...] = (
+    DataSplit.TRAIN,
+    DataSplit.VALIDATION,
+    DataSplit.TEST,
+)
 
 
 @dataclass(frozen=True)
@@ -65,6 +72,12 @@ class DatasetSplitItem:
     assignment_reason: str
     source_name: str | None = None
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.split, DataSplit):
+            object.__setattr__(self, "split", DataSplit(self.split))
+        if self.split is DataSplit.ALL:
+            raise ValueError("item 不得分配到 all split")
+
     def as_dict(self) -> dict[str, Any]:
         return {
             "item_name": self.item_name,
@@ -77,12 +90,12 @@ class DatasetSplitItem:
 
     @classmethod
     def from_mapping(cls, item_name: str, raw: Mapping[str, Any]) -> "DatasetSplitItem":
-        split = str(raw["split"])
-        if split not in SPLIT_ORDER:
+        split = DataSplit(str(raw["split"]))
+        if split is DataSplit.ALL:
             raise ValueError(f"unknown split for {item_name}: {split}")
         return cls(
             item_name=item_name,
-            split=split,  # type: ignore[arg-type]
+            split=split,
             segment_count=int(raw.get("segment_count", 0)),
             assigned_at_utc=str(raw.get("assigned_at_utc", "")),
             assignment_reason=str(raw.get("assignment_reason", "loaded")),

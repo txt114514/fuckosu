@@ -5,13 +5,15 @@ from __future__ import annotations
 import json
 import sqlite3
 from pathlib import Path
-from typing import Any
+from typing import cast
+
+from traning.contracts.common import JSONObject
 
 
 def load_preprocessing_metadata(
     dataset_root: Path,
     item_name: str,
-) -> dict[str, Any] | None:
+) -> JSONObject | None:
     """读取最近一次成功视频预处理记录；缺失或损坏时返回 ``None``。"""
 
     status_db = _status_db_for_dataset_root(dataset_root)
@@ -39,21 +41,22 @@ def load_preprocessing_metadata(
         return None
     if not isinstance(detail, dict):
         return None
+    typed_detail = cast(JSONObject, detail)
     # 保留 raw 便于审计，同时提升常用尺寸/裁剪字段为稳定的坐标链输入。
     return {
         "source": "process_status.video_processed",
         "status_db": str(status_db),
         "source_size": {
-            "width": detail.get("video_width"),
-            "height": detail.get("video_height"),
+            "width": typed_detail.get("video_width"),
+            "height": typed_detail.get("video_height"),
         },
         "crop_rect": {
-            "left": detail.get("crop_left"),
-            "top": detail.get("crop_top"),
-            "width": detail.get("crop_width"),
-            "height": detail.get("crop_height"),
+            "left": typed_detail.get("crop_left"),
+            "top": typed_detail.get("crop_top"),
+            "width": typed_detail.get("crop_width"),
+            "height": typed_detail.get("crop_height"),
         },
-        "raw": detail,
+        "raw": typed_detail,
     }
 
 

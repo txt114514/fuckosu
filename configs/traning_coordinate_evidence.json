@@ -1,0 +1,61 @@
+{
+    "artifact_type": "traning_affine_calibration_evidence",
+    "schema_version": 1,
+    "source_frame_width": 1484,
+    "source_frame_height": 846,
+    "transform_identity": "legacy-control-validated-v1",
+    "affine_matrix": [
+        [2.115860914627143, 0.0011971920855575358, 242.59057485632047],
+        [0.0003418231662923798, 2.1166805757239477, 16.12108357719331]
+    ],
+    "max_control_error_px": 4.0,
+    "fit_provenance": {
+        "method": "unavailable-legacy-fit-procedure",
+        "observations_available": false,
+        "observation_count": null,
+        "observation_sha256": null,
+        "note": "矩阵首次进入基线提交 9ed1486；仓库未保存当时完整 passed train/validation 拟合点，现有五点仅作独立原视频 ROI 控制验证，不能反推或冒充原拟合集。"
+    },
+    "validation_controls": [
+        {
+            "control_id": "legacy-roi-control-001",
+            "osu_x": 508.0,
+            "osu_y": 237.0,
+            "video_x": 1317.5,
+            "video_y": 517.5,
+            "source_reference": "git:9ed1486:src/traning/tests/full_checks/test_plan_gap_closure.py#OBSERVED_CONTROL_POINTS[0]"
+        },
+        {
+            "control_id": "legacy-roi-control-002",
+            "osu_x": 80.0,
+            "osu_y": 101.0,
+            "video_x": 412.0,
+            "video_y": 230.0,
+            "source_reference": "git:9ed1486:src/traning/tests/full_checks/test_plan_gap_closure.py#OBSERVED_CONTROL_POINTS[1]"
+        },
+        {
+            "control_id": "legacy-roi-control-003",
+            "osu_x": 395.0,
+            "osu_y": 215.0,
+            "video_x": 1078.5,
+            "video_y": 471.5,
+            "source_reference": "git:9ed1486:src/traning/tests/full_checks/test_plan_gap_closure.py#OBSERVED_CONTROL_POINTS[2]"
+        },
+        {
+            "control_id": "legacy-roi-control-004",
+            "osu_x": 213.0,
+            "osu_y": 179.0,
+            "video_x": 693.5,
+            "video_y": 395.0,
+            "source_reference": "git:9ed1486:src/traning/tests/full_checks/test_plan_gap_closure.py#OBSERVED_CONTROL_POINTS[3]"
+        },
+        {
+            "control_id": "legacy-roi-control-005",
+            "osu_x": 256.0,
+            "osu_y": 183.0,
+            "video_x": 785.5,
+            "video_y": 404.5,
+            "source_reference": "git:9ed1486:src/traning/tests/full_checks/test_plan_gap_closure.py#OBSERVED_CONTROL_POINTS[4]"
+        }
+    ]
+}

@@ -144,7 +144,9 @@ def _select_split_for_new_item(
     allow_test_growth: bool,
 ) -> DatasetSplit:
     candidates: tuple[DatasetSplit, ...] = (
-        SPLIT_ORDER if allow_test_growth else ("train", "validation")
+        SPLIT_ORDER
+        if allow_test_growth
+        else (DatasetSplit.TRAIN, DatasetSplit.VALIDATION)
     )
     counts = {split: 0 for split in SPLIT_ORDER}
     for item in items.values():

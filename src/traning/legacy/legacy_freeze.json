@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "captured_at_utc": "2026-08-24",
+  "git_commit": "9ed1486",
+  "source_tree": "src/traning",
+  "archive": "src/traning.zip",
+  "archive_sha256": "143dce9980b75fc17a2babc3b9434c5ca20dbdee87b241923c6fbdfac6101e28",
+  "source_archive_equivalence": {
+    "command": "diff -qr --exclude=__pycache__ --exclude=*.pyc <archive>/traning src/traning",
+    "result": "no source differences"
+  },
+  "worktree_note": "src/traning/lib/metrics/scoring.py had a pre-existing whitespace-only modification and was not changed by Phase 0",
+  "refactor_inputs": {
+    "新修改/CODEX_REFACTOR_INSTRUCTIONS.md": "e5e5127c77259cdaa2792d7d4572f7864118ae6bc21d3f04d4a6cf100a02c52f",
+    "新修改/README_V2.md": "7fc5ea2d020f1c91474f49359c74c74ad8ccce02c4eea879d03dd8ef6860c0f2",
+    "新修改/v2_reference_example.zip": "452acf16aabea2933c97c7dab48c0b23ea01b073755953775ca557ef4c75b972"
+  }
+}

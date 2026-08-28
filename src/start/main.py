@@ -20,6 +20,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from traning.app.cli import app as v2_app
 from start.checks import run_startup_checks, run_training_startup_checks
 from start.flow import StartupFlowConfig, run_startup_flow
 from start.samples import DEFAULT_MATCHED_MANIFEST
@@ -31,6 +32,7 @@ from visualization.core.multi_terminal import launch_attached_training_terminals
 
 
 app = typer.Typer(help="统一的 src 启动入口和训练预检。")
+app.add_typer(v2_app, name="v2", help="OSU Decision Model V2 独立入口。")
 console = Console()
 DEFAULT_UI_TRAINING_CONFIG = Path("configs") / "model_full_small_vram.yaml"
 DEFAULT_UI_OUTPUT_ROOT = Path("artifacts") / "training_runs"

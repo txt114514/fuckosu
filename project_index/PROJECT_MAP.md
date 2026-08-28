@@ -9,6 +9,7 @@
 |---|---|---|---|
 | 用户文档 | `docs` | [`INDEX.md`](../docs/INDEX.md)、[`QUICK_START.md`](../docs/QUICK_START.md)、[`TRAINING_WORKFLOW.md`](../docs/TRAINING_WORKFLOW.md) | [`codex/INDEX.md`](../docs/codex/INDEX.md) |
 | 启动入口与自检 | `src/start` | [`README.md`](../src/start/README.md) | 公开入口：`src/start/main.py` |
+| OSU Decision Model V2 | `src/traning` | [`README.md`](../src/traning/README.md) | 公开入口：`src/traning/app/__init__.py`；CLI：`src/traning/app/cli.py` |
 | 全局共享 API | `src/package` | [`README.md`](../src/package/README.md) | 公开入口：`src/package/__init__.py` |
 | 运行环境检查 | `environment` | 环境/CUDA 诊断脚本与 Python 检查 API | 公开入口：`environment/__init__.py` |
 | 训练前处理 | `src/before_traning` | [`README.md`](../src/before_traning/docs/README.md) | [`CODEX_INDEX.md`](../src/before_traning/docs/CODEX_INDEX.md) |
@@ -44,6 +45,38 @@
    运行训练启动前自检。
 7. `PYTHONPATH=src python -m start run --training-config configs/model_small_vram.yaml --device cpu --dry-run --test-level quick --no-before-match-probe`
    演练完整启动流程。
+8. `PYTHONPATH=src:. python -m start v2 config-check --config configs/traning.yaml`
+   从统一入口严格校验 V2 配置；旧默认命令与 V2 领域链路保持隔离。
+9. `PYTHONPATH=src:. python -m start v2 env-check --config configs/traning.yaml`
+   检查 V2 配置要求的 CUDA 与共享 affine 坐标标定。
+10. `PYTHONPATH=src:. python -m start v2 coordinate-audit --config configs/traning.yaml`
+   复算版本化独立控制点，并公开原始拟合集能否重放。
+11. `PYTHONPATH=src:. python -m start v2 train --config configs/traning.yaml --evaluator module:factory`
+   运行真实 typed evaluator；普通 trial 失败继续提案，固定数据质量阻断立即失败。
+
+## OSU V2 最短阅读路径
+
+1. 先读 `src/traning/README.md`，确认运行命令、失败语义、坐标指纹和 Phase 0 → 11 边界。
+2. `src/traning/config/models.py` 定义单一严格配置；工程基线是 `configs/traning.yaml`。
+3. `src/traning/app/cli.py` 提供 `config-check`、`coordinate-audit`、`env-check` 和
+   `train`，由
+   `src/start/main.py` 显式挂载到 `v2` 命名空间。
+4. `src/traning/app/factory.py` 校验模型/config/设备一致性并装配正式 runtime；
+   `src/traning/app/runtime.py` 固定 Perception → Tracking → Belief → Outcome → Decision。
+5. `src/traning/app/training.py` 把单一 config 接到门禁驱动参数搜索；
+   `optimization.max_trials: null` 表示未全通过时不施加额外 trial 截断。
+   `src/traning/training/evaluator.py` 把真实阶段 runner 的普通失败映成下一轮观测，
+   但固定 blocking DataQuality 会在 runner 构造前终止。
+6. Phase 1 → 10 依次位于 `contracts|config|infrastructure`、`data`、`perception`、
+   `tracking`、`belief`、`outcome/oracle|dataset`、`outcome/model`、`decision`、
+   `training`、`telemetry|visualization`；Phase 0 是冻结代码与 golden baseline，
+   Phase 11 由 `app` 完成入口与正式 runtime 收口。
+7. 训练 target、canonical scoring 与 gallery 只能通过
+   `build_frame_coordinate_transform` 共享同一 affine 方程及尺寸绑定指纹，禁止局部渲染补偿。
+   `configs/traning_coordinate_evidence.json` 保存独立控制点和拟合来源可用性声明；当前
+   `legacy-control-validated-v1` 只证明控制残差，不能冒充可重放的 passed-sample 拟合。
+8. `src/traning/training/checkpoints.py` 事务发布三个模型权重，并同时门禁 dataset identity、
+   model-contract SHA-256、权重摘要和坐标指纹。
 
 ## before_traning 最短阅读路径
 

@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "legacy_score_version": "point-slider-v2",
+  "perception": {
+    "expected_object_count": 2,
+    "recall": 1.0,
+    "candidate_geometry": [
+      {
+        "x": 56.0,
+        "y": 44.0,
+        "score": 0.5399999618530273,
+        "object_type": "hit_circle",
+        "object_type_id": 1
+      },
+      {
+        "x": 136.0,
+        "y": 92.0,
+        "score": 0.5039999485015869,
+        "object_type": "approach_circle",
+        "object_type_id": 2
+      }
+    ]
+  },
+  "oracle": {
+    "point": {
+      "distance": 10.0,
+      "distance_ratio": 0.5,
+      "time_error_ms": 75.0,
+      "spatial": 1.05,
+      "temporal": 0.9,
+      "raw": 2.8950000000000005,
+      "normalized": 0.9039812646370025,
+      "passed": true
+    },
+    "slider": {
+      "head_distance": 2.23606797749979,
+      "path_reference_coverage": 1.0,
+      "path_prediction_precision": 1.0,
+      "raw": 3.1341666666666663,
+      "normalized": 0.978662503252667,
+      "passed": true
+    }
+  },
+  "sequence": {
+    "hit_count": 2,
+    "miss_count": 1,
+    "frequency_limited_count": 1,
+    "unresolved_target_ids": [],
+    "statuses": ["hit", "frequency_limited", "hit", "miss"],
+    "target_ids": ["a", null, "b", null],
+    "error_tags": [[], ["frequency_limited"], [], ["no_active_target"]]
+  }
+}
