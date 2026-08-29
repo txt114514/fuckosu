@@ -271,7 +271,7 @@ class DataLoaderConfig:
     pin_memory: bool = False
 
     def __post_init__(self) -> None:
-        _require_int("data.loader.workers", self.workers)
+        _require_int("data.loader.workers", self.workers, minimum=0)
         _require_bool("data.loader.pin_memory", self.pin_memory)
 
 
@@ -389,7 +389,7 @@ class TelemetryConfig:
     """只读遥测事件存储配置。"""
 
     schema_version: int = TELEMETRY_SCHEMA_VERSION
-    directory: Path = Path("output/v2/telemetry")
+    directory: Path = Path("output/traning/telemetry")
 
     def __post_init__(self) -> None:
         if (
@@ -798,6 +798,7 @@ def _parse_data(root: Mapping[str, object]) -> DataConfig:
             workers=_require_int(
                 "data.loader.workers",
                 _value(loader_raw, "workers", loader_defaults.workers),
+                minimum=0,
             ),
             pin_memory=_require_bool(
                 "data.loader.pin_memory",

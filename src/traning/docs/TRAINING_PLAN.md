@@ -1,102 +1,152 @@
-# traning 当前进度总览
+# traning 当前训练目标与实现状态
 
-本文是 `src/traning` 的当前状态说明，面向人和 Codex 共同使用。源码导航仍以
-[`CODEX_INDEX.md`](CODEX_INDEX.md) 为准；阶段模块计划拆分为六个 plan：
+本文描述 `src/traning` 的唯一活动实现。V2 已整体迁入并覆盖旧训练包；不存在需要继续维护的
+`src/osu_v2`、`traning.core/conf/state`、外部 evaluator 或旧可视化兼容入口。源码定位以
+自动生成的 [`CODEX_INDEX.md`](CODEX_INDEX.md) 为准，运行环境约束见
+[`ENVIRONMENT.md`](ENVIRONMENT.md)，用户入口见 [`../README.md`](../README.md)。
 
-- [`DATASET_IMPORT_PLAN.md`](DATASET_IMPORT_PLAN.md)
-- [`SPATIAL_PLAN.md`](SPATIAL_PLAN.md)
-- [`TEMPORAL_PLAN.md`](TEMPORAL_PLAN.md)
-- [`DECISION_PLAN.md`](DECISION_PLAN.md)
-- [`RESULT_EXPORT_PLAN.md`](RESULT_EXPORT_PLAN.md)
-- [`MODEL_EXPORT_PLAN.md`](MODEL_EXPORT_PLAN.md)
+## 模型目标
 
-环境与 CUDA 运行约束见 [`ENVIRONMENT.md`](ENVIRONMENT.md)。
-训练启动前的实测检查和下一步命令见 [`TRAINING_READINESS.md`](TRAINING_READINESS.md)。
-计划缺口审计见 [`PLAN_GAP_AUDIT.md`](PLAN_GAP_AUDIT.md)。
-训练结果评分、归因和参数调整闭环见 [`OPTIMIZATION_MODULE.md`](OPTIMIZATION_MODULE.md)。
-`traning` 内部复用层整理见 [`LIB_STRUCTURE_AUDIT.md`](LIB_STRUCTURE_AUDIT.md)。
-`src` 总入口与完整训练启动前自检见 [`../../start/README.md`](../../start/README.md)。
-
-## 项目目标
-
-本项目从 osu! 游戏视频中逐帧识别当前应执行的动作，输出：
-
-- 是否操作：`no-op / press / hold / release`
-- 操作坐标：osu! playfield 坐标系下的 `x, y`
-- 目标类型：`circle / slider / spinner`
-- slider 路径、持续时间和必要的重复状态
-
-部署时只能看到当前帧和历史状态，因此完整链路必须保持因果：
+正式因果链路固定为：
 
 ```text
-当前帧 + 上一时刻状态
-  -> 空间识别与候选提取
-  -> 时间状态更新
-  -> 决策输出动作和坐标
+RuntimeFrame
+  -> Perception: CandidateObservation[]
+  -> Tracking: TrackedObservation[]
+  -> Belief: BeliefState[]
+  -> Outcome: OutcomeDistribution[]
+  -> Decision: CLICK_NOW | WAIT_ONE_STEP
 ```
 
-## 当前目录分层
+最终动作来自 learned outcome 分布与 deterministic optimal-stopping utility。正式 runtime
+不得读取 GT hit objects、训练 target、oracle label、action imitation logits 或 candidate
+slot logits；改变未来帧不得改变当前 belief。
+
+## 活动目录分层
 
 ```text
-main.py
-  -> ../start                 # src 顶层入口登记、渐进检查、训练启动前自检
-  -> core/dataset_import     # 训练集导入、检查、Dataset/DataLoader
-  -> core/spatial            # 空间训练与单帧推理
-  -> core/temporal           # 候选缓存窗口、因果时序训练 smoke
-  -> core/decision           # 候选缓存、评分、阶段编排
-  -> core/optimization       # 训练结果评分、错误归因、参数搜索修改
-  -> core/full_flow          # 完整生命周期编排、plan/dry-run/status/execute
-  -> core/result_export      # 标注预览、评估图集导出
-  -> core/model_export       # 模型导出与迁移边界
-  -> lib                     # traning 作用域内可复用 API
-  -> conf                    # Settings、默认值和配置加载
-  -> state                   # run / experiment / checkpoint / gallery schema
+src/start/main.py                 # 唯一仓库总启动入口
+  -> start/flow.py                # raw → before → split → checks → train → report
+  -> traning/
+       contracts/                # canonical typed contracts，训练/推理类型隔离
+       config/                   # 唯一严格配置与版本
+       infrastructure/           # 原子持久化、确定性与基础错误
+       data/                     # typed dataset、cache、quality、repository、坐标证据
+       perception/               # 图像感知、decode、target、loss、runtime
+       tracking/                 # association、track_id、轨迹生命周期
+       belief/                   # 逐 track 因果状态及训练
+       outcome/                  # oracle、反事实 dataset、模型、校准和训练
+       decision/                 # CLICK/WAIT 风险调整效用与 planner
+       evaluation/               # canonical scoring、sequence、attribution
+       training/                 # 六阶段门禁、参数搜索、恢复、checkpoint
+       telemetry/                # Reporter → Store，四类 JSONL
+       visualization/            # 只读 telemetry renderer 与纯 gallery overlay/PNG 原语
+       app/                      # 正式 runtime factory 与模型 CLI
+       lib/runtime/              # CUDA/AMP/channels-last/显存统一入口
 ```
 
-`core` 保留六个阶段目录，并新增 `optimization` 作为训练闭环控制模块。`traning` 内部公用能力放在 `lib`，配置模型与加载入口放在
-`conf`。旧 `traning.Lib`、`traning.data`、`traning.models`、`traning.training`
-和旧 core 路径兼容层已删除；新代码必须使用当前正式入口。
+## Phase 0 → Phase 11 状态
 
-## 已实现能力
+| Phase | 状态 | 当前落点 |
+|---|---|---|
+| 0 | 完成 | `legacy/legacy_freeze.json` 与 regression golden baseline |
+| 1 | 完成 | `contracts`、`config`、`infrastructure` |
+| 2 | 完成 | `data` typed pipeline、cache 完整性、quality gate、repositories |
+| 3 | 完成 | `perception`，推理只产生 `CandidateObservation` |
+| 4 | 完成 | `tracking`，slot 重排不改变 track identity |
+| 5 | 完成 | `belief`，逐 track 因果状态与 future-frame 隔离 |
+| 6 | 完成 | `outcome/oracle`、反事实 dataset、canonical attribution |
+| 7 | 完成 | OutcomeModel、NLL/Brier/ECE/expected-score MAE |
+| 8 | 完成 | `decision` CLICK/WAIT optimal stopping |
+| 9 | 完成 | 生产阶段、持续参数搜索、恢复状态及 hard-example typed 路由契约 |
+| 10 | 完成 | telemetry JSONL 与只读 terminal/Qt renderer |
+| 11 | 完成 | `app`、checkpoint、坐标证据、唯一 CLI/runtime，旧接口退役 |
 
-- `conf.settings`：Pydantic 配置模型、YAML 加载、环境变量覆盖和路径解析。
-- `dataset_import`：扫描 `video.mp4` 与 `beatmap.json` 配对，按
-  `package.dataset_split` 的持久化 manifest 生成 train/validation/test
-  `SegmentFrameDataset` 和 `DataLoader`。
-- `spatial`：原分辨率帧、重叠 patch、全局/局部编码、稠密空间头、单帧训练 smoke 和单帧推理。
-- `decision`：离线候选缓存 JSONL/manifest，保留候选、embedding、slider polyline 和歧义标记。
-- `optimization`：trial/sample 级评分聚合、空间/时间/决策归因、ASHA + 规则式参数调整、严格连续通过 gate、难例诊断、JSONL/SQLite trial 记录和多目标排序。
-- `result_export`：单帧标注预览、最佳 trial 图集、`passed/failed` 分类和稳定输出目录。
-- `state`：trial 参数、checkpoint lineage、课程阶段、gallery request 和 frame evaluation schema。
-- `lib.metrics`：`point-slider-v2` 单对象评分和 `click-sequence-v1` 序列模拟底层 API。
-- `lib.runtime`：CUDA/AMP/channels-last/TF32/GradScaler/显存预算和 OOM 建议统一入口。
-- `start.checks`：完整训练每次启动前执行模块入口、环境、配置、设备和数据输入自检。
-- `core.training_inheritance`：保存和加载 `training-checkpoint-v1`，支持 strict/auto/weights-only/none 恢复策略。
-- `core.full_flow`：统一完整流程入口，串接 before_traning、split、preflight、resume、ramp、artifact 和 inheritance 报告。
+## 生产训练闭环
 
-## 已实现但仍需持续扩展
+`data/segments.py` 从 canonical split manifest 构建 `TrainingDatasetBundle`。数据质量只由
+`DataQualityIssue.blocks_training` 决定；start 检查与训练复用同一份报告，blocking issue
+在任何 runner 执行前终止。
 
-- `full-flow` 是推荐的一条命令入口；`ramp-to-full` 保留为渐进放大兼容入口。
-- `run` 保留为单轮完整训练入口；`train-spatial`、`train-temporal` 等分步命令仍用于诊断。
-- `model_export` 已执行 CPU artifact smoke；更大规模 GPU 训练仍需按 `TRAINING_READINESS.md` 分级推进。
-- SMET 动态拓扑已有首版动态 top-k 稀疏线性层，并接入时序模型输出 heads；当前配置默认关闭。
+`training/production_stages.py` 对每个参数提案依次执行：
 
-## 核心技术约束
+```text
+Perception -> Tracking -> Belief -> Outcome -> Decision -> Evaluation
+```
 
-- 输入保持原始分辨率，默认约 `1484 x 846 / 60 FPS`。
-- 训练目标设备是 RTX 4060 Laptop 8GB VRAM，优先用时间换显存。
-- 空间训练使用 `512 x 512` 左右重叠 patch，`overlap_x/y` 建议 `96-128`。
-- patch 串行前向与逐 patch backward，禁止在训练 step 中长期保留 GPU tensor 列表。
-- slider 首版支持跨 patch 连续路径，但不支持两条 slider 交叉、接触后分叉或多 head 竞争同一连通分量。
-- 时序模型必须因果，任何训练或评估设计都不能用未来帧修正过去输出。
+参数通过统一规格映射到完整训练配置，不允许只调整渲染或某个旁路组件。一个 trial 只有
+全部门禁通过才可发布 checkpoint；checkpoint 同时绑定 dataset identity、模型契约摘要、
+权重 SHA-256、完整训练配置摘要和坐标指纹，并在返回成功前重新加载验证。
 
-## 文档阅读顺序
+Evaluation 以事件真实 `frame_index` 生成 production PNG，并在所有图片成功写入后最后原子
+提交 `gallery/manifest.json`。`passed/failed` 和 Spatial/Temporal/Decision 目录只由当前帧
+canonical events 决定；`long_sequence` 等名称仍是数据维度/样本身份，不参与错误归因。
 
-1. [`CODEX_INDEX.md`](CODEX_INDEX.md)：定位源码入口、符号和依赖。
-2. 本文：确认当前实现和缺口。
-3. 六个模块 plan：按任务所在阶段阅读。
-4. [`ENVIRONMENT.md`](ENVIRONMENT.md)：运行 CUDA、GPU、smoke test 或训练前阅读。
-5. [`LIB_STRUCTURE_AUDIT.md`](LIB_STRUCTURE_AUDIT.md)：调整 `src/traning/lib` 或公共 API
-   边界前阅读。
-6. [`../../start/README.md`](../../start/README.md)：调整整体入口或启动自检前阅读。
-7. [`../../../docs/codex/FULL_FLOW.md`](../../../docs/codex/FULL_FLOW.md)：调整完整流程或 resume 编排前阅读。
+`training/optimization.py` 只提出合法、量化且未执行过的参数组合。普通门禁失败会形成下一轮
+观测并继续搜索，不会让程序静默停止。搜索只有三类终态：
+
+1. 全部门禁通过：发布并验证 checkpoint，终态 `PASSED`。
+2. 显式正整数预算或有限参数空间耗尽：抛出 `SearchExhaustedError`，终态 `EXHAUSTED`。
+3. blocking 数据问题、设备/训练/制品异常：立即失败；这类问题无法通过换参数修复。
+
+`optimization.max_trials: null` 表示不附加人为 trial 截断，不表示伪造无限参数空间。
+`training/search_state.py` 将恢复状态绑定到 run、dataset 和 config identity，原子写入，避免
+不同数据或配置错误续跑。
+
+Curriculum、ASHA 与 hard-example 已有独立的 typed 规则、路由和回归测试，但当前
+`ProductionTrainer` 尚未把 TRAIN split 失败事件持久化并作为下一 trial 的采样或 loss
+权重消费。该能力不能从 `events_for(OPTIMIZER)` 的对象共享契约推断出来；在真正接线前，
+production 不得声称存在 hard-example 反馈闭环，validation/test 也绝不能进入训练权重。
+
+## 坐标与分类约束
+
+训练 target、perception 输出解释、oracle/scoring、evaluation 和 gallery overlay 必须共享
+`FrameCoordinateTransform`。方程方向、标定身份、原帧尺寸和完整 affine 矩阵共同进入
+transform fingerprint；不允许为某张图或某个 renderer 单独增加偏移。
+
+目标中心/head 必须位于 osu playfield；slider 后续控制点用于表达曲线方向，可以合法越出
+边界，不能因此把一个实际命中准确的样本误归因到空间模块。错误模块由
+`evaluation/attribution.py` 的 canonical 最早失败边界统一判定。
+
+## CUDA 与数据加载约束
+
+- 训练代码复用 `traning.lib.runtime` 的 `configure_torch_runtime`、
+  `module_to_device`、`tensor_to_device`、`autocast_context`、
+  `create_grad_scaler` 和 `collect_memory_snapshot`。
+- CUDA step 使用 `optimizer.zero_grad(set_to_none=True)`、AMP、必要时 GradScaler、
+  channels-last、TF32/cuDNN benchmark、pinned memory 和 non-blocking copy。
+- 不在 step 中保留无用 GPU Tensor 列表，不频繁调用 `torch.cuda.empty_cache()`。
+- Dataset 无 UI side effect，model forward 无磁盘 IO，repository 不泄漏裸 SQLite row。
+
+## 唯一运行入口
+
+完整生命周期：
+
+```bash
+PYTHONPATH=src python src/start/main.py
+PYTHONPATH=src python -m start run --config configs/traning.yaml
+```
+
+模型领域诊断或直接训练：
+
+```bash
+PYTHONPATH=src python -m traning.app config-check --config configs/traning.yaml
+PYTHONPATH=src python -m traning.app env-check --config configs/traning.yaml
+PYTHONPATH=src python -m traning.app coordinate-audit --config configs/traning.yaml
+PYTHONPATH=src python -m traning.app train --config configs/traning.yaml
+```
+
+上述命令不接受外部 evaluator；生产数据、阶段 runner 和 checkpoint 行为全部由仓库内 typed
+实现装配。
+
+## 维护要求
+
+修改 `src/traning/**/*.py` 后运行：
+
+```bash
+python project_index/build_index.py
+python project_index/build_index.py --check
+```
+
+`CODEX_INDEX.md` 是生成文件，不得手工编辑。旧六阶段 plan、readiness 和 gap audit 仅保留为
+迁移前历史记录，不可作为活动路径或命令依据。

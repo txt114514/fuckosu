@@ -12,7 +12,6 @@ from traning.lib.data.color_cues import (
     color_cue_channel_count,
     extract_osu_basic_color_cues,
 )
-from traning.lib.data.collate import collate_frame_samples
 from traning.lib.data.coordinates import (
     feature_grid_to_image,
     global_to_local,
@@ -20,7 +19,6 @@ from traning.lib.data.coordinates import (
     image_to_feature_grid,
     local_to_global,
 )
-from traning.lib.data.dataset import SegmentFrameDataset
 from traning.lib.data.discovery import discover_segments
 from traning.lib.data.models import (
     DatasetIssue,
@@ -54,14 +52,12 @@ __all__ = [
     "PatchStream",
     "PatchWindow",
     "SegmentAnnotation",
-    "SegmentFrameDataset",
     "SegmentRecord",
     "SyntheticStructure",
     "VideoReader",
     "append_color_cues",
     "build_patch_windows",
     "color_cue_channel_count",
-    "collate_frame_samples",
     "discover_segments",
     "extract_osu_basic_color_cues",
     "feature_grid_to_image",

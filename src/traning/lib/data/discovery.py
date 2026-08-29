@@ -18,6 +18,8 @@ def discover_segments(
     exclude_items: tuple[str, ...] = (),
     max_segments: int | None = None,
 ) -> DiscoveryResult:
+    """按稳定顺序发现过滤条件内的视频与标注配对记录。"""
+
     records: list[SegmentRecord] = []
     issues: list[DatasetIssue] = []
     dimension_filter = set(dimensions)

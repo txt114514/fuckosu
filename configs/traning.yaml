@@ -79,7 +79,7 @@ runtime:
 
 telemetry:
   schema_version: 2
-  directory: output/v2/telemetry
+  directory: output/traning/telemetry
 
 training:
   seed: 2026

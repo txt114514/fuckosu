@@ -6,6 +6,12 @@
 `failed/long_sequence`。frame 105 的图片看起来“打击位置很准”，但图片上的
 目标、候选和路径覆盖层不等于程序实际执行了点击。
 
+这里的 `long_sequence` 是数据集的 `dataset_dimension`，不是 Spatial、Temporal 或
+Decision“错误模块”。旧 exporter 先对整组帧做 `all(frame.passed)`，再把该组全部图片
+放入 `passed/failed`；因此一个准确单帧也会随同序列里的其他失败帧进入
+`failed/long_sequence`。V2 的 canonical event 改为保留每次点击/未解析目标各自的真实
+`frame_index`，不得再用序列级 AND 反写单帧分类。
+
 ## 原始制品中的一致事实
 
 - `decision/decisions.jsonl` 的 frame 105 动作为 `no_op`，概率
@@ -39,8 +45,9 @@ V2 不修改覆盖层来掩盖问题，而是在完整数据流中统一修复�
 3. “未执行 CLICK”不能因为存在 candidate slot 就当作命中；其失败首先属于
    Decision。只有 Perception/Tracking 的独立门禁明确失败时，才记录对应层的
    次级原因，不能覆盖主因。
-4. Phase 9/10 必须用自动化测试固定：同一 evaluation event 在训练调参、遥测和
-   gallery 中具有完全相同的 `primary_error` 与 pass/fail。
+4. Phase 9/10 用自动化测试固定：同一 evaluation event 在 hard-example 路由契约、
+   遥测和 gallery 中具有完全相同的 `primary_error` 与 pass/fail；当前 production
+   不宣称已经把该权重接入下一 trial 的采样器。
 
 ## 为什么该次训练在进程未被手动关闭时停止
 
@@ -86,8 +93,9 @@ video_y = 0.0003418231662923798 * osu_x
 RANSAC inlier 清单或点集摘要；现有 5 个点只能验证方程，无法唯一重建它。V2 因此不再
 使用 `pass-sample-ransac-v1` 这个过度声明的身份，而采用
 `legacy-control-validated-v1`，并把 `fit_reproducible=false`、控制点、来源和残差门限保存到
-`configs/traning_coordinate_evidence.json`。`v2 coordinate-audit` 默认复算控制点；若要求
-完整拟合来源，则 `--require-refit-provenance` 会按设计失败，绝不伪造缺失证据。
+`configs/traning_coordinate_evidence.json`。`python -m traning.app coordinate-audit`
+默认复算控制点；若要求完整拟合来源，则 `--require-refit-provenance` 会按设计失败，
+绝不伪造缺失证据。
 
 这组系数不是针对一张图做平移，也不能只写进 renderer。V2 的离线标注适配、训练样本、
 Oracle/evaluation、gallery 与命中位置必须共同调用 `package.coordinates` 的公开 affine

@@ -33,18 +33,26 @@ class PatchMeta:
 
     @property
     def width(self) -> int:
+        """返回当前 patch 在原始帧内的有效宽度。"""
+
         return self.x1 - self.x0
 
     @property
     def height(self) -> int:
+        """返回当前 patch 在原始帧内的有效高度。"""
+
         return self.y1 - self.y0
 
     @property
     def padded_width(self) -> int:
+        """返回模型实际接收的填充后 patch 宽度。"""
+
         return self.patch_width or self.valid_width
 
     @property
     def padded_height(self) -> int:
+        """返回模型实际接收的填充后 patch 高度。"""
+
         return self.patch_height or self.valid_height
 
 
@@ -107,7 +115,7 @@ class PatchStream:
         return metas
 
     def count(self, frame: torch.Tensor) -> int:
-        """Return the number of patches that ``iter_patches`` would emit."""
+        """返回 ``iter_patches`` 将为完整帧产生的 patch 数量。"""
 
         _, height, width = self._shape(frame)
         return len(self.metas(frame_width=width, frame_height=height))
@@ -147,7 +155,7 @@ class PatchStream:
     def to_device(
         self, patch: torch.Tensor, device: torch.device | str
     ) -> torch.Tensor:
-        """Move a patch to a device using non-blocking transfer when possible."""
+        """在允许时通过非阻塞传输把 patch 搬到目标设备。"""
 
         return patch.to(device, non_blocking=self.pin_memory)
 

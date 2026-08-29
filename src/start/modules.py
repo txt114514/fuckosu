@@ -76,9 +76,9 @@ SOURCE_MODULE_ENTRIES: tuple[SourceModuleEntry, ...] = (
         key="traning",
         import_name="traning",
         source_dir=SRC_ROOT / "traning",
-        description="模型训练、候选缓存、时序决策、评分和导出。",
-        public_entry="traning.main",
-        cli_entry="PYTHONPATH=src:. python -m traning.main",
+        description="Perception→Tracking→Belief→Outcome→Decision 生产训练与运行时。",
+        public_entry="traning.app",
+        cli_entry="PYTHONPATH=src python -m traning.app",
         docs=(
             SRC_ROOT / "traning" / "docs" / "TRAINING_PLAN.md",
             SRC_ROOT / "traning" / "docs" / "CODEX_INDEX.md",

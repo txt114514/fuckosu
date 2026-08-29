@@ -166,14 +166,12 @@ def _slider_direction_to_training_target(
         or source_frame_height != coordinate_transform.source_frame_height
     ):
         raise ValueError("source frame size 与坐标变换标定尺寸不一致")
-    start_x, start_y = coordinate_transform.transform.osu_to_video(start.x, start.y)
-    end_x, end_y = coordinate_transform.transform.osu_to_video(end.x, end.y)
-    delta_x = end_x - start_x
-    delta_y = end_y - start_y
-    norm = math.hypot(delta_x, delta_y)
-    if not math.isfinite(norm) or norm <= 0.0:
-        raise ValueError("slider path 首段经 affine 变换后必须是有限非零向量")
-    return delta_x / norm, delta_y / norm
+    return coordinate_transform.ground_truth_direction_to_training_target(
+        start,
+        end,
+        source_frame_width=source_frame_width,
+        source_frame_height=source_frame_height,
+    )
 
 
 def rasterize_perception_targets(

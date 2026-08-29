@@ -1,64 +1,52 @@
-# start 启动入口
+# start 总启动入口
 
-`src/start` 固定仓库内 `src` 顶层模块入口和启动前自检：
+`src/start` 是仓库唯一完整生命周期入口。它保留原来的总启动顺序，但训练阶段已经
+整体替换为 `src/traning` 的 typed V2 生产服务，不再调用旧 `traning.core`、独立
+`visualization` 或外部 evaluator 工厂。
 
-- `start.main`：总 CLI 入口，可列出模块和执行启动前检查。
-- `start.modules`：登记 `src/package`、`src/before_traning`、`src/traning`
-  以及 `src/start` 自身的稳定入口。
-- `start.entries`：按模块拆分的入口对象，供外部或脚本稳定引用。
-- `start.checks`：渐进自检与训练启动前检查。
-- `start.flow`：旧的启动编排业务函数，保留给适配层测试和诊断使用。
-- `start run`：当前推荐总入口，直接进入 `traning.core.full_flow`，启动中文 UI，
-  先展示启动检查/渐进训练准备 UI，再在真实训练阶段切换到正式训练 UI。
+## 执行顺序
 
-常用命令：
+1. 只读扫描未匹配谱面、视频和待处理样本。
+2. 确有新原始数据时运行 `before_traning` 七阶段转换；否则明确跳过。
+3. 增量同步 canonical dataset split manifest，既有 item 的 split 不漂移。
+4. 加载 `configs/traning.yaml`，检查设备、坐标证据和 canonical 数据质量报告。
+5. `--dry-run` 到此生成报告；正式模式进入可恢复参数搜索和六阶段训练。
+6. 只有全部门禁通过且 runtime checkpoint 复验成功，整个流程才返回 `passed`。
+
+默认配置不限制 trial 数。普通阶段门禁失败会保存 observation 并继续选择未重复参数；
+固定数据质量错误、显式 trial 预算/空间耗尽和不可恢复异常才会终止，并各自留下明确终态。
+
+## 命令
 
 ```bash
+PYTHONPATH=src python src/start/main.py run \
+  --config configs/traning.yaml \
+  --device cuda \
+  --resume
+
+# 同一入口的模块形式；无子命令也执行完整流程
+PYTHONPATH=src python -m start
+
+# CPU 只读预检，不启动训练
+PYTHONPATH=src python -m start run \
+  --config configs/traning.yaml \
+  --device cpu \
+  --dry-run
+
+# 诊断
 PYTHONPATH=src python -m start modules
-PYTHONPATH=src python -m start check
-PYTHONPATH=src python -m start check --config configs/model_small_vram.yaml --device cpu
-PYTHONPATH=src python src/start/main.py run --config configs/model_full_small_vram.yaml --device cuda --progress-ui rich --auto-launch-full
+PYTHONPATH=src python -m start config-check --config configs/traning.yaml
+PYTHONPATH=src python -m start coordinate-audit --config configs/traning.yaml
+PYTHONPATH=src python -m start env-check --config configs/traning.yaml --strict
 ```
 
-完整启动顺序：
-
-1. 调用 `before_traning.tests.startup_checks.runner.run_startup_checks`。
-   其中 `before_traning:raw_data` 会只读检测未匹配的新 `.osz`、待匹配视频、
-   已导入但未 `video_matched` 的样本和启动层 matched manifest；已匹配或已打包的样本不再检测、不修改。
-2. 如果 `before_traning:raw_data.details.should_run_before_traning` 为 true，
-   且未传 `--dry-run` / `--skip-before-traning`，运行 before_traning 七阶段流水线更新训练集。
-3. 同步 `training_package/splits/dataset_split_manifest.json`。已有 item 的 split 冻结，
-   只给新增且已打包完成的 item 做增量分配；默认不自动扩充 test split。
-4. 调用 `traning.tests.startup_checks.runner.run_startup_checks` 检查训练配置、设备、数据输入和 core 入口。
-5. `--test-level quick` 复用两个启动检测报告；`--test-level full` 调用
-   `before_traning.tests.full_checks.runner.run_full_checks` 和
-   `traning.tests.full_checks.runner.run_full_checks`。
-6. 检测通过后执行受控渐进训练；进入 `RAMP_TRAINING` 后 UI 自动切换为正式训练 UI。
-7. 渐进训练通过后，默认 `--auto-launch-full` 启动正式训练。
-8. 正式训练评估后，最佳参数对应的测试图集默认输出到 `traning_example/`，目录结构遵循
-   `src/traning/docs/RESULT_EXPORT_PLAN.md`。
-
-推荐总入口现在是：
+CUDA 必须通过工程约定的主机桥运行：
 
 ```bash
-PYTHONPATH=src:. python src/start/main.py run --config configs/model_full_small_vram.yaml --device cuda --progress-ui rich
+host-exec docker exec -u dev osu_ai_dev bash -lc \
+  'cd /home/dev/workspace && PYTHONPATH=src python src/start/main.py run --config configs/traning.yaml --device cuda --resume'
 ```
 
-容器内 CUDA 运行应使用项目约定的 host bridge：
-
-```bash
-host-exec docker exec -t -u dev osu_ai_dev bash -lc 'cd /home/dev/workspace && PYTHONPATH=src:. python src/start/main.py run --config configs/model_full_small_vram.yaml --device cuda --progress-ui rich --auto-launch-full'
-```
-
-常用 UI/训练参数：
-
-- `--progress-ui auto|rich|plain|off`：TTY 下 `auto` 会启用 Rich UI。
-- `--test-level none|quick|full`：`none` 跳过 ramp preflight 中的 pytest full checks；
-  默认 `quick` 会执行训练 full checks。
-- `--auto-launch-full/--no-auto-launch-full`：是否在渐进训练通过后进入正式训练，默认开启。
-- `--gallery-output-root traning_example`：正式训练最佳参数图集输出根目录，默认就是
-  `traning_example/`。
-
-完整训练入口 `traning.core.decision.run_full_training_pipeline` 每次启动都会先调用
-`start.checks.run_training_startup_checks`。自检失败时训练不会继续；自检结果写入
-`full_training_summary.json`。
+每次运行在 `artifacts/training_runs/<run_id>/start_flow_report.json` 保存完整阶段证据；
+trial checkpoint 与 `search_state.json` 位于同一 run 目录，重启时使用 `--resume` 接续，
+不会重复已原子提交的 proposal。

@@ -19,7 +19,7 @@ from traning.evaluation import (
 )
 
 
-_OSU_V2_ROOT = Path(__file__).resolve().parents[2]
+_TRANING_ROOT = Path(__file__).resolve().parents[2]
 _VALID_EVENT_ID = "sequence-event-" + "0" * 64
 
 
@@ -159,7 +159,7 @@ def test_click_event_contract_rejects_contradictory_pass_and_tags() -> None:
 def test_attribution_source_has_no_legacy_any_or_rescoring() -> None:
     """归因层只能投影 SequenceScore，不得读取视觉旁路或重新评分。"""
 
-    path = _OSU_V2_ROOT / "evaluation/attribution.py"
+    path = _TRANING_ROOT / "evaluation/attribution.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))
     forbidden_names = {
         "Any",

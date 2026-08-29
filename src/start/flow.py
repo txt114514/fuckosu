@@ -317,6 +317,7 @@ def run_start_flow(
 
     try:
         config = load_v2_config(flow_config.training_config)
+        config = _effective_training_config(config, flow_config)
     except (OSError, TypeError, ValueError) as exc:
         stages.append(StartStageResult("raw_scan", "failed", f"V2 配置失败：{exc}"))
         return _finish_flow(
@@ -654,6 +655,31 @@ def _sync_dataset_splits(
         allow_test_growth=flow_config.allow_test_growth,
         dry_run=flow_config.dry_run,
     )
+
+
+def _effective_training_config(
+    config: V2Config,
+    flow_config: StartFlowConfig,
+) -> V2Config:
+    """把启动层允许覆盖的设备、清单和 seed 集体写回唯一 V2Config。"""
+
+    data = replace(
+        config.data,
+        split_manifest=(
+            flow_config.split_manifest_path or config.data.split_manifest
+        ),
+        seed=config.data.seed if flow_config.split_seed is None else flow_config.split_seed,
+    )
+    runtime = config.runtime
+    if flow_config.requested_device is not None:
+        is_cuda = flow_config.requested_device is RuntimeDevice.CUDA
+        runtime = replace(
+            runtime,
+            device=flow_config.requested_device,
+            require_cuda=is_cuda,
+            amp=is_cuda and runtime.amp,
+        )
+    return replace(config, data=data, runtime=runtime)
 
 
 def _before_raw_data_result(report: StartupCheckReport) -> Any | None:

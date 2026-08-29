@@ -33,6 +33,8 @@ class VideoReader:
         return capture
 
     def read_frame(self, path: Path, frame_index: int) -> np.ndarray:
+        """按零起始帧序号解码并返回 RGB 数组。"""
+
         capture = self._capture(path)
         capture.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
         success, frame = capture.read()
@@ -41,18 +43,20 @@ class VideoReader:
         return cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
     def read_frame_at(self, path: Path, timestamp_ms: float) -> np.ndarray:
+        """按非负相对毫秒定位并解码一个 RGB 帧。"""
+
         if timestamp_ms < 0:
             raise ValueError("timestamp_ms must be nonnegative")
         capture = self._capture(path)
         capture.set(cv2.CAP_PROP_POS_MSEC, timestamp_ms)
         success, frame = capture.read()
         if not success:
-            raise IndexError(
-                f"failed to decode frame at {timestamp_ms:.3f} ms: {path}"
-            )
+            raise IndexError(f"failed to decode frame at {timestamp_ms:.3f} ms: {path}")
         return cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
     def close(self) -> None:
+        """立即释放缓存中的全部 OpenCV 视频句柄。"""
+
         for capture in self._captures.values():
             capture.release()
         self._captures.clear()

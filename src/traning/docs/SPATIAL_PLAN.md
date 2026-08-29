@@ -1,5 +1,8 @@
 # Spatial Plan
 
+> Legacy 历史记录：旧 Spatial 路径已由 Perception/Tracking 覆盖，不提供兼容入口。
+> 当前实现以 `TRAINING_PLAN.md` 和生成的 `CODEX_INDEX.md` 为准。
+
 ## 模块定位
 
 源码入口：`src/traning/core/spatial`

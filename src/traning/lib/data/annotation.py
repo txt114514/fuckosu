@@ -9,6 +9,8 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validat
 
 
 class HitObjectAnnotation(BaseModel):
+    """单个 osu! 物件在 segment 相对时间轴上的标注。"""
+
     model_config = ConfigDict(extra="allow")
 
     type: str
@@ -32,6 +34,8 @@ class HitObjectAnnotation(BaseModel):
 
 
 class DifficultyAnnotation(BaseModel):
+    """生成监督目标所需的难度派生参数。"""
+
     model_config = ConfigDict(extra="allow")
 
     approach_preempt_ms: float
@@ -39,6 +43,8 @@ class DifficultyAnnotation(BaseModel):
 
 
 class SourceAnnotation(BaseModel):
+    """segment 对应谱面与原始裁剪区间的来源信息。"""
+
     model_config = ConfigDict(extra="allow")
 
     folder_name: str
@@ -56,6 +62,8 @@ class SourceAnnotation(BaseModel):
 
 
 class SegmentAnnotation(BaseModel):
+    """一个视频 segment 的版本化完整训练标注。"""
+
     model_config = ConfigDict(extra="allow")
 
     schema_version: int
@@ -68,10 +76,14 @@ class SegmentAnnotation(BaseModel):
 
     @property
     def duration_ms(self) -> int:
+        """返回 segment 在源时间轴上的持续毫秒数。"""
+
         return self.source.clip_end_ms - self.source.clip_start_ms
 
 
 def load_annotation(path: Path) -> SegmentAnnotation:
+    """从 JSON 文件读取并严格校验一个 segment 标注。"""
+
     try:
         raw = json.loads(path.read_text(encoding="utf-8-sig"))
     except (OSError, json.JSONDecodeError) as error:

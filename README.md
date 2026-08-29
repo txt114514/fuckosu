@@ -1,171 +1,91 @@
-# osu video training workspace
+# osu! 视频决策模型工作区
 
-This repository prepares osu! gameplay data and trains a video-to-action model.
-The stable training CLI is `python -m traning.main`; `python -m traning.cli`
-is kept only as a compatibility alias.
+仓库以 `src/start/main.py` 作为唯一总启动流程，以 `src/traning` 作为唯一活动训练包。
+旧 Spatial → Temporal imitation → argmax Decision 实现和独立 `src/visualization`
+包已经退役；V2 已整体迁入并覆盖原 `traning`，不保留旧接口兼容层。
 
-## Current Status
+## 当前模型链路
 
-Checked on 2026-07-05.
+```text
+Image
+  → Perception
+  → Association / Tracking
+  → Temporal Belief
+  → Outcome Prediction
+  → Decision / Optimal Stopping
+```
 
-- Git workspace was clean at the time of the check.
-- Project indexes are current: `python project_index/build_index.py --check`.
-- `src` module entries are importable: `start`, `package`, `before_traning`,
-  and `traning`.
-- CPU environment check passes. The normal Codex sandbox cannot see CUDA, so
-  GPU checks and CUDA training should be run through the host bridge.
-- `full-flow --mode plan` passes and writes the expected manifest, state, and
-  report files.
-- `full-flow --mode dry-run` passes. It runs raw-data checks, split validation,
-  startup checks, resume discovery, and report generation without training.
-- Current raw-data check found no unmatched beatmap/audio candidates, so
-  `before_traning` is skipped unless new raw data appears.
-- Current dataset split manifest has 1 train item and 1 validation item:
-  `item_000001` has 190 train segments, `item_000002` has 90 validation
-  segments, and test split is frozen at 0 items.
-- Training startup checks see 190 train segments and about 23,949 estimated
-  train frames with no reported data-input issues.
+训练与推理使用 typed contracts，正式动作路径不读取 GT、oracle label 或旧 action
+logits。唯一活动配置是 `configs/traning.yaml`；默认 `optimization.max_trials: null`，
+普通门禁失败后会继续选择合法且未重复的参数，直到全部门禁通过、搜索空间显式耗尽、
+用户中断或发生不可恢复错误。
 
-The project is ready for controlled training. The recommended route is
-`full-flow`: it coordinates raw-data checks, optional `before_traning`, split
-sync, preflight, resume discovery/restore, ramp training, artifact export,
-inheritance packaging, and reports. The last documented GPU ramp verification
-in `src/traning/docs/TRAINING_READINESS.md` reached Level B on 2026-06-26; GPU
-verification was not rerun in this README update.
+## 启动
 
-## 计划完成情况
-
-- `before_traning` 七阶段数据处理流程：谱面导入、校验、难度提取、视频匹配、音画对齐、裁剪和片段生成。
-- 训练数据导入与 split manifest 管理。
-- 空间模型训练与单帧推理。
-- 候选缓存生成。
-- 时序模型训练与因果动作预测。
-- 决策结果导出。
-- 评分、错误归因、gallery 图集和 next job 输出。
-- 可视化模块：中文终端训练 UI、Rich/plain/off 进度模式、结构化 `TrainingReporter`、
-  full-flow 阶段上报、训练 step/loss/资源状态上报、passed/failed gallery 图集、
-  `manifest.json` 和 `index.csv` 导出。
-- 模型 artifact 导出。
-- checkpoint / inheritance 断点继承与恢复。
-- `full-flow` 完整生命周期入口。
-- CPU plan / dry-run 检查已通过。
-- 文档记录中 GPU ramp 已验证到 Level B。
-
-目前进行到计划的 **受控训练 / ramp-to-full 已打通，准备放大到完整目标 GPU 训练** 这一步。
-也就是说，工程闭环已经完成，当前重点不再是补主流程代码，而是执行完整训练并根据真实结果调优。
-
-当前没有未完成的 P0/P1/P2 代码缺口。还没有实现或还没有最终完成验证的内容包括：
-
-- 完整 full 目标 GPU 训练还没有确认跑完。
-- 本次 README 更新没有重新跑真实 CUDA 验证，GPU 路径仍需通过 host bridge 检查。
-- 模型质量还需要依赖真实长训练继续调参，包括 press/release 时间窗、课程采样、loss 权重和评分门槛。
-- 可视化目前是终端 UI 和静态 gallery/index 导出，还没有做独立 Web 仪表盘或交互式浏览器。
-
-已实现的增强项首版：
-
-- 更强的局部模型复查：候选缓存生成阶段会用 `local_consistency_model_v1` 复判候选点、
-  slider 端点和低置信区域；可解决的歧义会从候选标记中移除，局部 refiner 可把
-  slider head 贴合到路径端点或中心线。
-- optimization 记录升级：保留 JSONL 兼容 store，并新增 `SQLiteTrialStore`；
-  配置可通过 `optimization.trial_store_backend` 在 `jsonl/sqlite` 之间切换。
-- 多目标排序公式：新增 `multi-objective-v1`，把 `quality_score`、`peak_vram_mb`、
-  `latency_ms` 拆成独立目标并计算可复现 `objective_score`。
-- SMET 动态拓扑：新增动态 top-k 稀疏线性层，并接入时序模型 action/candidate/xy/time heads；
-  默认关闭，可通过 `smet.enabled`、`smet.sparsity`、`smet.update_interval`
-  和 `smet.min_density` 配置启用。
-
-## Recommended Command
-
-Run the real CUDA path from the container namespace:
+完整流程保持原入口语义：原始数据检查 → 可选 `before_traning` 七阶段转换 → split
+同步 → canonical 数据质量与环境检查 → 可恢复生产训练 → 报告。
 
 ```bash
-host-exec docker exec -u dev osu_ai_dev bash -lc '
-cd /home/dev/workspace
-PYTHONPATH=src:. python -m traning.main full-flow \
-  --config configs/model_full_small_vram.yaml \
+PYTHONPATH=src python src/start/main.py run \
+  --config configs/traning.yaml \
   --device cuda \
-  --resume \
-  --resume-policy auto \
-  --auto-launch-full \
-  --progress-ui rich \
-  --progress-language zh-CN
-'
+  --resume
 ```
 
-Check CUDA first:
+无参数直接执行同一完整流程：
 
 ```bash
-host-exec docker exec -u dev osu_ai_dev bash -lc 'cd /home/dev/workspace && PYTHONPATH=src:. python -m traning.main env-check --strict --require-cuda'
+PYTHONPATH=src python src/start/main.py
+# 等价模块入口
+PYTHONPATH=src python -m start
 ```
 
-## Non-Training Checks
-
-Preview the full flow on CPU:
+只执行模型侧诊断或训练：
 
 ```bash
-PYTHONPATH=src:. python -m traning.main full-flow --mode plan --config configs/model_small_vram.yaml --device cpu
-PYTHONPATH=src:. python -m traning.main full-flow --mode dry-run --config configs/model_small_vram.yaml --device cpu --progress-ui off
+PYTHONPATH=src python -m traning.app config-check --config configs/traning.yaml
+PYTHONPATH=src python -m traning.app coordinate-audit --config configs/traning.yaml
+PYTHONPATH=src python -m traning.app env-check --config configs/traning.yaml --strict
+PYTHONPATH=src python -m traning.app train --config configs/traning.yaml --resume
 ```
 
-Inspect top-level module entrypoints:
+CUDA 命令必须从主机桥进入正常容器 namespace：
 
 ```bash
-PYTHONPATH=src python -m start modules
-PYTHONPATH=src python -m start check --config configs/model_small_vram.yaml --device cpu
+host-exec docker exec -u dev osu_ai_dev bash -lc \
+  'cd /home/dev/workspace && bash environment/check_gpu.sh'
 ```
 
-Resume from the latest inheritance package:
+## 主要目录
 
-```bash
-PYTHONPATH=src:. python -m traning.main full-flow --config configs/model_small_vram.yaml --device cuda --resume --resume-policy auto
-```
-
-## Outputs
-
-Important outputs are written under `artifacts/training_runs/<run_id>/`:
-
-- `full_flow_state.json`
-- `resume_report.json`
-- `reports/full_flow_report.md`
-- `ramp/`
-- `artifacts/`
-- `inheritance/`
-
-The dry-run status check used for this README wrote temporary files under
-`/tmp/readme_status_check/`.
-
-## Module Snapshot
-
-| Module | Status |
+| 路径 | 职责 |
 |---|---|
-| `src/before_traning` | Seven-stage data preparation pipeline for beatmap import, verification, difficulty export, video match, AV sync, clipping, and segment generation. Current startup check found no new unmatched raw data. |
-| `src/package` | Stable shared API layer for contracts, checks, dataset split, coordinates, and slider path helpers. |
-| `src/start` | Top-level module registry and startup/self-check orchestration. Current module import check passes. |
-| `src/traning` | Main training system. `full-flow` is the recommended lifecycle entry; spatial, temporal, decision, scoring, result export, model export, ramp, and inheritance flows are wired. |
-| `src/visualization` | Chinese terminal training UI, report/gallery APIs, and visualization state helpers. |
-| `environment` | Environment and CUDA diagnostics. Use host bridge for real GPU checks. |
+| `src/before_traning` | 谱面导入、视频匹配、音画对齐、裁剪与 segment 生成 |
+| `src/package` | 多个顶层模块共用的坐标、split 与检查公开 API |
+| `src/start` | 唯一总启动编排和检查入口 |
+| `src/traning` | Perception、Tracking、Belief、Outcome、Decision、训练、遥测和只读可视化 |
+| `configs/traning.yaml` | 唯一严格生产配置 |
 
-## Documentation
+训练 run 写入 `artifacts/training_runs/<run_id>/`。每个已完成 trial 的搜索历史会原子
+写入 `search_state.json`；只有全部门禁通过且 checkpoint 摘要、dataset identity、模型
+契约和坐标指纹复验成功，流程才返回 `passed`。
 
-- [Quick Start](docs/QUICK_START.md)
-- [Training Workflow](docs/TRAINING_WORKFLOW.md)
-- [Documentation Index](docs/INDEX.md)
-- [Project Map](project_index/PROJECT_MAP.md)
-- [Training Readiness](src/traning/docs/TRAINING_READINESS.md)
-- [CUDA Environment](src/traning/docs/ENVIRONMENT.md)
+每个到达 Evaluation 的 trial 还会生成
+`trials/trial-XXXXXX/gallery/manifest.json`。PNG 按当前帧的 canonical event 分入
+`passed/none` 或 `failed/<spatial|temporal|decision|mixed>`；序列名只保留为样本目录，
+不会再用整段序列的 AND 结果把一张已通过图片拖进 `failed`。
 
-Engineering docs for Codex and maintainers live in
-[docs/codex/INDEX.md](docs/codex/INDEX.md).
-
-## Verification Log
-
-The README status above is based on these commands:
+## 验证与文档
 
 ```bash
-git status --short
+PYTHONPATH=src:. python -m pytest -q src/traning/tests
+PYTHONPATH=src:. python -m pytest -q src/start/tests
 python project_index/build_index.py --check
-PYTHONPATH=src python -m start modules
-PYTHONPATH=src:. python -m traning.main env-check --strict
-PYTHONPATH=src:. python -m traning.main full-flow --mode plan --config configs/model_small_vram.yaml --device cpu --output-root /tmp/readme_status_check --run-id plan_check --skip-full-checks --progress-ui off
-PYTHONPATH=src:. python -m traning.main full-flow --mode dry-run --config configs/model_small_vram.yaml --device cpu --output-root /tmp/readme_status_check --run-id dry_run_check --skip-full-checks --progress-ui off
 ```
+
+- [项目导航](project_index/PROJECT_MAP.md)
+- [训练目标与阶段](src/traning/docs/TRAINING_PLAN.md)
+- [生成的训练代码索引](src/traning/docs/CODEX_INDEX.md)
+- [CUDA 环境](src/traning/docs/ENVIRONMENT.md)
+- [V2 迁移状态](V2_MIGRATION_STATUS.md)
+- [旧准确画面误归因诊断](src/traning/docs/LEGACY_FAILURE_DIAGNOSIS.md)

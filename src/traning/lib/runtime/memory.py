@@ -42,6 +42,8 @@ class RuntimeMemoryBudget:
     cuda_memory_fraction: float | None
 
     def as_dict(self) -> dict[str, float | str | None]:
+        """返回适合持久化和诊断输出的内存预算字段映射。"""
+
         return {
             "device": self.device,
             "ram_total_gib": self.ram_total_gib,
@@ -70,6 +72,8 @@ class CudaRuntimeConfig:
 
 @dataclass(frozen=True)
 class CudaRuntimeState:
+    """应用运行时配置后可记录、可比较的 CUDA 实际状态。"""
+
     device: str
     amp_dtype: str
     channels_last: bool
@@ -77,6 +81,19 @@ class CudaRuntimeState:
     cudnn_benchmark: bool
     matmul_float32_precision: str
     grad_scaler_enabled: bool
+
+    def as_dict(self) -> dict[str, str | bool]:
+        """返回适合日志和诊断输出的强类型字段映射。"""
+
+        return {
+            "device": self.device,
+            "amp_dtype": self.amp_dtype,
+            "channels_last": self.channels_last,
+            "allow_tf32": self.allow_tf32,
+            "cudnn_benchmark": self.cudnn_benchmark,
+            "matmul_float32_precision": self.matmul_float32_precision,
+            "grad_scaler_enabled": self.grad_scaler_enabled,
+        }
 
 
 def enforce_runtime_memory_budget(
@@ -273,6 +290,8 @@ def create_grad_scaler(
     amp_dtype: AmpDType,
     mode: str = "auto",
 ) -> torch.amp.GradScaler:
+    """按设备、AMP 精度和显式模式构造统一 GradScaler。"""
+
     if mode not in {"auto", "enabled", "disabled"}:
         raise ValueError("grad scaler mode must be auto, enabled, or disabled")
     enabled = {
@@ -303,6 +322,8 @@ def maybe_compile_module(
     enabled: bool,
     mode: str = "default",
 ) -> nn.Module:
+    """按配置选择性编译模块，不可用时给出明确失败。"""
+
     if not enabled:
         return module
     if not hasattr(torch, "compile"):
@@ -356,6 +377,8 @@ def format_oom_guidance(
     amp_dtype: str,
     config_path: str | None,
 ) -> str:
+    """根据内存快照生成可操作且顺序明确的 CUDA OOM 建议。"""
+
     snapshot = collect_memory_snapshot()
     allocated = (
         "unknown"

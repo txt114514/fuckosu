@@ -1,103 +1,62 @@
-"""验证统一 CLI 只做参数适配，并正确调用底层业务流程。"""
+"""验证总 CLI 只适配参数，并且不再暴露 legacy/V2 双入口。"""
 
 from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
-import unittest
-from unittest.mock import patch, sentinel
+from unittest.mock import patch
 
-import torch
 from typer.testing import CliRunner
 
 from start import main as start_main
 
 
-class StartCliAdapterTests(unittest.TestCase):
-    def test_business_start_flow_builds_startup_config(self) -> None:
-        with patch(
-            "start.main.run_startup_flow",
-            return_value=sentinel.result,
-        ) as flow:
-            result = start_main.run_training_startup_flow(
-                training_config=Path("configs/test.yaml"),
-                device="cpu",
-                dry_run=True,
-                test_level="none",
-                patch_limit=0,
-                cache_max_frames=0,
-            )
-
-        self.assertIs(result, sentinel.result)
-        config = flow.call_args.args[0]
-        self.assertEqual(config.training_config, Path("configs/test.yaml"))
-        self.assertEqual(config.device, torch.device("cpu"))
-        self.assertTrue(config.dry_run)
-        self.assertEqual(config.test_level, "none")
-        self.assertIsNone(config.patch_limit)
-        self.assertIsNone(config.cache_max_frames)
-
-    def test_run_cli_alias_passes_arguments_to_ui_full_flow_function(self) -> None:
-        runner = CliRunner()
-        fake_result = SimpleNamespace(status="passed")
-        with (
-            patch(
-                "start.main.run_training_ui_flow",
-                return_value=fake_result,
-            ) as business,
-            patch("start.main._render_full_flow_table"),
-        ):
-            result = runner.invoke(
-                start_main.app,
-                [
-                    "run",
-                    "--config",
-                    "configs/test.yaml",
-                    "--device",
-                    "cpu",
-                    "--dry-run",
-                    "--test-level",
-                    "none",
-                ],
-            )
-
-        self.assertEqual(result.exit_code, 0, result.output)
-        kwargs = business.call_args.kwargs
-        self.assertEqual(kwargs["training_config"], Path("configs/test.yaml"))
-        self.assertEqual(kwargs["device"], "cpu")
-        self.assertTrue(kwargs["dry_run"])
-        self.assertEqual(kwargs["test_level"], "none")
-        self.assertTrue(kwargs["auto_launch_full"])
-        self.assertEqual(kwargs["gallery_output_root"], Path("traning_example"))
-
-    def test_no_args_defaults_to_ui_full_flow(self) -> None:
-        runner = CliRunner()
-        fake_result = SimpleNamespace(status="passed")
-        with (
-            patch(
-                "start.main.run_training_ui_flow",
-                return_value=fake_result,
-            ) as business,
-            patch("start.main._render_full_flow_table"),
-        ):
-            result = runner.invoke(start_main.app, [])
-
-        self.assertEqual(result.exit_code, 0, result.output)
-        kwargs = business.call_args.kwargs
-        self.assertEqual(
-            kwargs["training_config"],
-            start_main.DEFAULT_UI_TRAINING_CONFIG,
+def test_run_command_forwards_single_v2_config_and_device_override() -> None:
+    runner = CliRunner()
+    fake = SimpleNamespace(ok=True, stages=(), run_id="run", report_path=Path("report"))
+    with (
+        patch("start.main.run_training_flow", return_value=fake) as business,
+        patch("start.main._render_result"),
+    ):
+        result = runner.invoke(
+            start_main.app,
+            [
+                "run",
+                "--config",
+                "configs/test.yaml",
+                "--device",
+                "cpu",
+                "--dry-run",
+                "--run-id",
+                "test-run",
+            ],
         )
-        self.assertEqual(kwargs["gallery_output_root"], Path("traning_example"))
 
-    def test_run_help_is_available(self) -> None:
-        runner = CliRunner()
-        result = runner.invoke(start_main.app, ["run", "--help"])
-
-        self.assertEqual(result.exit_code, 0, result.output)
-        self.assertIn("Usage:", result.output)
-        self.assertIn("--device", result.output)
+    assert result.exit_code == 0, result.output
+    assert business.call_args.kwargs["config"] == Path("configs/test.yaml")
+    assert business.call_args.kwargs["device"] is start_main.DeviceOption.CPU
+    assert business.call_args.kwargs["dry_run"] is True
+    assert business.call_args.kwargs["run_id"] == "test-run"
 
 
-if __name__ == "__main__":
-    unittest.main()
+def test_no_args_runs_same_total_flow() -> None:
+    runner = CliRunner()
+    fake = SimpleNamespace(ok=True, stages=(), run_id="run", report_path=Path("report"))
+    with (
+        patch("start.main.run_training_flow", return_value=fake) as business,
+        patch("start.main._render_result"),
+    ):
+        result = runner.invoke(start_main.app, [])
+
+    assert result.exit_code == 0, result.output
+    business.assert_called_once_with()
+
+
+def test_help_has_no_legacy_evaluator_or_v2_namespace() -> None:
+    runner = CliRunner()
+    result = runner.invoke(start_main.app, ["--help"])
+
+    assert result.exit_code == 0, result.output
+    assert "--evaluator" not in result.output
+    assert " v2 " not in result.output
+    assert "run" in result.output

@@ -361,8 +361,8 @@ def _validate_output_batch_alignment(
         raise ValueError("output 与 batch size 不一致")
     if output.category_logits.device != batch.belief_embeddings.device:
         raise ValueError("output 与 batch 必须位于同一设备")
-    if output.category_logits.dtype != batch.belief_embeddings.dtype:
-        raise TypeError("output 与 batch 浮点 dtype 必须一致")
+    # CUDA autocast 可以让模型输出成为 float16/bfloat16，而输入与监督仍保持
+    # float32；PyTorch 的 canonical loss 会安全提升精度，不能把正常 AMP 当成错配。
 
 
 def _validate_scalar_tensors(values: tuple[tuple[str, torch.Tensor], ...]) -> None:

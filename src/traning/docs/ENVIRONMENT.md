@@ -1,40 +1,37 @@
-# Environment
+# 训练环境与 CUDA 规则
 
-## 运行目标
+正式配置默认使用 CUDA。Codex 普通 sandbox 可能看不到 `/dev/nvidia*`，即使开发容器已经
+正常挂载 GPU；不要因此重装 PyTorch、改 CUDA 镜像或给生产代码增加 CPU 静默 fallback。
 
-训练环境默认面向 RTX 4060 Laptop 8GB VRAM。核心策略是保留原始图像精度，同时通过
-patch 串行、AMP、channels-last 和 CPU offload 控制显存。
-
-普通 Codex sandbox 可能看不到 `/dev/nvidia*`。不要因为 sandbox 看不到 CUDA 就重装
-PyTorch 或修改 CUDA 镜像。需要 GPU/CUDA 时通过 host bridge 进入正常容器 namespace：
+## 主机桥检查
 
 ```bash
-host-exec docker exec -u dev osu_ai_dev bash -lc 'cd /home/dev/workspace && bash environment/check_gpu.sh'
+host-exec docker exec -u dev osu_ai_dev bash -lc \
+  'cd /home/dev/workspace && bash environment/check_gpu.sh'
+
+host-exec docker exec -u dev osu_ai_dev bash -lc \
+  'cd /home/dev/workspace && PYTHONPATH=src python -m traning.app env-check --config configs/traning.yaml --strict'
 ```
 
-训练 CLI 的 CUDA 严格检查示例：
+完整训练同样从主机桥运行：
 
 ```bash
-host-exec docker exec -u dev osu_ai_dev bash -lc 'cd /home/dev/workspace && PYTHONPATH=src:. python -m traning.main env-check --strict --require-cuda'
+host-exec docker exec -u dev osu_ai_dev bash -lc \
+  'cd /home/dev/workspace && PYTHONPATH=src python src/start/main.py run --config configs/traning.yaml --device cuda --resume'
 ```
 
-## 环境检查
+CPU 仅用于明确的 dry-run 或测试。若要直接运行模型 CPU smoke，配置必须同时设置：
 
-常用命令：
-
-```bash
-PYTHONPATH=src:. python -m traning.main env-check
-PYTHONPATH=src:. python -m traning.main model-smoke --config configs/model_small_vram.yaml
-PYTHONPATH=src python -m pytest src/traning/tests -q
-python project_index/build_index.py --check
+```yaml
+runtime:
+  device: cpu
+  require_cuda: false
+  amp: false
 ```
 
-`env-check` 汇总 Python、ffmpeg、nvidia-smi、torch、torchvision、CUDA、GPU 名称、cuDNN、
-BF16、显存和依赖导入状态。
+## 统一 runtime API
 
-## Runtime Policy
-
-新增训练、评估或 smoke 入口必须复用 `traning.lib.runtime`：
+新增或修改训练 step 必须复用 `traning.lib.runtime`：
 
 - `configure_torch_runtime`
 - `module_to_device`
@@ -45,56 +42,32 @@ BF16、显存和依赖导入状态。
 - `enforce_runtime_memory_budget`
 - `format_oom_guidance`
 
-不要在各模块里散写 CUDA 开关。
+不要在不同模型或阶段各写一套设备选择、AMP 和 CUDA 开关。
 
-## 小显存默认配置
+## CUDA step 约束
 
-默认配置位于 `configs/model_small_vram.yaml`：
+- `optimizer.zero_grad(set_to_none=True)`；
+- CUDA 使用 AMP，float16 时启用 GradScaler，bfloat16 通常不缩放；
+- 图像模型使用 channels-last，非图像二维张量不强制转换；
+- 启用 TF32 与 cuDNN benchmark；
+- DataLoader 使用 pinned memory，GPU copy 使用 non-blocking；
+- 不在 step 中长期保留无用 GPU Tensor 列表；
+- 不频繁调用 `torch.cuda.empty_cache()`；
+- model forward 不做磁盘 IO，Dataset 不产生 UI side effect。
 
-- AMP: `auto`，RTX 4060 上优先 BF16。
-- `channels_last: true`
-- `allow_tf32: true`
-- `cudnn_benchmark: true`
-- `grad_scaler: auto`
-- `compile_model: false`
-- `max_vram_gib: 6.5`
-- `reserve_vram_gib: 1.0`
-- `max_ram_gib: 24.0`
-- `reserve_ram_gib: 4.0`
-- `pin_memory: true`
-- `patch_batch_size: 1`
-- `backward_per_patch: true`
+## OOM 处理顺序
 
-`torch.compile` 默认关闭，首版优先稳定和可诊断。
+1. 根据 `collect_memory_snapshot` 和 `format_oom_guidance` 记录当前峰值；
+2. 降低 batch、候选上限或 feature/hidden channels；
+3. 缩短一次处理的 sequence/window；
+4. 必要时减少输入/patch 规格，避免先用整体 resize 隐藏几何问题；
+5. 保留失败 trial 和搜索状态，让下一组合法参数继续，而不是把 OOM 伪装成 passed。
 
-## 训练 step 规则
+## 常用非 GPU 验证
 
-训练路径默认使用：
-
-- `optimizer.zero_grad(set_to_none=True)`
-- AMP 和必要时 GradScaler；
-- channels-last；
-- TF32 和 cuDNN benchmark；
-- pinned memory；
-- non-blocking GPU copy；
-- patch 完成后 detach 并迁移到 CPU。
-
-不要在 step 中长期保存 GPU Tensor list；除阶段切换、评测结束或 OOM 恢复外，不要频繁
-调用 `torch.cuda.empty_cache()`。
-
-## GPU / CPU 分工
-
-空间推理中：
-
-- GPU：完整帧 global encoder、逐 patch local encoder、fusion、spatial head。
-- CPU：RGB 归一化、颜色 cue、PatchStream、padding、画布融合、NMS、slider 连通域、
-  JSON summary 和候选缓存写出。
-
-离线缓存、评估和部署应复用同一分工，避免重复实现 patch 前向和融合循环。
-
-## OOM 处理原则
-
-- 先降低 `patch_limit`、通道数、feature channels 或候选数。
-- 再降低 batch/window 相关设置。
-- 保持输入原始分辨率作为优先目标，不把整体 resize 当作首选解决方案。
-- OOM 报告应包含显存 snapshot、有效预算、当前 patch 规格和建议动作。
+```bash
+PYTHONPATH=src python -m traning.app config-check --config configs/traning.yaml
+PYTHONPATH=src:. python -m pytest -q src/traning/tests
+PYTHONPATH=src:. python -m pytest -q src/start/tests
+python project_index/build_index.py --check
+```

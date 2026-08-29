@@ -18,6 +18,7 @@ import cv2
 from package import AffineOsuVideoTransform
 from package.dataset_split import (
     DATASET_SPLIT_SCHEMA_VERSION,
+    DatasetSplitManifest,
     load_split_manifest,
 )
 
@@ -483,7 +484,7 @@ def _coordinate_transform(
 def _split_manifest(
     config: V2Config,
     issues: list[DataQualityIssue],
-):
+) -> DatasetSplitManifest | None:
     try:
         manifest = load_split_manifest(config.data.split_manifest)
     except (OSError, TypeError, ValueError, json.JSONDecodeError) as error:
@@ -544,7 +545,7 @@ def _split_manifest(
 
 def _assign_records(
     records: tuple[SegmentRecord, ...],
-    manifest,
+    manifest: DatasetSplitManifest,
     grouped: dict[DataSplit, list[SegmentRecord]],
     issues: list[DataQualityIssue],
 ) -> None:

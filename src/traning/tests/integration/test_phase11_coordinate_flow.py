@@ -207,6 +207,89 @@ def test_slider_direction_preserves_legal_out_of_playfield_control_point(
     )
 
 
+def test_slider_outside_control_point_is_shared_by_training_scoring_and_gallery(
+    adapter: FrameCoordinateTransform,
+) -> None:
+    """合法越界控制点必须在训练、评分与 gallery 中使用同一未裁剪投影。"""
+
+    start = Point2D(500.0, 200.0)
+    outside = Point2D(620.0, 210.0)
+    sample = TrainingSample(
+        sample_id="slider-shared-outside-control",
+        split=DataSplit.TRAIN,
+        frame_index=12,
+        timestamp_ms=200.0,
+        width=SOURCE_WIDTH,
+        height=SOURCE_HEIGHT,
+        image_bytes=b"frame-bytes",
+        transform_fingerprint=adapter.transform_fingerprint,
+        candidates=(),
+        ground_truth_objects=(
+            GroundTruthObject(
+                object_id="slider-shared",
+                object_type=ObjectType.SLIDER,
+                position=start,
+                start_time_ms=200.0,
+                end_time_ms=300.0,
+                score=1.0,
+                path=(start, outside),
+            ),
+        ),
+        selected_candidate_id=None,
+    )
+    training_target = build_coordinate_training_targets(sample, adapter)[0]
+    target = TargetObject(
+        "slider-shared",
+        "slider",
+        200.0,
+        300.0,
+        path=((start.x, start.y), (outside.x, outside.y)),
+    )
+    frame_start = adapter.ground_truth_to_training_target(
+        OsuPoint(start.x, start.y),
+        source_frame_width=SOURCE_WIDTH,
+        source_frame_height=SOURCE_HEIGHT,
+    )
+    projected_outside = adapter.ground_truth_geometry_to_frame(
+        outside,
+        source_frame_width=SOURCE_WIDTH,
+        source_frame_height=SOURCE_HEIGHT,
+    )
+    score = score_frame_click_sequence(
+        (target,),
+        (
+            FramePredictedClick(
+                200.0,
+                frame_start,
+                path=(
+                    frame_start,
+                    FramePixelPoint(
+                        min(projected_outside.x, SOURCE_WIDTH - 1.0),
+                        min(projected_outside.y, SOURCE_HEIGHT - 1.0),
+                        SOURCE_WIDTH,
+                        SOURCE_HEIGHT,
+                        adapter.transform_fingerprint,
+                    ),
+                ),
+            ),
+        ),
+        coordinate_transform=adapter,
+        circle_radius=20.0,
+    )
+    events = build_sequence_evaluation_events(
+        sample.sample_id, sample.frame_index, score
+    )
+    overlay = build_gallery_frame_overlay(
+        (target,), score, events, adapter, frame_index=sample.frame_index
+    )
+
+    assert training_target.slider_direction is not None
+    assert overlay.targets[0].path[1] == projected_outside
+    assert overlay.targets[0].path[1].x > SOURCE_WIDTH
+    # PIL 会在最终画布边界裁切线段；领域投影本身不得把控制点夹到边缘。
+    assert overlay.targets[0].path[1].x != SOURCE_WIDTH - 1.0
+
+
 def test_pass_sample_is_rasterized_with_decoder_inverse_equation(
     adapter: FrameCoordinateTransform,
 ) -> None:
@@ -358,7 +441,9 @@ def test_frame_score_event_and_real_png_keep_one_transform_identity(
         circle_radius=20.0,
     )
     events = build_sequence_evaluation_events("frame-36", 36, score)
-    overlay = build_gallery_frame_overlay((target,), score, events, adapter)
+    overlay = build_gallery_frame_overlay(
+        (target,), score, events, adapter, frame_index=36
+    )
 
     assert events[0].coordinate_transform_fingerprint == adapter.transform_fingerprint
     assert events[0].click_x == pytest.approx(position.x)
@@ -403,13 +488,63 @@ def test_frame_105_unresolved_stays_decision_with_coordinate_provenance(
         circle_radius=20.0,
     )
     events = build_sequence_evaluation_events("frame-105", 105, score)
-    overlay = build_gallery_frame_overlay((target,), score, events, adapter)
+    overlay = build_gallery_frame_overlay(
+        (target,), score, events, adapter, frame_index=105
+    )
 
     assert len(events) == 1
     assert events[0].primary_error is PrimaryError.DECISION
     assert events[0].coordinate_transform_fingerprint == adapter.transform_fingerprint
     assert overlay.predictions == ()
     assert overlay.events[0] is events[0]
+
+
+def test_multiframe_events_keep_click_and_unresolved_source_frames(
+    adapter: FrameCoordinateTransform,
+) -> None:
+    """同一长序列的事件必须保留各自帧号，不能全部归到最后一帧。"""
+
+    first_position = adapter.ground_truth_to_training_target(
+        OsuPoint(80.0, 101.0),
+        source_frame_width=SOURCE_WIDTH,
+        source_frame_height=SOURCE_HEIGHT,
+    )
+    targets = (
+        TargetObject(
+            "target-105",
+            "circle",
+            1680.0,
+            1680.0,
+            x=80.0,
+            y=101.0,
+            frame_index=105,
+        ),
+        TargetObject(
+            "target-107",
+            "circle",
+            1712.0,
+            1712.0,
+            x=120.0,
+            y=110.0,
+            frame_index=107,
+        ),
+    )
+    score = score_frame_click_sequence(
+        targets,
+        (FramePredictedClick(1680.0, first_position, frame_index=105),),
+        coordinate_transform=adapter,
+        circle_radius=20.0,
+    )
+    events = build_sequence_evaluation_events(
+        "long_sequence_000008",
+        999,
+        score,
+    )
+
+    assert tuple(event.frame_index for event in events) == (105, 107)
+    assert events[0].passed is True
+    assert events[1].primary_error is PrimaryError.DECISION
+    assert events[1].target_id == "target-107"
 
 
 def test_frame_margin_prediction_is_scored_as_spatial_miss(

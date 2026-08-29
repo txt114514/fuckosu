@@ -1,48 +1,49 @@
-"""验证顶层模块登记以及训练启动检查的聚合结果。"""
+"""验证顶层模块登记与 V2 canonical 数据质量启动检查。"""
 
 from __future__ import annotations
 
-import unittest
+from dataclasses import replace
 from pathlib import Path
 
-import torch
-
+from package import DataSplit
 from start.checks import run_startup_checks, run_training_startup_checks
 from start.modules import source_module_entry, source_module_entries
-from traning.conf import load_settings
+from traning.config import RuntimeConfig, RuntimeDevice, load_v2_config
+from traning.contracts import DataQualityReport
 
 
-class StartEntryTests(unittest.TestCase):
-    def test_src_module_entries_are_importable(self) -> None:
-        keys = {entry.key for entry in source_module_entries(include_start=True)}
+def test_src_module_entries_are_importable_and_point_to_v2_app() -> None:
+    keys = {entry.key for entry in source_module_entries(include_start=True)}
 
-        self.assertTrue({"start", "package", "before_traning", "traning"} <= keys)
-        self.assertTrue(source_module_entry("traning").importable)
-
-    def test_global_startup_checks_pass_without_cuda_requirement(self) -> None:
-        report = run_startup_checks(require_cuda=False)
-
-        self.assertTrue(report.ok)
-        self.assertIn("environment", {result.key for result in report.results})
+    assert {"start", "package", "before_traning", "traning"} <= keys
+    assert source_module_entry("traning").importable
+    assert source_module_entry("traning").public_entry == "traning.app"
 
 
-class TrainingStartupCheckTests(unittest.TestCase):
-    def test_training_checks_include_data_input_report(self) -> None:
-        settings = load_settings(Path("configs/model_small_vram.yaml"))
-        training_report = run_training_startup_checks(
-            settings,
-            split="train",
-            device=torch.device("cpu"),
-            require_cuda=False,
-        )
+def test_global_startup_checks_pass_without_cuda_requirement() -> None:
+    report = run_startup_checks(require_cuda=False)
 
-        self.assertTrue(training_report.ok)
-        self.assertGreater(training_report.data_input.segment_count, 0)
-        self.assertIn(
-            "training:data_input",
-            {result.key for result in training_report.report.results},
-        )
+    assert report.ok
+    assert "environment" in {item.key for item in report.results}
 
 
-if __name__ == "__main__":
-    unittest.main()
+def test_training_checks_consume_the_given_quality_report() -> None:
+    loaded = load_v2_config(Path("configs/traning.yaml"))
+    config = replace(
+        loaded,
+        runtime=RuntimeConfig(RuntimeDevice.CPU, require_cuda=False, amp=False),
+    )
+    quality = DataQualityReport(issues=())
+    result = run_training_startup_checks(
+        config,
+        split=DataSplit.TRAIN,
+        requested_device=RuntimeDevice.CPU,
+        quality_report=quality,
+        executor_available=True,
+    )
+
+    assert result.ok
+    assert result.data_quality is quality
+    keys = tuple(item.key for item in result.results)
+    assert "training:data_quality" in keys
+    assert len(keys) == len(set(keys))

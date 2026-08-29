@@ -40,8 +40,8 @@ from traning.outcome.oracle import (
 )
 
 
-_OSU_V2_ROOT = Path(__file__).resolve().parents[2]
-_GOLDEN_PATH = _OSU_V2_ROOT / "tests/regression/fixtures/legacy_golden_v1.json"
+_TRANING_ROOT = Path(__file__).resolve().parents[2]
+_GOLDEN_PATH = _TRANING_ROOT / "tests/regression/fixtures/legacy_golden_v1.json"
 
 
 def _golden() -> dict[str, object]:
@@ -471,8 +471,8 @@ def test_oracle_outcome_rejects_invalid_category_type_and_negative_error() -> No
 def test_evaluation_and_oracle_ast_use_one_shared_scoring_implementation() -> None:
     """禁止 legacy/Any 渗透，Oracle 必须调用共享 scorer 而非复制公式。"""
 
-    source_paths = tuple(sorted((_OSU_V2_ROOT / "evaluation").rglob("*.py"))) + tuple(
-        sorted((_OSU_V2_ROOT / "outcome/oracle").rglob("*.py"))
+    source_paths = tuple(sorted((_TRANING_ROOT / "evaluation").rglob("*.py"))) + tuple(
+        sorted((_TRANING_ROOT / "outcome/oracle").rglob("*.py"))
     )
     forbidden_definitions = {
         "combine_coefficients",
@@ -484,7 +484,7 @@ def test_evaluation_and_oracle_ast_use_one_shared_scoring_implementation() -> No
         "temporal_coefficient",
     }
     oracle_tree = ast.parse(
-        (_OSU_V2_ROOT / "outcome/oracle/oracle.py").read_text(encoding="utf-8")
+        (_TRANING_ROOT / "outcome/oracle/oracle.py").read_text(encoding="utf-8")
     )
     for path in source_paths:
         tree = ast.parse(path.read_text(encoding="utf-8"))

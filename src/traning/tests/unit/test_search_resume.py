@@ -45,6 +45,8 @@ class _PassesAtIndex:
         parameters: ParameterVector,
         trial_index: int,
     ) -> TrialObservation:
+        """记录调用，并只让指定序号的 trial 通过全部门禁。"""
+
         self.calls.append((trial_index, parameters))
         return _observation(
             trial_index,

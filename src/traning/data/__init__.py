@@ -26,6 +26,7 @@ from .coordinates import (
     CanonicalScoringPoint,
     FrameCoordinateTransform,
     FramePixelPoint,
+    FrameProjectedPoint,
     OsuPoint,
 )
 from .pipeline import (
@@ -54,6 +55,13 @@ from .repositories import (
     SQLiteDatasetCatalogRepository,
     SQLitePreprocessingMetadataRepository,
 )
+from .segments import (
+    CombinedTrainingDataset,
+    SegmentTrainingDataset,
+    TrainingDatasetBundle,
+    TrainingSequenceDataset,
+    build_training_datasets,
+)
 
 __all__ = (
     "CANDIDATE_CACHE_ARTIFACT_TYPE",
@@ -70,6 +78,7 @@ __all__ = (
     "CalibrationFitProvenance",
     "CalibrationObservation",
     "CanonicalScoringPoint",
+    "CombinedTrainingDataset",
     "DataPipeline",
     "DataPipelineResult",
     "DataQualityContext",
@@ -81,6 +90,7 @@ __all__ = (
     "DatasetSummary",
     "FrameCoordinateTransform",
     "FramePixelPoint",
+    "FrameProjectedPoint",
     "InMemoryDatasetCatalogRepository",
     "InMemoryPreprocessingMetadataRepository",
     "LoadedCalibrationEvidence",
@@ -89,9 +99,13 @@ __all__ = (
     "OsuPoint",
     "QualityGateBlockedError",
     "RepositoryError",
+    "SegmentTrainingDataset",
     "SQLiteDatasetCatalogRepository",
     "SQLitePreprocessingMetadataRepository",
+    "TrainingDatasetBundle",
+    "TrainingSequenceDataset",
     "audit_affine_calibration",
+    "build_training_datasets",
     "fit_affine_least_squares",
     "load_candidate_cache",
     "load_affine_calibration_evidence",

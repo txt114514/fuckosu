@@ -5,10 +5,10 @@
 ## 当前状态
 
 - 当前阶段：Phase 11 — cleanup legacy adapters
-- 状态：已完成（Phase 0 → Phase 11 全部门禁通过）
+- 状态：覆盖迁移实现已完成；最终验证结果记录于本文件 Phase 11
 - V2 包根：`src/traning`
-- legacy 代码：`src/traning`，只作为参考与 golden baseline
-- legacy 冻结包：`src/traning.zip`
+- legacy 活动代码：已从 `src/traning` 和独立 `src/visualization` 退役，不提供兼容入口
+- legacy 冻结参考：`src/traning.zip` 与 Phase 0 golden 证据
 - 详细盘点：`src/traning/docs/MIGRATION_INVENTORY.md`
 
 ## 阶段门禁
@@ -26,11 +26,14 @@
 | Phase 8 | decision / optimal stopping | 已通过 | V2 + golden：`182 passed` |
 | Phase 9 | training orchestration / optimization | 已通过 | V2 + golden：`216 passed` |
 | Phase 10 | telemetry / visualization | 已通过 | V2 + golden：`250 passed` |
-| Phase 11 | cleanup legacy adapters | 已通过 | 全仓 `547 passed, 2 skipped, 29 subtests`；V2/legacy golden、Ruff、索引、GPU 均通过 |
+| Phase 11 | cleanup legacy adapters | 已通过 | 2026-08-29 全仓 `354 passed`；训练包 `329 passed`；Ruff、索引、CUDA strict env-check 与真实 GPU backward/optimizer smoke 通过 |
 
 ## 架构决定
 
-V2 使用单一顶层包 `src/traning`，而不是把 `contracts`、`data`、`training` 等通用名称散落为多个顶层包。这样既保持参考文档中的领域边界，又能从导入路径上阻止新代码无意沿用旧 `traning` 接口。跨顶层模块确需共享的稳定 API 仍按工程规则迁入 `src/package` 并公开导出。
+V2 使用单一顶层包 `src/traning`，并已物理覆盖旧训练实现，而不是把
+`contracts`、`data`、`training` 等通用名称散落为多个顶层包或保留并行
+`osu_v2` 命名空间。领域边界由 `traning` 下的 typed 子包表达；跨顶层模块确需共享的
+稳定 API 仍按工程规则迁入 `src/package` 并公开导出。
 
 ## Phase 0 基线
 
@@ -139,17 +142,18 @@ Phase 8 门禁于 2026-08-24 通过，现按顺序进入 Phase 9。
 ## Phase 9 结果
 
 - 训练编排先消费 canonical `DataQualityReport`，阻断时 runner 零调用；随后严格按
-  Perception → Tracking → Belief → Outcome → Decision → Evaluation 执行，首个执行失败
-  立即停止。
+  Perception → Tracking → Belief → Outcome → Decision → Evaluation 执行。首个 gate
+  失败会立即结束当前 trial，再由搜索控制器选择下一组合法 proposal，而不是结束整个程序。
 - Evaluation stage 直接发布唯一 typed `TrialAcceptance`；搜索、编排与最终状态共享该
   对象，只有 data/perception/tracking/belief/outcome/decision/golden 七个 gate 全部通过
   才可成为 `PASSED`。
 - 参数由统一 registry 校验、clamp 与量化；旧制品中的 `score_threshold=-0.01` 不会被
   发布。seed 确定性搜索不重复提案，`max_trials=None` 时失败后持续选择新参数，直到
   全通过或有限空间显式 `EXHAUSTED`；预算耗尽也只产生 typed error，不伪装成功。
-- Curriculum 固定 BASIC → MULTI_OBJECT → COMPLEX → FULL 且必须全 gate 前进；ASHA 先
-  应用严格 gate，再按 objective/trial identity 稳定排名。hard-example 仅使用 TRAIN，
-  并让 optimizer/telemetry/gallery 持有同一个 canonical evaluation event。
+- Curriculum、ASHA 和 hard-example 已迁入 typed 规则与路由层：curriculum 固定
+  BASIC → MULTI_OBJECT → COMPLEX → FULL，ASHA 先应用严格 gate，hard-example contract
+  只允许 TRAIN。当前 production 尚未把 TRAIN 失败事件持久化为下一 trial 的采样/loss
+  权重，不能把共享 consumer view 误写成 optimizer 已实际消费。
 - 门禁：V2 单元/回归测试 `216 passed`，Ruff、format、compileall 与 diff-check 全通过。
 
 Phase 9 门禁于 2026-08-24 通过，现按顺序进入 Phase 10。
@@ -165,9 +169,9 @@ Phase 9 门禁于 2026-08-24 通过，现按顺序进入 Phase 10。
 - 指标覆盖 loss/step/score、perception recall、tracking ID switches、Outcome
   NLL/Brier/ECE/expected-score error、decision utility、wait/click ratio、GPU、VRAM 与
   throughput；GPU ratio 到百分比只在展示规格表统一格式化。
-- frame 105 集成回归证明 optimizer、telemetry、gallery 与 hard-example route 持有同一个
-  canonical `SequenceEvaluationEvent` 对象；零点击 unresolved 始终是 Decision，展示层
-  不能改投 Spatial。
+- 契约级 frame 105 集成回归证明 hard-example consumer view、telemetry 与只读 dashboard
+  renderer 不复制或改写 canonical `SequenceEvaluationEvent`；零点击 unresolved 始终是
+  Decision，展示层不能改投 Spatial。该测试不冒充 production optimizer 权重消费。
 - 门禁：V2 单元/集成/回归测试 `250 passed`，Ruff、format、compileall 与 diff-check
   全通过。
 
@@ -175,22 +179,28 @@ Phase 10 门禁于 2026-08-24 通过，现按顺序进入 Phase 11。
 
 ## Phase 11 结果
 
-- `src/start/main.py` 只在显式 `v2` 命名空间挂载新入口；legacy 默认启动行为未被 V2
-  adapter 污染。`config-check`、`coordinate-audit`、`env-check`、`train` 都从该入口可达。
+- `src/start/main.py` 保持总启动入口和原始数据准备顺序，但训练部分已直接替换为 V2；
+  无参数启动和 `run` 都执行 raw scan → conversion → split → checks → production training
+  → report。不存在 `v2` 兼容子命名空间。
 - 正式 runtime 只能从经 manifest 校验的三模型 bundle 装配。checkpoint 使用
   generation-first/manifest-last 原子发布，加载时共同校验 dataset identity、三模型契约
   SHA-256、权重 SHA-256、strict state dict 和坐标变换指纹；仅部署目录变化不会误拒绝权重。
-- 训练 CLI 从显式 `module:factory` 加载 typed evaluator。普通阶段或最终 gate 未通过会继续
-  提出合法且未重复参数；默认 `max_trials: null` 不再复现 legacy 两轮停止。固定 blocking
-  DataQuality 在 runner 构造前终止，避免把不可由参数修复的数据错误变成无限搜索；所有异常
-  产生 `search.failed`，预算/空间耗尽产生 `search.exhausted`，全通过产生 `search.passed`。
+- 训练 CLI 直接从真实 typed segment dataset 构建六阶段 runner，不再接收外部
+  `module:factory` evaluator。普通阶段或最终 gate 未通过会继续提出合法且未重复参数；
+  默认 `max_trials: null` 不再复现 legacy 两轮停止。固定 blocking
+  DataQuality 在 runner 构造前终止，避免把不可由参数修复的数据错误变成无限搜索；进入搜索
+  执行后或 winning checkpoint 复验期间的不可恢复异常产生 `search.failed`，预算/空间耗尽产生
+  `search.exhausted`，全通过产生 `search.passed`。初始化及恢复身份校验可在 telemetry 建立前
+  直接失败。
 - 训练 target 使用实际 dense rasterizer 与 production decoder 的互逆方程；预测、canonical
-  scorer、evaluation event、telemetry 和真实 PNG gallery 均携带相同原帧尺寸与 transform
-  fingerprint。frame 36 固定映射为 `(411.75, 230.40)`；原帧边缘点击逆映射到 playfield 外
-  时由 scorer 记为空间 miss，而不是中断批次。
-- frame 105 的零点击事实通过唯一 canonical event 保持 `Decision/unresolved`，optimizer、
-  hard-example、telemetry 和 gallery 不再根据覆盖层重新归因；真实 PNG 准确候选覆盖不能
-  冒充实际 CLICK 或命中。
+  scorer、evaluation event、telemetry 和 production gallery overlay 共用相同原帧尺寸与
+  transform fingerprint。PNG 逐帧原子写入，manifest-last 记录其 SHA-256、事件、尺寸和
+  坐标指纹。frame 36 固定映射为 `(411.75, 230.40)`；原帧边缘点击逆映射到 playfield 外时
+  由 scorer 记为空间 miss，而不是中断批次。
+- frame 105 的零点击事实通过唯一 canonical event 保持 `Decision/unresolved`；hard-example
+  路由、telemetry 和 gallery 不再根据覆盖层重新归因。GT/candidate 覆盖不能冒充实际 CLICK
+  或命中。production gallery 现在按当前帧事件分入 `failed/decision`，而已通过的其他帧仍在
+  `passed/none`；production optimizer 是否消费 hard-example 权重仍按上一节的明确边界处理。
 - 当前 affine 方程经 5 个独立 ROI 控制点验证，平均残差约 `0.449 px`、最大约
   `1.394 px`。审计确认 legacy 提交未保存原始 passed train/validation 拟合集，因此 V2
   使用诚实身份 `legacy-control-validated-v1`，证据制品显式记录
@@ -198,12 +208,13 @@ Phase 10 门禁于 2026-08-24 通过，现按顺序进入 Phase 11。
 - Candidate cache、Outcome batch、sequence score/event、telemetry 与 checkpoint 都强制保留
   dataset/artifact/坐标 lineage；旧 schema、错误尺寸、错误 identity、未知字段、摘要漂移和
   跨变换混批均有负向测试。
-- 全仓 461 个 Python 模块均有中文用途 docstring；V2 生产和测试的全部公开定义均有中文
-  docstring，并由 AST 架构测试持续门禁。Phase 0 冻结 legacy 不为机械补注释而改写。
-- 最终验证：全仓 `547 passed, 2 skipped, 14 warnings, 29 subtests passed`；单独 legacy
-  golden `4 passed`；Ruff format/check、compileall、`git diff --check` 和
-  `project_index/build_index.py --check` 均通过。主机容器验证 RTX 4060、CUDA 13.0、
-  PyTorch `2.9.0+cu130` 可用；V2 strict 环境检查通过，并保留拟合集缺失 warning。
+- 全仓 Python 模块均有中文用途 docstring；`traning` 生产和测试的全部公开定义均有中文
+  docstring，并由 AST 架构测试持续门禁。Phase 0 冻结制品不为机械补注释而改写。
+- 覆盖迁移加入真实 dataset、Belief/Outcome 训练、production stage runner、原子搜索恢复、
+  winning checkpoint 复验和 start 总流程 dry-run。2026-08-29 的最终验证为：全仓
+  `354 passed`（沙箱仅有预期 CUDA 可见性 warning）、`ruff check` 通过、start dry-run 通过、
+  RTX 4060 Laptop 上 strict env-check 通过，并实际完成 BF16/channels-last Perception
+  forward、backward 与 AdamW step（峰值 PyTorch allocation 约 `146.6 MiB`）。
 
-Phase 11 门禁于 2026-08-27 通过。Phase 0 → Phase 11 已按顺序完成；legacy 继续只作为
-冻结 reference/golden baseline，正式新路径为 `src/traning`。
+Phase 0 → Phase 11 已按顺序完成；legacy 只保留冻结 reference/golden baseline，唯一正式
+训练与推理路径为 `src/traning`，唯一总启动路径为 `src/start/main.py`。

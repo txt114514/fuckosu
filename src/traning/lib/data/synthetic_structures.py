@@ -38,7 +38,7 @@ def make_cross_patch_ring(
     radius: float = 210.0,
     thickness: float = 8.0,
 ) -> SyntheticStructure:
-    """Create a ring whose circumference crosses four 512px patches."""
+    """生成圆周跨越四个典型 patch 的环形结构。"""
 
     x, y = _coordinate_grid(width, height)
     distance = torch.sqrt((x - center[0]).square() + (y - center[1]).square())
@@ -58,7 +58,7 @@ def make_boundary_circle(
     center: tuple[float, float] = (512.0, 256.0),
     radius: float = 48.0,
 ) -> SyntheticStructure:
-    """Create a filled circle centered on a typical patch boundary."""
+    """生成圆心位于典型 patch 边界上的实心圆。"""
 
     x, y = _coordinate_grid(width, height)
     mask = (x - center[0]).square() + (y - center[1]).square() <= radius**2
@@ -78,7 +78,7 @@ def make_cross_patch_slider(
     end: tuple[float, float] = (1032.0, 256.0),
     thickness: float = 12.0,
 ) -> SyntheticStructure:
-    """Create a long straight slider spanning multiple patch windows."""
+    """生成横跨多个 patch 窗口的长直 slider。"""
 
     x, y = _coordinate_grid(width, height)
     sx, sy = start
@@ -106,7 +106,7 @@ def make_spinner(
     center: tuple[float, float] = (384.0, 384.0),
     radius: float = 260.0,
 ) -> SyntheticStructure:
-    """Create a large spinner-like disk with a bright rim."""
+    """生成带高亮外沿的大型 spinner 状圆盘。"""
 
     x, y = _coordinate_grid(width, height)
     distance = torch.sqrt((x - center[0]).square() + (y - center[1]).square())
@@ -122,7 +122,7 @@ def make_noise_background(
     height: int = 512,
     seed: int = 2026,
 ) -> SyntheticStructure:
-    """Create deterministic noise for background robustness smoke tests."""
+    """生成供背景鲁棒性冒烟测试使用的确定性噪声。"""
 
     generator = torch.Generator().manual_seed(seed)
     image = torch.rand((3, height, width), generator=generator)

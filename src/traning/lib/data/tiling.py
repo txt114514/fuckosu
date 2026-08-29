@@ -10,6 +10,8 @@ from torch import Tensor
 
 @dataclass(frozen=True)
 class PatchWindow:
+    """完整帧坐标系中的半开 patch 窗口。"""
+
     left: int
     top: int
     width: int
@@ -17,10 +19,14 @@ class PatchWindow:
 
     @property
     def right(self) -> int:
+        """返回窗口右侧的半开像素边界。"""
+
         return self.left + self.width
 
     @property
     def bottom(self) -> int:
+        """返回窗口底部的半开像素边界。"""
+
         return self.top + self.height
 
 
@@ -70,6 +76,8 @@ def iter_patches(
     image: Tensor,
     windows: tuple[PatchWindow, ...],
 ) -> Iterator[tuple[PatchWindow, Tensor]]:
+    """按给定窗口顺序产生完整帧中的 CHW patch 视图。"""
+
     if image.ndim != 3:
         raise ValueError("image tensor must use CHW layout")
     for window in windows:

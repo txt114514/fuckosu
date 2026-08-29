@@ -82,6 +82,7 @@ class TargetObject:
     y: float | None = None
     path: PathPoints = ()
     source_index: int | None = None
+    frame_index: int | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.target_id, str):
@@ -108,6 +109,12 @@ class TargetObject:
                 self.source_index, int
             ):
                 raise TypeError("source_index 必须是整数或 None")
+        if self.frame_index is not None and (
+            isinstance(self.frame_index, bool)
+            or not isinstance(self.frame_index, int)
+            or self.frame_index < 0
+        ):
+            raise ValueError("frame_index 必须是非负整数或 None")
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,6 +140,7 @@ class FramePredictedClick:
     time_ms: float
     position: FramePixelPoint
     path: tuple[FramePixelPoint, ...] = ()
+    frame_index: int | None = None
 
     def __post_init__(self) -> None:
         """确保路径点不能逃离帧尺寸与坐标指纹领域对象。"""
@@ -146,6 +154,12 @@ class FramePredictedClick:
             raise TypeError("path 必须是 FramePixelPoint 元组")
         if len(self.path) == 1:
             raise ValueError("slider path 必须为空或至少包含两个点")
+        if self.frame_index is not None and (
+            isinstance(self.frame_index, bool)
+            or not isinstance(self.frame_index, int)
+            or self.frame_index < 0
+        ):
+            raise ValueError("frame_index 必须是非负整数或 None")
         if any(
             point.source_frame_width != self.position.source_frame_width
             or point.source_frame_height != self.position.source_frame_height
@@ -224,6 +238,7 @@ class FrameSequenceScore:
     source_frame_width: int
     source_frame_height: int
     transform_fingerprint: str
+    unresolved_target_frame_indices: tuple[tuple[str, int], ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.result, SequenceScore):
@@ -258,6 +273,31 @@ class FrameSequenceScore:
         )
         if click_indices != tuple(range(len(self.frame_clicks))):
             raise ValueError("canonical click evaluations 必须精确覆盖 frame_clicks")
+        if not isinstance(self.unresolved_target_frame_indices, tuple):
+            raise TypeError("unresolved_target_frame_indices 必须是 tuple")
+        target_ids: list[str] = []
+        for item in self.unresolved_target_frame_indices:
+            if not isinstance(item, tuple) or len(item) != 2:
+                raise TypeError("unresolved target frame 记录必须是二元 tuple")
+            target_id, frame_index = item
+            if not isinstance(target_id, str) or not target_id:
+                raise ValueError("unresolved target_id 必须是非空字符串")
+            if (
+                isinstance(frame_index, bool)
+                or not isinstance(frame_index, int)
+                or frame_index < 0
+            ):
+                raise ValueError("unresolved frame_index 必须是非负整数")
+            target_ids.append(target_id)
+        if len(target_ids) != len(set(target_ids)):
+            raise ValueError("unresolved target frame 记录不得重复 target_id")
+        if tuple(target_ids) != tuple(sorted(target_ids)):
+            raise ValueError("unresolved target frame 记录必须按 target_id 稳定排序")
+        if any(
+            target_id not in self.result.unresolved_target_ids
+            for target_id in target_ids
+        ):
+            raise ValueError("frame 记录只能引用 canonical unresolved target")
 
     @property
     def clicks(self) -> tuple[ClickEvaluation, ...]:
@@ -593,13 +633,13 @@ def score_frame_click_sequence(
     ):
         raise TypeError("clicks 必须是 FramePredictedClick tuple")
 
-    # 该入口明确要求 target 已在 osu! playfield；越界值不得与原帧
-    # 像素巧合地“在同一空间”而获得高分。
+    # 命中中心必须在 playfield 内；slider 的后续曲线控制点可以合法越界，
+    # TargetObject 已保证它们是有限值，不能在这里裁剪或误判为坏样本。
     for target in targets:
         if target.x is not None and target.y is not None:
             OsuPoint(target.x, target.y)
-        for x, y in target.path:
-            OsuPoint(x, y)
+        if target.target_type == "slider":
+            OsuPoint(*target.path[0])
 
     canonical_clicks: list[PredictedClick] = []
     for click in clicks:
@@ -622,12 +662,24 @@ def score_frame_click_sequence(
         circle_radius=circle_radius,
         spec=spec,
     )
+    target_frame_indices = {
+        target.target_id: target.frame_index
+        for target in targets
+        if target.frame_index is not None
+    }
     return FrameSequenceScore(
         result=result,
         frame_clicks=clicks,
         source_frame_width=coordinate_transform.source_frame_width,
         source_frame_height=coordinate_transform.source_frame_height,
         transform_fingerprint=coordinate_transform.transform_fingerprint,
+        unresolved_target_frame_indices=tuple(
+            sorted(
+                (target_id, target_frame_indices[target_id])
+                for target_id in result.unresolved_target_ids
+                if target_id in target_frame_indices
+            )
+        ),
     )
 
 

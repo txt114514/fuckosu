@@ -1,5 +1,8 @@
 # Result Export Plan
 
+> Legacy 历史记录：旧独立 visualization/gallery exporter 已退役，不提供兼容入口。
+> 当前 canonical event 与只读渲染边界以 `TRAINING_PLAN.md`、`CODEX_INDEX.md` 为准。
+
 ## 模块定位
 
 源码入口：`src/traning/core/result_export`

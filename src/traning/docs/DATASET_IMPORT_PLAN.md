@@ -1,5 +1,8 @@
 # Dataset Import Plan
 
+> Legacy 历史记录：本文路径、配置和命令已退役，不是兼容接口。活动实现以
+> `TRAINING_PLAN.md`、`CODEX_INDEX.md` 和 `../README.md` 为准。
+
 ## 模块定位
 
 源码入口：`src/traning/core/dataset_import`

@@ -1,5 +1,8 @@
 # Model Export Plan
 
+> Legacy 历史记录：旧 artifact 路径已退役。当前 runtime checkpoint 契约见
+> `training/checkpoints.py` 的生成索引与 `TRAINING_PLAN.md`。
+
 ## 模块定位
 
 源码入口：`src/traning/core/model_export`

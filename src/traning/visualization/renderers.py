@@ -17,10 +17,11 @@ from typing import TypeAlias
 
 from PIL import Image, ImageDraw
 
-from traning.contracts import RuntimeFrame
+from traning.contracts import Point2D, RuntimeFrame
 from traning.data.coordinates import (
     FrameCoordinateTransform,
     FramePixelPoint,
+    FrameProjectedPoint,
     OsuPoint,
 )
 from traning.evaluation.attribution import (
@@ -204,7 +205,7 @@ class GalleryTargetOverlay:
 
     target_id: str
     head: FramePixelPoint
-    path: tuple[FramePixelPoint, ...]
+    path: tuple[FrameProjectedPoint, ...]
 
     def __post_init__(self) -> None:
         if not isinstance(self.target_id, str):
@@ -214,9 +215,9 @@ class GalleryTargetOverlay:
         if not isinstance(self.head, FramePixelPoint):
             raise TypeError("head 必须是 FramePixelPoint")
         if not isinstance(self.path, tuple) or any(
-            not isinstance(point, FramePixelPoint) for point in self.path
+            not isinstance(point, FrameProjectedPoint) for point in self.path
         ):
-            raise TypeError("path 必须是 FramePixelPoint 元组")
+            raise TypeError("path 必须是 FrameProjectedPoint 元组")
         points = (self.head, *self.path)
         if any(
             point.transform_fingerprint != self.head.transform_fingerprint
@@ -260,8 +261,8 @@ def project_gallery_target_overlays(
             source_frame_height=coordinate_transform.source_frame_height,
         )
         frame_path = tuple(
-            coordinate_transform.target_to_gallery_overlay(
-                OsuPoint(x, y),
+            coordinate_transform.ground_truth_geometry_to_frame(
+                Point2D(x, y),
                 source_frame_width=coordinate_transform.source_frame_width,
                 source_frame_height=coordinate_transform.source_frame_height,
             )
@@ -309,6 +310,7 @@ class GalleryPredictionOverlay:
 class GalleryFrameOverlay:
     """一个原帧的 GT、预测和完整归因事件不可变集合。"""
 
+    frame_index: int
     source_frame_width: int
     source_frame_height: int
     transform_fingerprint: str
@@ -317,6 +319,12 @@ class GalleryFrameOverlay:
     events: tuple[SequenceEvaluationEvent, ...]
 
     def __post_init__(self) -> None:
+        if (
+            isinstance(self.frame_index, bool)
+            or not isinstance(self.frame_index, int)
+            or self.frame_index < 0
+        ):
+            raise ValueError("gallery frame_index 必须是非负整数")
         if any(
             isinstance(value, bool) or not isinstance(value, int) or value < 1
             for value in (self.source_frame_width, self.source_frame_height)
@@ -353,6 +361,8 @@ class GalleryFrameOverlay:
             for event in self.events
         ):
             raise ValueError("gallery 所有事件必须来自同一 calibrated frame 坐标系")
+        if any(event.frame_index != self.frame_index for event in self.events):
+            raise ValueError("gallery 事件必须精确属于当前原帧")
 
 
 def build_gallery_frame_overlay(
@@ -360,6 +370,8 @@ def build_gallery_frame_overlay(
     score: FrameSequenceScore,
     events: tuple[SequenceEvaluationEvent, ...],
     coordinate_transform: FrameCoordinateTransform,
+    *,
+    frame_index: int,
 ) -> GalleryFrameOverlay:
     """把 scorer 原始事件和同一坐标变换组合成可直接渲染的原帧 overlay。"""
 
@@ -372,25 +384,46 @@ def build_gallery_frame_overlay(
     if not isinstance(coordinate_transform, FrameCoordinateTransform):
         raise TypeError("coordinate_transform 必须是 FrameCoordinateTransform")
     if (
+        isinstance(frame_index, bool)
+        or not isinstance(frame_index, int)
+        or frame_index < 0
+    ):
+        raise ValueError("frame_index 必须是非负整数")
+    if (
         score.transform_fingerprint != coordinate_transform.transform_fingerprint
         or score.source_frame_width != coordinate_transform.source_frame_width
         or score.source_frame_height != coordinate_transform.source_frame_height
     ):
         raise ValueError("frame score 与 gallery 坐标变换来源不一致")
 
+    frame_events = tuple(event for event in events if event.frame_index == frame_index)
     click_events = tuple(
         sorted(
-            (event for event in events if event.click_index is not None),
+            (event for event in frame_events if event.click_index is not None),
             key=lambda event: event.click_index,
         )
     )
-    if tuple(event.click_index for event in click_events) != tuple(
-        range(len(score.frame_clicks))
+    click_indices = tuple(event.click_index for event in click_events)
+    if len(click_indices) != len(set(click_indices)) or any(
+        index is None or index >= len(score.frame_clicks) for index in click_indices
     ):
-        raise ValueError("gallery events 必须精确覆盖 frame score 的全部点击")
-    expected_unresolved = tuple(sorted(score.unresolved_target_ids))
+        raise ValueError("gallery click events 含有重复或越界 click_index")
+    if any(
+        score.frame_clicks[index].frame_index not in {None, frame_index}
+        for index in click_indices
+        if index is not None
+    ):
+        raise ValueError("gallery click event 与 FramePredictedClick 来源帧不一致")
+    unresolved_frames = dict(score.unresolved_target_frame_indices)
+    expected_unresolved = tuple(
+        sorted(
+            target_id
+            for target_id in score.unresolved_target_ids
+            if unresolved_frames.get(target_id, frame_index) == frame_index
+        )
+    )
     actual_unresolved = tuple(
-        sorted(event.target_id for event in events if event.click_index is None)
+        sorted(event.target_id for event in frame_events if event.click_index is None)
     )
     if actual_unresolved != expected_unresolved:
         raise ValueError("gallery unresolved events 与 frame score 不一致")
@@ -403,13 +436,25 @@ def build_gallery_frame_overlay(
         for event in click_events
         if event.click_index is not None
     )
+    frame_target_ids = {
+        event.target_id for event in frame_events if event.target_id is not None
+    }
     return GalleryFrameOverlay(
+        frame_index=frame_index,
         source_frame_width=score.source_frame_width,
         source_frame_height=score.source_frame_height,
         transform_fingerprint=score.transform_fingerprint,
-        targets=project_gallery_target_overlays(targets, coordinate_transform),
+        targets=project_gallery_target_overlays(
+            tuple(
+                target
+                for target in targets
+                if target.frame_index in {None, frame_index}
+                or target.target_id in frame_target_ids
+            ),
+            coordinate_transform,
+        ),
         predictions=predictions,
-        events=events,
+        events=frame_events,
     )
 
 
@@ -431,6 +476,8 @@ def render_gallery_png(
         overlay.source_frame_height,
     ):
         raise ValueError("RuntimeFrame 尺寸与 gallery overlay 不一致")
+    if frame.frame_index != overlay.frame_index:
+        raise ValueError("RuntimeFrame.frame_index 与 gallery overlay 不一致")
     expected_size = frame.width * frame.height * 3
     if len(frame.image_bytes) != expected_size:
         raise ValueError("RuntimeFrame.image_bytes 必须是完整 packed RGB 数据")

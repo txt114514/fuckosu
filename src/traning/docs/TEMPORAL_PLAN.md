@@ -1,5 +1,8 @@
 # Temporal Plan
 
+> Legacy 历史记录：旧全局 Temporal imitation 路径已由 per-track Belief 与 Outcome 覆盖。
+> 本文命令不可再执行；当前实现以 `TRAINING_PLAN.md` 和 `CODEX_INDEX.md` 为准。
+
 ## 模块定位
 
 源码入口：`src/traning/core/temporal`

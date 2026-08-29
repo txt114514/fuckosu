@@ -179,12 +179,7 @@ class PerTrackBeliefEncoder(nn.Module):
 
         self._validate_contract_step(observation, previous)
         parameter = next(self.parameters())
-        features = self._observation_features(
-            observation,
-            previous,
-            device=parameter.device,
-            dtype=parameter.dtype,
-        )
+        features = self.observation_features(observation, previous)
         previous_hidden = self._hidden_from_belief(
             previous,
             device=parameter.device,
@@ -219,6 +214,26 @@ class PerTrackBeliefEncoder(nn.Module):
             age=observation.track_age,
             time_since_seen_ms=observation.time_since_seen_ms,
             uncertainty=float(output.uncertainty[0, 0].cpu().item()),
+        )
+
+    def observation_features(
+        self,
+        observation: TrackedObservation,
+        previous: BeliefState | None = None,
+    ) -> torch.Tensor:
+        """把 typed 观测编码为训练与 runtime 共用的单行特征张量。
+
+        该公开入口避免训练侧复制字段顺序；设备和 dtype 始终跟随 encoder
+        参数，调用方不能用另一套缩放或列注册表悄悄改变模型语义。
+        """
+
+        self._validate_contract_step(observation, previous)
+        parameter = next(self.parameters())
+        return self._observation_features(
+            observation,
+            previous,
+            device=parameter.device,
+            dtype=parameter.dtype,
         )
 
     def _validate_feature_tensor(self, features: torch.Tensor) -> None:

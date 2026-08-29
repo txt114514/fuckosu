@@ -1,5 +1,8 @@
 # Optimization Module
 
+> Legacy 历史记录：本文旧 ASHA/job 路径与 CLI 已退役，不是可调用接口。
+> 当前持续搜索、恢复和 hard-example 契约以 `TRAINING_PLAN.md`、`CODEX_INDEX.md` 为准。
+
 源码入口：`src/traning/core/optimization`
 
 该模块负责训练结果闭环：评分、错误归因和下一轮参数调整。它不直接训练模型、不读视频、不调用

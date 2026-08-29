@@ -1,5 +1,8 @@
 # Decision Plan
 
+> Legacy 历史记录：本文描述旧 Temporal/Decision 链路，路径和命令已退役。
+> 活动 optimal-stopping 实现以 `TRAINING_PLAN.md` 和 `CODEX_INDEX.md` 为准。
+
 ## 模块定位
 
 源码入口：`src/traning/core/decision`

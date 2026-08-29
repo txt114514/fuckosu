@@ -23,6 +23,8 @@ OSU_OBJECT_COLOR_ANCHORS_RGB: tuple[tuple[float, float, float], ...] = (
 
 
 def color_cue_channel_count(mode: ColorCueMode) -> int:
+    """返回指定颜色提示模式追加的确定性通道数量。"""
+
     if mode == "disabled":
         return 0
     if mode == "osu_basic":
@@ -75,8 +77,8 @@ def _palette_response(
     )
     anchor_chroma = anchors / anchors.sum(dim=1, keepdim=True).clamp_min(1e-6)
     distance = (
-        chroma.unsqueeze(0) - anchor_chroma[:, :, None, None]
-    ).square().sum(dim=1)
+        (chroma.unsqueeze(0) - anchor_chroma[:, :, None, None]).square().sum(dim=1)
+    )
     nearest = distance.amin(dim=0)
     color_match = torch.exp(-nearest / 0.018)
     return color_match * saturation.clamp(0.0, 1.0) * value.clamp(0.0, 1.0)
@@ -98,11 +100,9 @@ def _object_edge_response(
     object_prior: torch.Tensor,
 ) -> torch.Tensor:
     # Sobel 响应再乘物件先验，抑制背景纹理被误当成 osu! 轮廓。
-    gray = (
-        0.299 * rgb[0]
-        + 0.587 * rgb[1]
-        + 0.114 * rgb[2]
-    ).view(1, 1, rgb.shape[-2], rgb.shape[-1])
+    gray = (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]).view(
+        1, 1, rgb.shape[-2], rgb.shape[-1]
+    )
     kernel_x = torch.tensor(
         ((-1.0, 0.0, 1.0), (-2.0, 0.0, 2.0), (-1.0, 0.0, 1.0)),
         device=rgb.device,

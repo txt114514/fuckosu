@@ -214,12 +214,14 @@ def build_sequence_evaluation_events(
         transform_fingerprint = result.transform_fingerprint
         source_frame_width = result.source_frame_width
         source_frame_height = result.source_frame_height
+        unresolved_frame_indices = dict(result.unresolved_target_frame_indices)
     else:
         canonical_result = result
         coordinate_space = EvaluationCoordinateSpace.CANONICAL_OSU
         transform_fingerprint = None
         source_frame_width = None
         source_frame_height = None
+        unresolved_frame_indices = {}
 
     events: list[SequenceEvaluationEvent] = []
     for click in sorted(canonical_result.clicks, key=lambda item: item.click_index):
@@ -231,14 +233,20 @@ def build_sequence_evaluation_events(
             source_click = result.frame_clicks[click.click_index]
             click_x = source_click.position.x
             click_y = source_click.position.y
+            event_frame_index = (
+                frame_index
+                if source_click.frame_index is None
+                else source_click.frame_index
+            )
         else:
             click_x = click.click.x
             click_y = click.click.y
+            event_frame_index = frame_index
         event_id = _canonical_event_id(
             (
                 SCORE_VERSION,
                 sample_id,
-                str(frame_index),
+                str(event_frame_index),
                 "click",
                 str(click.click_index),
                 click.status,
@@ -251,7 +259,7 @@ def build_sequence_evaluation_events(
             SequenceEvaluationEvent(
                 event_id=event_id,
                 sample_id=sample_id,
-                frame_index=frame_index,
+                frame_index=event_frame_index,
                 passed=passed,
                 primary_error=primary_error,
                 error_tags=error_tags,
@@ -273,11 +281,12 @@ def build_sequence_evaluation_events(
         raise ValueError("unresolved_target_ids 不得重复")
     for target_id in unresolved_ids:
         _require_identifier("unresolved target_id", target_id)
+        event_frame_index = unresolved_frame_indices.get(target_id, frame_index)
         event_id = _canonical_event_id(
             (
                 SCORE_VERSION,
                 sample_id,
-                str(frame_index),
+                str(event_frame_index),
                 "unresolved",
                 target_id,
                 coordinate_space.value,
@@ -288,7 +297,7 @@ def build_sequence_evaluation_events(
             SequenceEvaluationEvent(
                 event_id=event_id,
                 sample_id=sample_id,
-                frame_index=frame_index,
+                frame_index=event_frame_index,
                 passed=False,
                 primary_error=PrimaryError.DECISION,
                 error_tags=(EvaluationTag.UNRESOLVED_TARGET,),

@@ -105,6 +105,30 @@ class FramePixelPoint:
 
 
 @dataclass(frozen=True, slots=True)
+class FrameProjectedPoint:
+    """共享 affine 投影得到的原帧几何点，允许位于画布外。
+
+    slider 的 Bézier/Catmull 控制点可以同时越过 osu! playfield
+    和原帧画布边界。gallery 需要保留这个未裁剪投影，由绘图后端
+    完成画布裁切，不得把控制点改写成边缘像素。
+    """
+
+    x: float
+    y: float
+    source_frame_width: int
+    source_frame_height: int
+    transform_fingerprint: str
+
+    def __post_init__(self) -> None:
+        """只校验有限性与坐标来源，不对投影结果做边界裁剪。"""
+
+        _require_frame_size(self.source_frame_width, self.source_frame_height)
+        require_transform_fingerprint(self.transform_fingerprint)
+        _require_finite(self.x, "projected_frame.x")
+        _require_finite(self.y, "projected_frame.y")
+
+
+@dataclass(frozen=True, slots=True)
 class FrameCoordinateTransform:
     """将一个共享仿射变换与标定原帧的尺寸、身份和指纹绑定。
 
@@ -172,14 +196,40 @@ class FrameCoordinateTransform:
     def _transform_osu_to_frame(self, point: OsuPoint) -> FramePixelPoint:
         """统一的 osu -> 原帧实现；三个消费者不得自行算系数。"""
 
-        x, y = self.transform.osu_to_video(point.x, point.y)
+        projected = self._project_osu_geometry(Point2D(point.x, point.y))
         return FramePixelPoint(
+            x=projected.x,
+            y=projected.y,
+            source_frame_width=self.source_frame_width,
+            source_frame_height=self.source_frame_height,
+            transform_fingerprint=self.transform_fingerprint,
+        )
+
+    def _project_osu_geometry(self, point: Point2D) -> FrameProjectedPoint:
+        """用唯一 affine 方程投影有限 osu! 几何，不施加边界裁剪。"""
+
+        if not isinstance(point, Point2D):
+            raise TypeError("osu geometry 必须是 Point2D")
+        x, y = self.transform.osu_to_video(point.x, point.y)
+        return FrameProjectedPoint(
             x=x,
             y=y,
             source_frame_width=self.source_frame_width,
             source_frame_height=self.source_frame_height,
             transform_fingerprint=self.transform_fingerprint,
         )
+
+    def ground_truth_geometry_to_frame(
+        self,
+        point: Point2D,
+        *,
+        source_frame_width: int,
+        source_frame_height: int,
+    ) -> FrameProjectedPoint:
+        """投影未裁剪的 osu! GT 几何，供 slider 训练与 gallery 共用。"""
+
+        self._require_bound_size(source_frame_width, source_frame_height)
+        return self._project_osu_geometry(point)
 
     def bind_frame_prediction(
         self,
@@ -249,10 +299,18 @@ class FrameCoordinateTransform:
         self._require_bound_size(source_frame_width, source_frame_height)
         if not isinstance(start, Point2D) or not isinstance(end, Point2D):
             raise TypeError("slider start/end 必须是 Point2D")
-        start_x, start_y = self.transform.osu_to_video(start.x, start.y)
-        end_x, end_y = self.transform.osu_to_video(end.x, end.y)
-        delta_x = end_x - start_x
-        delta_y = end_y - start_y
+        start_point = self.ground_truth_geometry_to_frame(
+            start,
+            source_frame_width=source_frame_width,
+            source_frame_height=source_frame_height,
+        )
+        end_point = self.ground_truth_geometry_to_frame(
+            end,
+            source_frame_width=source_frame_width,
+            source_frame_height=source_frame_height,
+        )
+        delta_x = end_point.x - start_point.x
+        delta_y = end_point.y - start_point.y
         norm = math.hypot(delta_x, delta_y)
         if norm <= 0.0:
             raise ValueError("slider path 首段不得是零长度")
@@ -296,5 +354,6 @@ __all__ = (
     "CanonicalScoringPoint",
     "FrameCoordinateTransform",
     "FramePixelPoint",
+    "FrameProjectedPoint",
     "OsuPoint",
 )

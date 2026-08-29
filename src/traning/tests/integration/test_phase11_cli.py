@@ -7,33 +7,14 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 from typer.testing import CliRunner
 
 from traning.app.cli import app
-from traning.config import TelemetryConfig, V2Config, v2_config_to_dict
-from traning.telemetry import StateStore
-from traning.training import ParameterVector, TrialAcceptance, TrialObservation
-
-
-class _CliPassesOnThirdTrial:
-    """验证 CLI 确实保持进程并执行第三个 proposal。"""
-
-    def evaluate(
-        self,
-        parameters: ParameterVector,
-        trial_index: int,
-    ) -> TrialObservation:
-        """前两轮返回普通 gate 失败，第三轮返回完整通过。"""
-
-        passed = trial_index == 2
-        return TrialObservation(
-            trial_index,
-            parameters,
-            float(trial_index),
-            TrialAcceptance(*(passed for _ in range(7))),
-        )
+from traning.training import ParameterVector
 
 
 def test_config_check_loads_the_formal_v2_config() -> None:
@@ -136,8 +117,8 @@ def test_env_check_can_report_without_hiding_failure(monkeypatch) -> None:
     assert any(item["status"] == "failed" for item in payload["results"])
 
 
-def test_repository_start_entry_exposes_namespaced_v2_cli() -> None:
-    """用户从原 start/main.py 出发也只能显式进入独立 V2 边界。"""
+def test_repository_start_entry_exposes_model_diagnostics_without_namespace() -> None:
+    """总入口直接暴露当前模型诊断，不再保留 v2 兼容命名空间。"""
 
     workspace = Path(__file__).resolve().parents[4]
     environment = dict(os.environ)
@@ -146,7 +127,6 @@ def test_repository_start_entry_exposes_namespaced_v2_cli() -> None:
         (
             sys.executable,
             "src/start/main.py",
-            "v2",
             "config-check",
             "--config",
             "configs/traning.yaml",
@@ -166,37 +146,38 @@ def test_repository_start_entry_exposes_namespaced_v2_cli() -> None:
     assert payload["coordinates"]["transform_identity"] == "legacy-control-validated-v1"
 
 
-def test_train_cli_continues_until_real_evaluator_passes(
+def test_train_cli_uses_production_trainer_without_external_evaluator(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    """V2 CLI 不得在前两轮 gate 失败后静默停止。"""
+    """train 命令只装配内建生产服务，不接受 module:factory。"""
 
-    config_path = tmp_path / "v2.json"
-    telemetry_root = tmp_path / "telemetry"
-    config_path.write_text(
-        json.dumps(
-            v2_config_to_dict(
-                V2Config(telemetry=TelemetryConfig(directory=telemetry_root))
-            )
-        ),
-        encoding="utf-8",
+    observation = SimpleNamespace(
+        trial_index=2,
+        objective=0.9,
+        parameters=ParameterVector(0.001, 0.05, 64, 0.1, 0.0, 0.0),
     )
-    monkeypatch.setattr(
-        "traning.app.cli.load_trial_evaluator",
-        lambda _factory_spec, _config: _CliPassesOnThirdTrial(),
+    production_result = SimpleNamespace(
+        observation=observation,
+        checkpoint_directory=tmp_path / "checkpoint",
+        resumed=False,
     )
+    trainer = Mock()
+    trainer.run.return_value = production_result
+    trainer_factory = Mock(return_value=trainer)
+    monkeypatch.setattr("traning.app.cli.build_training_datasets", Mock())
+    monkeypatch.setattr("traning.app.cli.ProductionTrainer", trainer_factory)
 
     result = CliRunner().invoke(
         app,
         (
             "train",
             "--config",
-            str(config_path),
-            "--evaluator",
-            "test_module:factory",
+            "configs/traning.yaml",
             "--run-id",
             "cli-run",
+            "--output-root",
+            str(tmp_path),
             "--no-check-environment",
         ),
     )
@@ -205,13 +186,9 @@ def test_train_cli_continues_until_real_evaluator_passes(
     payload = json.loads(result.stdout)
     assert payload["status"] == "passed"
     assert payload["trial_index"] == 2
-    event_types = tuple(
-        event.event_type
-        for event in StateStore(telemetry_root / "cli-run").history().events
-    )
-    assert event_types == (
-        "search.trial.completed",
-        "search.trial.completed",
-        "search.trial.completed",
-        "search.passed",
+    assert "--evaluator" not in CliRunner().invoke(app, ("train", "--help")).output
+    trainer.run.assert_called_once_with(
+        run_dir=tmp_path / "cli-run",
+        run_id="cli-run",
+        resume=True,
     )

@@ -1,5 +1,8 @@
 # Plan Gap Audit
 
+> Legacy 历史记录：这是覆盖迁移前的缺口快照；其中旧路径和命令已退役。
+> 当前状态以 `TRAINING_PLAN.md` 和根目录 `V2_MIGRATION_STATUS.md` 为准。
+
 检查日期：2026-06-26
 
 本文对照 `src/traning/docs` 中的六个模块 plan、`TRAINING_PLAN.md`、

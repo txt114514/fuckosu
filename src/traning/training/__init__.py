@@ -23,6 +23,14 @@ from traning.training.hard_examples import (
     HardExampleWeight,
     build_hard_example_plan,
 )
+from traning.training.gallery_artifacts import (
+    PRODUCTION_GALLERY_MANIFEST_FILENAME,
+    PRODUCTION_GALLERY_SCHEMA_VERSION,
+    ProductionGalleryRecord,
+    publish_production_gallery_manifest,
+    render_production_sequence_gallery,
+    trial_gallery_directory,
+)
 from traning.training.evaluator import (
     OrchestratedTrialEvaluator,
     TrialObjectiveFunction,
@@ -72,15 +80,24 @@ from traning.training.search_state import (
     SearchHistoryStore,
     training_config_sha256,
 )
+from traning.training.production import SEARCH_STATE_FILENAME, ProductionTrainer
+from traning.training.production_contracts import (
+    ProductionGateSpec,
+    ProductionTrainingResult,
+    ProductionTrialMetrics,
+)
 
 __all__ = (
     "CURRICULUM_ORDER",
     "CHECKPOINT_MANIFEST_FILENAME",
     "HARD_EXAMPLE_ROUTE_REGISTRY",
     "PARAMETER_REGISTRY",
+    "PRODUCTION_GALLERY_MANIFEST_FILENAME",
+    "PRODUCTION_GALLERY_SCHEMA_VERSION",
     "RUNTIME_CHECKPOINT_ARTIFACT_TYPE",
     "RUNTIME_CHECKPOINT_SCHEMA_VERSION",
     "SEARCH_STATE_SCHEMA_VERSION",
+    "SEARCH_STATE_FILENAME",
     "STAGE_REGISTRY",
     "AshaAction",
     "AshaDecision",
@@ -108,6 +125,11 @@ __all__ = (
     "ParameterSpec",
     "ParameterType",
     "ParameterVector",
+    "ProductionGateSpec",
+    "ProductionGalleryRecord",
+    "ProductionTrainer",
+    "ProductionTrainingResult",
+    "ProductionTrialMetrics",
     "SearchDecision",
     "SearchExhaustedError",
     "SearchHistoryState",
@@ -129,6 +151,9 @@ __all__ = (
     "decide_curriculum",
     "load_runtime_checkpoint",
     "publish_runtime_checkpoint",
+    "publish_production_gallery_manifest",
+    "render_production_sequence_gallery",
     "run_search",
     "training_config_sha256",
+    "trial_gallery_directory",
 )

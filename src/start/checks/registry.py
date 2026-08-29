@@ -1,30 +1,29 @@
-"""登记并执行模块、环境、配置、设备和数据输入的分级检查。"""
+"""登记并执行模块、环境、V2 配置、设备和 canonical 数据质量检查。"""
 
 from __future__ import annotations
 
 import importlib.util
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 import torch
 
-from environment import EnvironmentReport, collect_environment_report
-from start.checks.models import (
-    StartupCheckReport,
-    StartupCheckResult,
-    TrainingStartupCheckReport,
-)
+from environment import EnvironmentReport as HostEnvironmentReport
+from environment import collect_environment_report
+from package.checks import StartupCheckReport, StartupCheckResult
+from start.checks.models import TrainingStartupCheckReport
 from start.modules import SourceModuleEntry, source_module_entries
-from traning.conf import DataSplit, Settings
-from traning.core.dataset_import import DataInputReport, inspect_data_input
+from traning.app.environment import EnvironmentCheckStatus, check_v2_environment
+from traning.config import RuntimeDevice, V2Config
+from traning.contracts import DataQualityReport, DataSplit
 
 
 CheckRunner = Callable[[], StartupCheckResult]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ProgressiveCheck:
-    """带层级的惰性检查；只有调用 ``run`` 才执行实际探测。"""
+    """带层级的惰性检查；构造注册表不会执行实际探测。"""
 
     key: str
     level: int
@@ -33,23 +32,24 @@ class ProgressiveCheck:
 
 
 def check_source_module_import(entry: SourceModuleEntry) -> StartupCheckResult:
+    """只解析模块 spec，避免检查阶段触发业务副作用。"""
+
     spec = importlib.util.find_spec(entry.import_name)
-    if spec is None:
-        return StartupCheckResult(
-            key=f"module:{entry.key}",
-            status="failed",
-            message=f"{entry.import_name} is not importable",
-            details=entry.as_dict(),
-        )
     return StartupCheckResult(
         key=f"module:{entry.key}",
-        status="passed",
-        message=f"{entry.import_name} import spec resolved",
+        status="passed" if spec is not None else "failed",
+        message=(
+            f"{entry.import_name} import spec resolved"
+            if spec is not None
+            else f"{entry.import_name} is not importable"
+        ),
         details=entry.as_dict(),
     )
 
 
 def check_src_module_imports() -> tuple[StartupCheckResult, ...]:
+    """检查 start 登记的全部顶层源码模块。"""
+
     return tuple(
         check_source_module_import(entry)
         for entry in source_module_entries(include_start=True)
@@ -58,24 +58,24 @@ def check_src_module_imports() -> tuple[StartupCheckResult, ...]:
 
 def check_environment(
     *,
-    report: EnvironmentReport | None = None,
+    report: HostEnvironmentReport | None = None,
     require_cuda: bool = False,
 ) -> StartupCheckResult:
-    """把只读环境报告归约为单项结果，不安装或修改任何依赖。"""
+    """把宿主环境只读报告归约为共享启动检查项。"""
 
     selected = report or collect_environment_report()
-    if selected.ready(require_cuda=require_cuda):
-        status = "passed"
-        message = "required runtime dependencies are available"
-    else:
-        status = "failed"
-        missing = ", ".join(selected.missing_required_packages) or "none"
-        message = f"environment is not ready; missing={missing}"
-        if require_cuda and not selected.torch.cuda_available:
-            message = f"{message}; cuda unavailable"
+    ready = selected.ready(require_cuda=require_cuda)
+    missing = ", ".join(selected.missing_required_packages) or "none"
+    message = (
+        "required runtime dependencies are available"
+        if ready
+        else f"environment is not ready; missing={missing}"
+    )
+    if require_cuda and not selected.torch.cuda_available:
+        message = f"{message}; cuda unavailable"
     return StartupCheckResult(
         key="environment",
-        status=status,
+        status="passed" if ready else "failed",
         message=message,
         details={
             "python": selected.python_version,
@@ -91,93 +91,103 @@ def check_environment(
     )
 
 
-def check_training_runtime(
-    settings: Settings,
-    *,
-    device: torch.device,
-) -> StartupCheckResult:
-    if device.type == "cuda" and not torch.cuda.is_available():
+def check_training_settings(config: V2Config) -> StartupCheckResult:
+    """确认调用方使用的对象已经通过唯一严格 V2 schema。"""
+
+    if not isinstance(config, V2Config):
         return StartupCheckResult(
-            key="training:runtime",
+            key="training:config",
             status="failed",
-            message="training requested cuda but torch cannot see CUDA",
-            details={
-                "requested_device": str(device),
-                "configured_device": settings.runtime.device,
-            },
-        )
-    if device.type not in {"cpu", "cuda"}:
-        return StartupCheckResult(
-            key="training:runtime",
-            status="failed",
-            message="training device must be cpu or cuda",
-            details={"requested_device": str(device)},
+            message="training config 不是 V2Config",
         )
     return StartupCheckResult(
-        key="training:runtime",
+        key="training:config",
         status="passed",
-        message="training runtime device is usable",
+        message=f"training config schema {config.schema_version} 已验证",
         details={
-            "requested_device": str(device),
-            "configured_device": settings.runtime.device,
-            "seed": settings.runtime.seed,
+            "dataset_root": config.data.dataset_root,
+            "split_manifest": config.data.split_manifest,
+            "frame_width": config.perception.frame_width,
+            "frame_height": config.perception.frame_height,
+            "batch_size": config.training.batch_size,
+            "epochs": config.training.epochs,
+            "optimization_max_trials": config.optimization.max_trials,
         },
     )
 
 
-def check_training_settings(settings: Settings) -> StartupCheckResult:
-    settings.data_input.validate_tiling()
-    settings.tiling.validate_tiling()
-    return StartupCheckResult(
-        key="training:settings",
-        status="passed",
-        message="training settings loaded and tiling constraints passed",
-        details={
-            "dataset_root": settings.data_input.dataset_root,
-            "input": {
-                "width": settings.input.width,
-                "height": settings.input.height,
-                "color_cues": settings.input.color_cues,
+def check_training_runtime(
+    config: V2Config,
+    *,
+    requested_device: RuntimeDevice | None = None,
+) -> tuple[StartupCheckResult, ...]:
+    """消费 V2 自身环境报告，不复制 CUDA 或坐标门禁语义。"""
+
+    if requested_device is not None and requested_device is not config.runtime.device:
+        return (
+            StartupCheckResult(
+                key="training:runtime",
+                status="failed",
+                message="requested_device 尚未应用到 V2Config",
+                details={
+                    "requested_device": requested_device.value,
+                    "configured_device": config.runtime.device.value,
+                },
+            ),
+        )
+    report = check_v2_environment(config)
+    status_map = {
+        EnvironmentCheckStatus.PASSED: "passed",
+        EnvironmentCheckStatus.WARNING: "warning",
+        EnvironmentCheckStatus.FAILED: "failed",
+    }
+    return tuple(
+        StartupCheckResult(
+            key=f"training:runtime:{item.name}",
+            status=status_map[item.status],
+            message=item.message,
+            details={
+                "configured_device": config.runtime.device.value,
+                "cuda_visible": torch.cuda.is_available(),
             },
-            "tiling": {
-                "patch_width": settings.tiling.patch_width,
-                "patch_height": settings.tiling.patch_height,
-                "overlap_x": settings.tiling.overlap_x,
-                "overlap_y": settings.tiling.overlap_y,
-            },
-        },
+        )
+        for item in report.results
     )
 
 
 def check_training_data_input(
-    settings: Settings,
+    quality_report: DataQualityReport | None,
     *,
     split: DataSplit,
-) -> tuple[StartupCheckResult, DataInputReport]:
-    report = inspect_data_input(settings, split=split)
-    if report.ok:
-        status = "passed"
-        message = "training data input is available"
-    elif settings.data_input.strict:
-        status = "failed"
-        message = "training data input failed strict validation"
-    else:
-        status = "warning"
-        message = "training data input has issues but strict mode is disabled"
-    return (
-        StartupCheckResult(
-            key="training:data_input",
-            status=status,
-            message=message,
-            details={
-                "split": report.split,
-                "segments": report.segment_count,
-                "estimated_frames": report.frame_count_estimate,
-                "issue_count": report.issue_count,
-                "issues": report.issues[:10],
-            },
+    executor_available: bool,
+    executor_error: str | None = None,
+) -> StartupCheckResult:
+    """只按 DataQualityIssue.blocks_training 判断真实数据是否可训练。"""
+
+    if not executor_available or quality_report is None:
+        return StartupCheckResult(
+            key="training:data_quality",
+            status="failed",
+            message=executor_error or "production TrainingExecutor 不可用",
+            details={"split": split.value, "executor_available": False},
+        )
+    blocking = tuple(item for item in quality_report.issues if item.blocks_training)
+    warnings = tuple(item for item in quality_report.issues if not item.blocks_training)
+    return StartupCheckResult(
+        key="training:data_quality",
+        status="passed" if quality_report.ok else "failed",
+        message=(
+            "canonical 数据质量门通过"
+            if quality_report.ok
+            else f"canonical 数据质量门发现 {len(blocking)} 个阻断问题"
         ),
-        report,
+        details={
+            "split": split.value,
+            "issue_count": len(quality_report.issues),
+            "blocking_count": len(blocking),
+            "warning_count": len(warnings),
+            "blocking_codes": tuple(item.code for item in blocking),
+        },
     )
 
 
@@ -185,17 +195,19 @@ def progressive_startup_checks(
     *,
     require_cuda: bool = False,
 ) -> tuple[ProgressiveCheck, ...]:
-    # level 0 只验证模块边界可导入；level 1 才触碰较重的运行环境探测。
+    """返回从模块 spec 到宿主环境的固定渐进检查注册表。"""
+
+    module_checks = tuple(
+        ProgressiveCheck(
+            key=f"module:{entry.key}",
+            level=0,
+            description=f"Import {entry.import_name}",
+            run=lambda entry=entry: check_source_module_import(entry),
+        )
+        for entry in source_module_entries(include_start=True)
+    )
     return (
-        *(
-            ProgressiveCheck(
-                key=f"module:{entry.key}",
-                level=0,
-                description=f"Import {entry.import_name}",
-                run=lambda entry=entry: check_source_module_import(entry),
-            )
-            for entry in source_module_entries(include_start=True)
-        ),
+        *module_checks,
         ProgressiveCheck(
             key="environment",
             level=1,
@@ -205,44 +217,47 @@ def progressive_startup_checks(
     )
 
 
-def run_startup_checks(
-    *,
-    require_cuda: bool = False,
-) -> StartupCheckReport:
-    checks = progressive_startup_checks(require_cuda=require_cuda)
+def run_startup_checks(*, require_cuda: bool = False) -> StartupCheckReport:
+    """运行全局轻量启动检查。"""
+
     return StartupCheckReport(
         scope="src.start",
-        results=tuple(check.run() for check in checks),
+        results=tuple(
+            item.run() for item in progressive_startup_checks(require_cuda=require_cuda)
+        ),
     )
 
 
 def run_training_startup_checks(
-    settings: Settings,
+    config: V2Config,
     *,
     split: DataSplit,
-    device: torch.device,
-    require_cuda: bool | None = None,
+    requested_device: RuntimeDevice | None = None,
+    quality_report: DataQualityReport | None,
+    executor_available: bool,
+    executor_error: str | None = None,
 ) -> TrainingStartupCheckReport:
-    # 显式 require_cuda 可覆盖设备推导，便于 CPU CI 检查 CUDA 配置文件。
-    cuda_required = device.type == "cuda" if require_cuda is None else require_cuda
-    data_result, data_report = check_training_data_input(settings, split=split)
+    """组合模块、严格配置、V2 环境和同一份 canonical 数据质量报告。"""
+
+    data_result = check_training_data_input(
+        quality_report,
+        split=split,
+        executor_available=executor_available,
+        executor_error=executor_error,
+    )
     report = StartupCheckReport(
-        scope="traning.full_training",
+        scope="traning.production",
         results=(
             *check_src_module_imports(),
-            check_environment(require_cuda=cuda_required),
-            check_training_settings(settings),
-            check_training_runtime(settings, device=device),
+            check_training_settings(config),
+            *check_training_runtime(config, requested_device=requested_device),
             data_result,
         ),
     )
-    return TrainingStartupCheckReport(
-        report=report,
-        data_input=data_report,
-    )
+    return TrainingStartupCheckReport(report=report, data_quality=quality_report)
 
 
-__all__ = [
+__all__ = (
     "ProgressiveCheck",
     "check_environment",
     "check_src_module_imports",
@@ -253,4 +268,4 @@ __all__ = [
     "progressive_startup_checks",
     "run_startup_checks",
     "run_training_startup_checks",
-]
+)

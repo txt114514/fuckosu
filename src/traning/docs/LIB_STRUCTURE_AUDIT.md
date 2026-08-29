@@ -1,5 +1,8 @@
 # traning lib 结构审计
 
+> Legacy 历史记录：本文列出的旧 `core/conf/state/lib` 边界不再活动，也不提供兼容层。
+> 当前边界以 `TRAINING_PLAN.md` 和生成的 `CODEX_INDEX.md` 为准。
+
 本文记录 `src/traning/lib` 的整理结果和后续放置规则。`lib` 是 `traning`
 作用域内的复用实现层；只有被 `src` 下多个顶层模块共同调用、需要形成稳定契约的
 结构或 API，才上移到 `src/package` 并从 `package` 公开入口导出。

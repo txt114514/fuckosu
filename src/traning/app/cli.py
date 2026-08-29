@@ -1,9 +1,8 @@
-"""OSU V2 的独立配置与环境检查命令行入口。"""
+"""traning 模型的严格配置、环境、坐标审计与生产训练 CLI。"""
 
 from __future__ import annotations
 
 from dataclasses import asdict
-import importlib
 import json
 from pathlib import Path
 import time
@@ -15,19 +14,17 @@ from traning.app.factory import build_frame_coordinate_transform
 from traning.config import V2Config, load_v2_config, v2_config_to_dict
 from traning.data import (
     audit_affine_calibration,
+    build_training_datasets,
     load_affine_calibration_evidence,
 )
-from traning.telemetry import StateStore, TelemetryReporter
-from traning.training import SearchExhaustedError, TrialEvaluator
-
-from .training import run_configured_search
+from traning.training import ProductionTrainer, SearchExhaustedError
 
 
-app = typer.Typer(help="OSU Decision Model V2 启动与环境检查。")
+app = typer.Typer(help="OSU Decision Model 的配置、环境、坐标和生产训练入口。")
 
 
 def load_checked_config(path: Path) -> V2Config:
-    """加载严格 V2 配置，保留原始异常供 CLI 显式报告。"""
+    """加载严格配置，保留原始异常供 CLI 显式报告。"""
 
     if not isinstance(path, Path):
         raise TypeError("path 必须是 pathlib.Path")
@@ -43,16 +40,9 @@ def config_check(
     try:
         checked = load_checked_config(config)
     except (OSError, TypeError, ValueError) as exc:
-        typer.echo(f"V2 配置失败：{exc}", err=True)
+        typer.echo(f"配置失败：{exc}", err=True)
         raise typer.Exit(1) from exc
-    typer.echo(
-        json.dumps(
-            v2_config_to_dict(checked),
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        )
-    )
+    typer.echo(_json(v2_config_to_dict(checked)))
 
 
 @app.command("env-check")
@@ -66,27 +56,20 @@ def env_check(
         checked = load_checked_config(config)
         report = check_v2_environment(checked)
     except (OSError, TypeError, ValueError) as exc:
-        typer.echo(f"V2 环境检查失败：{exc}", err=True)
+        typer.echo(f"环境检查失败：{exc}", err=True)
         raise typer.Exit(1) from exc
     payload = {
         "ok": report.ok,
-        "results": [
+        "results": tuple(
             {
                 "name": item.name,
                 "status": item.status.value,
                 "message": item.message,
             }
             for item in report.results
-        ],
+        ),
     }
-    typer.echo(
-        json.dumps(
-            payload,
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        )
-    )
+    typer.echo(_json(payload))
     if strict and not report.ok:
         raise typer.Exit(1)
 
@@ -99,20 +82,19 @@ def coordinate_audit(
         "--require-refit-provenance/--allow-validation-only",
     ),
 ) -> None:
-    """复算坐标控制残差，并显式报告原始拟合集是否可重放。"""
+    """复算控制点残差，并明确报告原始拟合集能否重放。"""
 
     try:
         checked = load_checked_config(config)
         evidence_path = checked.coordinates.calibration_evidence_path
         if evidence_path is None:
-            raise ValueError("V2 config 未配置 calibration_evidence_path")
-        transform = build_frame_coordinate_transform(checked)
+            raise ValueError("config 未配置 calibration_evidence_path")
         report = audit_affine_calibration(
-            transform,
+            build_frame_coordinate_transform(checked),
             load_affine_calibration_evidence(evidence_path),
         )
     except (OSError, RuntimeError, TypeError, ValueError) as exc:
-        typer.echo(f"V2 坐标审计失败：{exc}", err=True)
+        typer.echo(f"坐标审计失败：{exc}", err=True)
         raise typer.Exit(1) from exc
     payload = {
         "ok": report.ok,
@@ -135,100 +117,76 @@ def coordinate_audit(
             else "原始拟合观测未入库；当前只能复核独立控制点，不能重放拟合"
         ),
     }
-    typer.echo(
-        json.dumps(
-            payload,
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        )
-    )
+    typer.echo(_json(payload))
     if not report.ok or (require_refit_provenance and not report.fit_reproducible):
         raise typer.Exit(1)
 
 
-def load_trial_evaluator(factory_spec: str, config: V2Config) -> TrialEvaluator:
-    """从显式 ``module:factory`` 边界加载用户的真实 typed evaluator。"""
-
-    if not isinstance(factory_spec, str):
-        raise TypeError("factory_spec 必须是字符串")
-    module_name, separator, attribute_name = factory_spec.partition(":")
-    if (
-        not separator
-        or not module_name
-        or not attribute_name
-        or module_name != module_name.strip()
-        or attribute_name != attribute_name.strip()
-    ):
-        raise ValueError("--evaluator 必须采用 module:factory 格式")
-    module = importlib.import_module(module_name)
-    factory = getattr(module, attribute_name)
-    if not callable(factory):
-        raise TypeError("evaluator factory 必须可调用")
-    evaluator = factory(config)
-    if not callable(getattr(evaluator, "evaluate", None)):
-        raise TypeError("evaluator factory 必须返回实现 evaluate 的 TrialEvaluator")
-    return evaluator
-
-
 @app.command("train")
 def train(
-    evaluator: str = typer.Option(..., "--evaluator", help="module:factory"),
     config: Path = typer.Option(Path("configs/traning.yaml"), "--config"),
+    output_root: Path = typer.Option(
+        Path("artifacts/training_runs"),
+        "--output-root",
+    ),
     run_id: str | None = typer.Option(None, "--run-id"),
+    resume: bool = typer.Option(True, "--resume/--no-resume"),
     check_environment: bool = typer.Option(
         True,
         "--check-environment/--no-check-environment",
     ),
 ) -> None:
-    """运行真实 V2 evaluator；普通 gate 失败会继续选择新参数。"""
+    """运行真实数据生产训练；普通门禁失败会持续提出未重复参数。"""
 
     try:
         checked = load_checked_config(config)
         if check_environment:
             require_v2_environment(checked)
-        selected_run_id = run_id or f"v2-search-{time.time_ns()}"
-        store = StateStore(
-            checked.telemetry.directory / selected_run_id,
-            schema_version=checked.telemetry.schema_version,
-        )
-        reporter = TelemetryReporter(selected_run_id, store)
-        selected_evaluator = load_trial_evaluator(evaluator, checked)
-        result = run_configured_search(
-            checked,
-            selected_evaluator,
-            reporter=reporter,
+        selected_run_id = run_id or f"traning-search-{time.time_ns()}"
+        datasets = build_training_datasets(checked)
+        result = ProductionTrainer(checked, datasets).run(
+            run_dir=output_root / selected_run_id,
+            run_id=selected_run_id,
+            resume=resume,
         )
     except SearchExhaustedError as exc:
         typer.echo(
-            json.dumps(
+            _json(
                 {
                     "status": "exhausted",
                     "trial_count": exc.decision.trial_count,
-                },
-                ensure_ascii=False,
-                sort_keys=True,
-                separators=(",", ":"),
+                }
             ),
             err=True,
         )
         raise typer.Exit(2) from exc
     except Exception as exc:
-        typer.echo(f"V2 训练失败：{exc}", err=True)
+        typer.echo(f"训练失败：{exc}", err=True)
         raise typer.Exit(1) from exc
 
     typer.echo(
-        json.dumps(
+        _json(
             {
                 "status": "passed",
-                "trial_index": result.trial_index,
-                "objective": result.objective,
-                "parameters": asdict(result.parameters),
-            },
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
+                "trial_index": result.observation.trial_index,
+                "objective": result.observation.objective,
+                "parameters": asdict(result.observation.parameters),
+                "checkpoint": result.checkpoint_directory,
+                "resumed": result.resumed,
+            }
         )
+    )
+
+
+def _json(value: object) -> str:
+    """以稳定键序和 UTF-8 文本编码 CLI JSON。"""
+
+    return json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
     )
 
 
@@ -238,6 +196,5 @@ __all__ = (
     "coordinate_audit",
     "env_check",
     "load_checked_config",
-    "load_trial_evaluator",
     "train",
 )
