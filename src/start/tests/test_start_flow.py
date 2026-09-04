@@ -19,8 +19,8 @@ from start.flow import (
     TrainingExecutionResult,
     run_start_flow,
 )
-from traning.config import RuntimeConfig, RuntimeDevice, V2Config, load_v2_config
-from traning.contracts import DataQualityReport
+from traning.conf import RuntimeConfig, RuntimeDevice, V2Config, load_v2_config
+from traning.state import DataQualityReport
 
 
 def _config() -> V2Config:
@@ -81,7 +81,10 @@ def test_dry_run_executes_checks_but_never_calls_training(tmp_path: Path) -> Non
         patch("start.flow.load_v2_config", return_value=_config()),
         patch("start.flow.run_before_startup_checks", return_value=_before_report()),
         patch("start.flow.load_before_settings", return_value=object()),
-        patch("start.flow._sync_dataset_splits", return_value=_split_sync(tmp_path / "split.json")),
+        patch(
+            "start.flow._sync_dataset_splits",
+            return_value=_split_sync(tmp_path / "split.json"),
+        ),
         patch("start.flow.run_training_startup_checks", return_value=checks),
     ):
         result = run_start_flow(
@@ -131,7 +134,10 @@ def test_passed_requires_explicit_training_result(tmp_path: Path) -> None:
         patch("start.flow.load_v2_config", return_value=_config()),
         patch("start.flow.run_before_startup_checks", return_value=_before_report()),
         patch("start.flow.load_before_settings", return_value=object()),
-        patch("start.flow._sync_dataset_splits", return_value=_split_sync(tmp_path / "split.json")),
+        patch(
+            "start.flow._sync_dataset_splits",
+            return_value=_split_sync(tmp_path / "split.json"),
+        ),
         patch("start.flow.run_training_startup_checks", return_value=checks),
     ):
         result = run_start_flow(

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from traning.contracts.common import JSONObject
+from traning.state.common import JSONObject
 from traning.lib.data.annotation import SegmentAnnotation
 
 

@@ -93,7 +93,7 @@ video_y = 0.0003418231662923798 * osu_x
 RANSAC inlier 清单或点集摘要；现有 5 个点只能验证方程，无法唯一重建它。V2 因此不再
 使用 `pass-sample-ransac-v1` 这个过度声明的身份，而采用
 `legacy-control-validated-v1`，并把 `fit_reproducible=false`、控制点、来源和残差门限保存到
-`configs/traning_coordinate_evidence.json`。`python -m traning.app coordinate-audit`
+`configs/traning_coordinate_evidence.json`。`python -m traning coordinate-audit`
 默认复算控制点；若要求完整拟合来源，则 `--require-refit-provenance` 会按设计失败，
 绝不伪造缺失证据。
 

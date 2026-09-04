@@ -7,18 +7,18 @@ from pathlib import Path
 
 import pytest
 
-import traning.data.cache.cache as cache_module
-from traning.contracts import (
+import traning.core.data.cache.cache as cache_module
+from traning.state import (
     CandidateObservation,
     InferenceCandidateRecord,
     ObjectTypeDistribution,
 )
-from traning.data.cache import (
+from traning.core.data.cache import (
     MANIFEST_FILENAME,
     load_candidate_cache,
     publish_candidate_cache,
 )
-from traning.infrastructure import (
+from traning.lib.infrastructure import (
     AtomicWriteError,
     IntegrityError,
     SchemaMismatchError,

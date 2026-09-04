@@ -1,21 +1,5 @@
-"""离线 Outcome oracle 公开入口。"""
+"""已弃用兼容转发；新代码必须导入对应的 conf、core、lib 或 state 路径。"""
 
-from .oracle import (
-    OUTCOME_ORACLE_VERSION,
-    HypotheticalClick,
-    OracleOutcome,
-    OracleState,
-    OracleTarget,
-    OutcomeCategory,
-    OutcomeOracle,
-)
+from traning.core.outcome.oracle import *  # noqa: F403
 
-__all__ = (
-    "OUTCOME_ORACLE_VERSION",
-    "HypotheticalClick",
-    "OracleOutcome",
-    "OracleState",
-    "OracleTarget",
-    "OutcomeCategory",
-    "OutcomeOracle",
-)
+__deprecated__ = True

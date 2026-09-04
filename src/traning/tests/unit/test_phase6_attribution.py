@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from traning.evaluation import (
+from traning.core.evaluation import (
     SCORE_VERSION,
     EvaluationTag,
     PredictedClick,
@@ -159,7 +159,7 @@ def test_click_event_contract_rejects_contradictory_pass_and_tags() -> None:
 def test_attribution_source_has_no_legacy_any_or_rescoring() -> None:
     """归因层只能投影 SequenceScore，不得读取视觉旁路或重新评分。"""
 
-    path = _TRANING_ROOT / "evaluation/attribution.py"
+    path = _TRANING_ROOT / "core/evaluation/attribution.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))
     forbidden_names = {
         "Any",

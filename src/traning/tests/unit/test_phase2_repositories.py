@@ -6,7 +6,7 @@ import sqlite3
 
 import pytest
 
-from traning.data.repositories import (
+from traning.core.data.repositories import (
     DatasetCatalogEntry,
     InMemoryDatasetCatalogRepository,
     InMemoryPreprocessingMetadataRepository,

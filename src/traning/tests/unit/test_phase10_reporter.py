@@ -8,29 +8,29 @@ from pathlib import Path
 
 import pytest
 
-from traning.contracts.telemetry import TelemetryEvent
-from traning.evaluation.attribution import (
+from traning.state.telemetry import TelemetryEvent
+from traning.core.evaluation.attribution import (
     EvaluationTag,
     PrimaryError,
     SequenceEvaluationEvent,
 )
-from traning.telemetry.events import (
+from traning.lib.telemetry.events import (
     TELEMETRY_SCHEMA_VERSION,
     EvaluationEvent,
     MetricsEvent,
     ResourceEvent,
 )
-from traning.telemetry.reporter import (
+from traning.lib.telemetry.reporter import (
     DASHBOARD_SCHEMA_VERSION,
     DashboardMetrics,
     DashboardResources,
     DashboardSnapshot,
     TelemetryReporter,
 )
-from traning.telemetry.store import StateStore
+from traning.lib.telemetry.store import StateStore
 
 
-_REPORTER_PATH = Path(__file__).resolve().parents[2] / "telemetry/reporter.py"
+_REPORTER_PATH = Path(__file__).resolve().parents[2] / "lib/telemetry/reporter.py"
 
 
 def _canonical_evaluation() -> SequenceEvaluationEvent:

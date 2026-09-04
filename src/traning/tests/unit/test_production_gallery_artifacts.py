@@ -7,22 +7,22 @@ from pathlib import Path, PurePosixPath
 from PIL import Image
 from package import AffineOsuVideoTransform
 
-from traning.contracts import RuntimeFrame
-from traning.data import FrameCoordinateTransform
-from traning.evaluation import (
+from traning.state import RuntimeFrame
+from traning.core.data import FrameCoordinateTransform
+from traning.core.evaluation import (
     FramePredictedClick,
     PrimaryError,
     TargetObject,
     build_sequence_evaluation_events,
     score_frame_click_sequence,
 )
-from traning.infrastructure import read_json_object
-from traning.training import (
+from traning.lib.infrastructure import read_json_object
+from traning.core.training import (
     PRODUCTION_GALLERY_MANIFEST_FILENAME,
     publish_production_gallery_manifest,
     render_production_sequence_gallery,
 )
-from traning.visualization import build_gallery_frame_overlay
+from traning.lib.visualization import build_gallery_frame_overlay
 
 
 _WIDTH = 64

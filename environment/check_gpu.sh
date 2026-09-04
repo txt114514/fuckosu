@@ -1,25 +1,6 @@
 #!/usr/bin/env bash
-# 在真实容器 namespace 中只读验证驱动、PyTorch CUDA、BF16 与显存查询能力。
+# 已弃用的兼容入口；真实实现位于训练包内部。
 set -euo pipefail
 
-# nvidia-smi 先验证宿主驱动桥；随后 Python 检查当前 PyTorch 构建能否实际使用设备。
-nvidia-smi
-
-python - <<'PY'
-import torch
-
-print("torch:", torch.__version__)
-print("cuda_available:", torch.cuda.is_available())
-print("torch_cuda:", torch.version.cuda)
-
-if not torch.cuda.is_available():
-    raise SystemExit("CUDA is not available inside the container")
-
-print("device:", torch.cuda.get_device_name(0))
-print("capability:", torch.cuda.get_device_capability(0))
-print("bf16:", torch.cuda.is_bf16_supported())
-
-free_bytes, total_bytes = torch.cuda.mem_get_info()
-print("free_vram_gib:", free_bytes / 1024**3)
-print("total_vram_gib:", total_bytes / 1024**3)
-PY
+workspace_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+exec bash "${workspace_root}/src/traning/lib/environment/check_gpu.sh" "$@"

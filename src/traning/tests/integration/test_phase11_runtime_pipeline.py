@@ -10,30 +10,30 @@ import torch
 from torch import nn
 
 from package import AffineOsuVideoTransform
-from traning.app import RuntimeStepResult, V2RuntimePipeline
-from traning.belief import PerTrackBeliefEncoder, PerTrackBeliefRuntime
-from traning.config import (
+from traning.core.app import RuntimeStepResult, V2RuntimePipeline
+from traning.core.belief import PerTrackBeliefEncoder, PerTrackBeliefRuntime
+from traning.conf import (
     BeliefConfig,
     DecisionConfig,
     OutcomeConfig,
     PerceptionConfig,
     TrackingConfig,
 )
-from traning.contracts import (
+from traning.state import (
     BeliefState,
     DecisionAction,
     OutcomeDistribution,
     RuntimeFrame,
     TrackLifecycle,
 )
-from traning.decision import OptimalStoppingPlanner
-from traning.data import FrameCoordinateTransform
-from traning.outcome import DenseOutcomeModel
-from traning.perception import DensePerceptionOutput, PerceptionRuntime
-from traning.tracking import MultiObjectTracker
+from traning.core.decision import OptimalStoppingPlanner
+from traning.core.data import FrameCoordinateTransform
+from traning.core.outcome import DenseOutcomeModel
+from traning.core.perception import DensePerceptionOutput, PerceptionRuntime
+from traning.core.tracking import MultiObjectTracker
 
 
-_RUNTIME_PATH = Path(__file__).resolve().parents[2] / "app/runtime.py"
+_RUNTIME_PATH = Path(__file__).resolve().parents[2] / "core/app/runtime.py"
 
 
 class _PixelControlledPerceptionModel:

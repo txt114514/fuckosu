@@ -8,20 +8,20 @@ from pathlib import Path
 
 import pytest
 
-from traning.contracts import (
+from traning.state import (
     DataQualityIssue,
     DataQualityReport,
     DataQualitySeverity,
 )
-from traning.training.orchestration import (
+from traning.core.training.orchestration import (
     STAGE_REGISTRY,
     ExecutionStatus,
     StageResult,
     TrainingOrchestrator,
     TrainingStage,
 )
-from traning.training.optimization import TrialAcceptance
-from traning.training.scheduling import (
+from traning.core.training.optimization import TrialAcceptance
+from traning.core.training.scheduling import (
     AshaAction,
     AshaRung,
     AshaScheduler,
@@ -33,7 +33,7 @@ from traning.training.scheduling import (
 )
 
 
-_TRAINING_ROOT = Path(__file__).resolve().parents[2] / "training"
+_TRAINING_ROOT = Path(__file__).resolve().parents[2] / "core/training"
 
 
 def _quality_report(*, blocked: bool = False) -> DataQualityReport:

@@ -1,53 +1,5 @@
-"""OSU V2 的公开配置 API。"""
+"""已弃用兼容转发；新代码必须导入对应的 conf、core、lib 或 state 路径。"""
 
-from .models import (
-    AffineMatrix,
-    V2_CONFIG_SCHEMA_VERSION,
-    BeliefConfig,
-    CacheConfig,
-    CoordinateConfig,
-    DataConfig,
-    DataLoaderConfig,
-    DecisionConfig,
-    OptimizationConfig,
-    OutcomeConfig,
-    PerceptionConfig,
-    RuntimeConfig,
-    RuntimeDevice,
-    TelemetryConfig,
-    TrackingConfig,
-    TrainingConfig,
-    V2Config,
-    load_v2_config,
-    v2_config_to_dict,
-)
-from .versions import (
-    CALIBRATION_EVIDENCE_SCHEMA_VERSION,
-    CANDIDATE_CACHE_SCHEMA_VERSION,
-    TELEMETRY_SCHEMA_VERSION,
-)
+from traning.conf import *  # noqa: F403
 
-__all__ = (
-    "AffineMatrix",
-    "CALIBRATION_EVIDENCE_SCHEMA_VERSION",
-    "CANDIDATE_CACHE_SCHEMA_VERSION",
-    "TELEMETRY_SCHEMA_VERSION",
-    "V2_CONFIG_SCHEMA_VERSION",
-    "BeliefConfig",
-    "CacheConfig",
-    "CoordinateConfig",
-    "DataConfig",
-    "DataLoaderConfig",
-    "DecisionConfig",
-    "OptimizationConfig",
-    "OutcomeConfig",
-    "PerceptionConfig",
-    "RuntimeConfig",
-    "RuntimeDevice",
-    "TelemetryConfig",
-    "TrackingConfig",
-    "TrainingConfig",
-    "V2Config",
-    "load_v2_config",
-    "v2_config_to_dict",
-)
+__deprecated__ = True

@@ -35,7 +35,15 @@ from package.contracts.experiment import (
     TrialRef,
     TrialStatus,
 )
-from package.contracts.geometry import CoordinateSpace, Point2D, Rect2D, Size2D
+from package.contracts.geometry import (
+    Box2D,
+    Circle2D,
+    CoordinateSpace,
+    Point2D,
+    Rect2D,
+    ResizeMeta,
+    Size2D,
+)
 from package.contracts.osu import (
     OsuDifficulty,
     OsuHitObject,
@@ -45,8 +53,10 @@ from package.contracts.osu import (
 
 __all__ = [
     "ArtifactFileRef",
+    "Box2D",
     "CandidateCacheFrameRef",
     "CheckpointRef",
+    "Circle2D",
     "ContractMixin",
     "CoordinateSpace",
     "CurriculumStage",
@@ -65,6 +75,7 @@ __all__ = [
     "PredictionAction",
     "PredictionEvent",
     "Rect2D",
+    "ResizeMeta",
     "ScoreSummary",
     "ScoreVersionRef",
     "SearchMethod",

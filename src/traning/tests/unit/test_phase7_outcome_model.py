@@ -10,21 +10,21 @@ import pytest
 import torch
 from torch import nn
 
-from traning.config import OutcomeConfig
-from traning.contracts import (
+from traning.conf import OutcomeConfig
+from traning.state import (
     BeliefState,
     ObjectTypeDistribution,
     OutcomeDistribution,
     Point2D,
 )
-from traning.outcome.model import (
+from traning.core.outcome.model import (
     SCORE_REPRESENTATIVES,
     DenseOutcomeModel,
     OutcomeTensorOutput,
 )
 
 
-_MODEL_PATH = Path(__file__).resolve().parents[2] / "outcome/model.py"
+_MODEL_PATH = Path(__file__).resolve().parents[2] / "core/outcome/model.py"
 
 
 def _config() -> OutcomeConfig:
@@ -193,12 +193,12 @@ def test_model_ast_has_no_legacy_oracle_gt_smet_or_any() -> None:
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             assert all(
-                not alias.name.startswith(("osu_v2", "traning.outcome.oracle"))
+                not alias.name.startswith(("osu_v2", "traning.core.outcome.oracle"))
                 for alias in node.names
             )
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
-            assert not module.startswith(("osu_v2", "traning.outcome.oracle"))
+            assert not module.startswith(("osu_v2", "traning.core.outcome.oracle"))
         if isinstance(node, ast.Name):
             assert node.id not in forbidden_names
         if isinstance(node, ast.Attribute):

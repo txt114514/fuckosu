@@ -1,45 +1,5 @@
-"""V2 只读 telemetry 可视化的公开纯投影 API。"""
+"""已弃用兼容转发；新代码必须导入对应的 conf、core、lib 或 state 路径。"""
 
-from .renderers import (
-    DashboardEvaluationRow,
-    DashboardMetric,
-    DashboardMetricRow,
-    DashboardSection,
-    GalleryTargetOverlay,
-    GalleryFrameOverlay,
-    GalleryPredictionOverlay,
-    QtDashboardModel,
-    QtDashboardRenderer,
-    QtEvaluationColumn,
-    QtEvaluationTableModel,
-    QtMetricColumn,
-    QtMetricTableModel,
-    RichDashboardModel,
-    RichDashboardRenderer,
-    RichMetricSection,
-    build_gallery_frame_overlay,
-    project_gallery_target_overlays,
-    render_gallery_png,
-)
+from traning.lib.visualization import *  # noqa: F403
 
-__all__ = (
-    "DashboardEvaluationRow",
-    "DashboardMetric",
-    "DashboardMetricRow",
-    "DashboardSection",
-    "GalleryTargetOverlay",
-    "GalleryFrameOverlay",
-    "GalleryPredictionOverlay",
-    "QtDashboardModel",
-    "QtDashboardRenderer",
-    "QtEvaluationColumn",
-    "QtEvaluationTableModel",
-    "QtMetricColumn",
-    "QtMetricTableModel",
-    "RichDashboardModel",
-    "RichDashboardRenderer",
-    "RichMetricSection",
-    "build_gallery_frame_overlay",
-    "project_gallery_target_overlays",
-    "render_gallery_png",
-)
+__deprecated__ = True

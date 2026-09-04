@@ -1,17 +1,5 @@
-"""感知运行时公开入口。"""
+"""已弃用兼容转发；新代码必须导入对应的 conf、core、lib 或 state 路径。"""
 
-from .runtime import (
-    DensePerceptionModel,
-    PerceptionRuntime,
-    RuntimeTensorFrame,
-    decode_runtime_output,
-    runtime_frame_to_tensor,
-)
+from traning.core.perception.runtime import *  # noqa: F403
 
-__all__ = (
-    "DensePerceptionModel",
-    "PerceptionRuntime",
-    "RuntimeTensorFrame",
-    "decode_runtime_output",
-    "runtime_frame_to_tensor",
-)
+__deprecated__ = True

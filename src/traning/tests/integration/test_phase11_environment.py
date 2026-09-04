@@ -5,14 +5,14 @@ from __future__ import annotations
 import pytest
 from pathlib import Path
 
-from traning.app.environment import (
+from traning.lib.environment.training import (
     EnvironmentCheckStatus,
     EnvironmentNotReadyError,
     check_v2_environment,
     require_v2_environment,
 )
-from traning.config import CoordinateConfig, RuntimeConfig, RuntimeDevice, V2Config
-from traning.config import load_v2_config
+from traning.conf import CoordinateConfig, RuntimeConfig, RuntimeDevice, V2Config
+from traning.conf import load_v2_config
 
 
 _IDENTITY_MATRIX = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0))

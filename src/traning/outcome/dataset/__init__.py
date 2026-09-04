@@ -1,27 +1,5 @@
-"""反事实 Outcome 数据集构造与持久化 API。"""
+"""已弃用兼容转发；新代码必须导入对应的 conf、core、lib 或 state 路径。"""
 
-from .artifact import (
-    MANIFEST_FILENAME,
-    OUTCOME_DATASET_ARTIFACT_TYPE,
-    OUTCOME_DATASET_SCHEMA_VERSION,
-    RECORDS_FILENAME,
-    OutcomeDatasetArtifactStore,
-    OutcomeDatasetManifest,
-)
-from .builder import (
-    CounterfactualFrame,
-    CounterfactualOutcomeDataset,
-    CounterfactualOutcomeDatasetBuilder,
-)
+from traning.core.outcome.dataset import *  # noqa: F403
 
-__all__ = (
-    "MANIFEST_FILENAME",
-    "OUTCOME_DATASET_ARTIFACT_TYPE",
-    "OUTCOME_DATASET_SCHEMA_VERSION",
-    "RECORDS_FILENAME",
-    "CounterfactualFrame",
-    "CounterfactualOutcomeDataset",
-    "CounterfactualOutcomeDatasetBuilder",
-    "OutcomeDatasetArtifactStore",
-    "OutcomeDatasetManifest",
-)
+__deprecated__ = True

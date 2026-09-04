@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from package import DataSplit as PackageDataSplit
 
-from traning.contracts import (
+from traning.state import (
     BeliefState,
     CandidateObservation,
     DataSplit,

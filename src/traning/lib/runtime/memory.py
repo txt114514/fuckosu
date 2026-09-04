@@ -10,18 +10,13 @@ import psutil
 import torch
 from torch import nn
 
+from traning.state.telemetry import MemoryReport
+
 AmpDType = str | torch.dtype | None
 
 
-@dataclass(frozen=True)
-class MemorySnapshot:
-    """PyTorch CUDA allocator 的峰值与当前 allocated/reserved 快照。"""
-
-    cuda_available: bool
-    max_allocated_gib: float | None
-    max_reserved_gib: float | None
-    current_allocated_gib: float | None
-    current_reserved_gib: float | None
+# 旧运行时名称只保留 identity alias；契约权威位于 traning.state。
+MemorySnapshot = MemoryReport
 
 
 @dataclass(frozen=True)
@@ -415,6 +410,7 @@ __all__ = [
     "CudaRuntimeConfig",
     "CudaRuntimeState",
     "MemorySnapshot",
+    "MemoryReport",
     "RuntimeMemoryBudget",
     "amp_uses_grad_scaler",
     "autocast_context",

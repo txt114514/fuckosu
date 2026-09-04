@@ -1,5 +1,5 @@
-"""多目标 tracker 公开入口。"""
+"""已弃用兼容转发；新代码必须导入对应的 conf、core、lib 或 state 路径。"""
 
-from .tracker import MultiObjectTracker
+from traning.core.tracking.tracker import *  # noqa: F403
 
-__all__ = ("MultiObjectTracker",)
+__deprecated__ = True

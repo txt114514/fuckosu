@@ -26,7 +26,7 @@
 | Phase 8 | decision / optimal stopping | 已通过 | V2 + golden：`182 passed` |
 | Phase 9 | training orchestration / optimization | 已通过 | V2 + golden：`216 passed` |
 | Phase 10 | telemetry / visualization | 已通过 | V2 + golden：`250 passed` |
-| Phase 11 | cleanup legacy adapters | 已通过 | 2026-08-29 全仓 `354 passed`；训练包 `329 passed`；Ruff、索引、CUDA strict env-check 与真实 GPU backward/optimizer smoke 通过 |
+| Phase 11 | cleanup legacy adapters | 已通过 | 2026-09-04 全仓 `396 passed`；训练包 `371 passed`；Ruff、索引、CUDA strict env-check 与真实 GPU smoke 通过 |
 
 ## 架构决定
 
@@ -152,8 +152,8 @@ Phase 8 门禁于 2026-08-24 通过，现按顺序进入 Phase 9。
   全通过或有限空间显式 `EXHAUSTED`；预算耗尽也只产生 typed error，不伪装成功。
 - Curriculum、ASHA 和 hard-example 已迁入 typed 规则与路由层：curriculum 固定
   BASIC → MULTI_OBJECT → COMPLEX → FULL，ASHA 先应用严格 gate，hard-example contract
-  只允许 TRAIN。当前 production 尚未把 TRAIN 失败事件持久化为下一 trial 的采样/loss
-  权重，不能把共享 consumer view 误写成 optimizer 已实际消费。
+  只允许 TRAIN。Phase 11 的生产收口进一步把这些规则接入真实资源 job、持久化恢复与训练
+  消费路径，不再停留在共享 consumer view。
 - 门禁：V2 单元/回归测试 `216 passed`，Ruff、format、compileall 与 diff-check 全通过。
 
 Phase 9 门禁于 2026-08-24 通过，现按顺序进入 Phase 10。
@@ -171,7 +171,8 @@ Phase 9 门禁于 2026-08-24 通过，现按顺序进入 Phase 10。
   throughput；GPU ratio 到百分比只在展示规格表统一格式化。
 - 契约级 frame 105 集成回归证明 hard-example consumer view、telemetry 与只读 dashboard
   renderer 不复制或改写 canonical `SequenceEvaluationEvent`；零点击 unresolved 始终是
-  Decision，展示层不能改投 Spatial。该测试不冒充 production optimizer 权重消费。
+  Decision，展示层不能改投 Spatial。Phase 11 收口又验证了该事件进入持久化 Decision
+  权重时仍精确绑定原 sequence/frame，而不是由图片目录反推归因。
 - 门禁：V2 单元/集成/回归测试 `250 passed`，Ruff、format、compileall 与 diff-check
   全通过。
 
@@ -200,7 +201,8 @@ Phase 10 门禁于 2026-08-24 通过，现按顺序进入 Phase 11。
 - frame 105 的零点击事实通过唯一 canonical event 保持 `Decision/unresolved`；hard-example
   路由、telemetry 和 gallery 不再根据覆盖层重新归因。GT/candidate 覆盖不能冒充实际 CLICK
   或命中。production gallery 现在按当前帧事件分入 `failed/decision`，而已通过的其他帧仍在
-  `passed/none`；production optimizer 是否消费 hard-example 权重仍按上一节的明确边界处理。
+  `passed/none`；TRAIN 事件同时可被持久化为精确 Decision 帧权重，validation/test 仍被
+  强制排除。
 - 当前 affine 方程经 5 个独立 ROI 控制点验证，平均残差约 `0.449 px`、最大约
   `1.394 px`。审计确认 legacy 提交未保存原始 passed train/validation 拟合集，因此 V2
   使用诚实身份 `legacy-control-validated-v1`，证据制品显式记录
@@ -211,10 +213,13 @@ Phase 10 门禁于 2026-08-24 通过，现按顺序进入 Phase 11。
 - 全仓 Python 模块均有中文用途 docstring；`traning` 生产和测试的全部公开定义均有中文
   docstring，并由 AST 架构测试持续门禁。Phase 0 冻结制品不为机械补注释而改写。
 - 覆盖迁移加入真实 dataset、Belief/Outcome 训练、production stage runner、原子搜索恢复、
-  winning checkpoint 复验和 start 总流程 dry-run。2026-08-29 的最终验证为：全仓
-  `354 passed`（沙箱仅有预期 CUDA 可见性 warning）、`ruff check` 通过、start dry-run 通过、
-  RTX 4060 Laptop 上 strict env-check 通过，并实际完成 BF16/channels-last Perception
-  forward、backward 与 AdamW step（峰值 PyTorch allocation 约 `146.6 MiB`）。
+  winning checkpoint 复验和 start 总流程 dry-run。生产收口进一步接通累计 curriculum 数据、
+  同 cohort/stage/rung ASHA、增量父 checkpoint、TRAIN-only hard-example 加权消费和 job 级
+  恢复账本；普通 prune 后会继续提出未重复参数。2026-09-04 的最终验证为：全仓
+  `396 passed`、训练包 `371 passed`（普通沙箱仅有预期 CUDA 可见性 warning）、`ruff check`
+  通过、索引一致、start dry-run 通过；RTX 4060 Laptop 上 strict env-check 与真实
+  BF16/channels-last Perception forward、backward、GradScaler/AdamW step 通过，最大 PyTorch
+  allocation 约 `0.143 GiB`。
 
 Phase 0 → Phase 11 已按顺序完成；legacy 只保留冻结 reference/golden baseline，唯一正式
 训练与推理路径为 `src/traning`，唯一总启动路径为 `src/start/main.py`。

@@ -2,25 +2,25 @@
 
 from __future__ import annotations
 
-from traning.contracts import DataSplit
-from traning.evaluation import (
+from traning.state import DataSplit
+from traning.core.evaluation import (
     PrimaryError,
     SequenceScore,
     build_sequence_evaluation_events,
 )
-from traning.telemetry import (
+from traning.lib.telemetry import (
     TELEMETRY_SCHEMA_VERSION,
     EvaluationEvent,
     StateStore,
     TelemetryReporter,
 )
-from traning.training import (
+from traning.core.training import (
     EvaluationSplitEvent,
     HardExampleConsumer,
     HardExampleDestination,
     build_hard_example_plan,
 )
-from traning.visualization import RichDashboardRenderer
+from traning.lib.visualization import RichDashboardRenderer
 
 
 def test_frame_105_event_identity_is_shared_by_all_consumers(tmp_path) -> None:

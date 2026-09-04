@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 import torch
 
-from traning.infrastructure import (
+from traning.lib.infrastructure import (
     AtomicWriteError,
     SchemaMismatchError,
     atomic_write_bytes,

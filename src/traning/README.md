@@ -1,8 +1,8 @@
 # OSU Decision Model
 
-`src/traning` 是唯一活动训练与推理包。V2 已整体迁入并覆盖旧实现；仓库不保留
-`src/osu_v2`、旧 `traning.core/conf/state`、外部 evaluator 或独立
-`src/visualization` 兼容层。
+`src/traning` 是唯一活动训练与推理包。V2 已整体迁入并覆盖旧实现；当前以
+`traning.conf/core/lib/state` 为权威结构。旧 `traning.app/config/contracts` 等扁平路径
+只作 deprecated re-export，不承载第二份实现。
 
 ## 正式链路
 
@@ -29,17 +29,18 @@ schema、字符串化数值和跨领域不一致；不会迁移旧配置或在 C
 PYTHONPATH=src python src/start/main.py run --config configs/traning.yaml --resume
 
 # 模型侧诊断
-PYTHONPATH=src python -m traning.app config-check --config configs/traning.yaml
-PYTHONPATH=src python -m traning.app coordinate-audit --config configs/traning.yaml
-PYTHONPATH=src python -m traning.app env-check --config configs/traning.yaml --strict
+PYTHONPATH=src python -m traning config-check --config configs/traning.yaml
+PYTHONPATH=src python -m traning coordinate-audit --config configs/traning.yaml
+PYTHONPATH=src python -m traning env-check --config configs/traning.yaml --strict
 
 # 直接运行真实 typed dataset 的生产训练
-PYTHONPATH=src python -m traning.app train --config configs/traning.yaml --resume
+PYTHONPATH=src python -m traning train --config configs/traning.yaml --resume
 ```
 
-训练命令不接受 `module:factory` evaluator。`data/segments.py` 构建 typed dataset bundle，
-`training/production_stages.py` 依次运行 Perception、Tracking、Belief、Outcome、Decision、
-Evaluation，`training/production.py` 负责参数搜索、恢复和 checkpoint 复验。
+训练命令不接受 `module:factory` evaluator。`core/data/segments.py` 构建 typed dataset bundle，
+`core/training/curriculum_data.py` 选择累计课程视图，`core/training/production_stages.py` 依次运行
+Perception、Tracking、Belief、Outcome、Decision、Evaluation，`core/training/production.py`
+负责参数搜索、ASHA 调度、恢复和 checkpoint 复验。
 
 ## 搜索为何会继续或停止
 
@@ -50,7 +51,8 @@ optimization:
   max_trials: null
 ```
 
-普通门禁失败会原子提交 observation，然后选择下一组合法、量化且未重复的参数继续执行。
+普通门禁失败或 ASHA prune 会原子提交 job/observation，然后选择下一组合法、量化且未重复
+的参数继续执行。
 搜索只在以下边界停止：
 
 1. 七个 acceptance gate 全部通过，winning checkpoint 完整复验后返回 `PASSED`；
@@ -58,8 +60,10 @@ optimization:
 3. blocking 数据质量问题、设备错误、损坏制品或训练异常立即失败；
 4. 用户/系统中断。
 
-每个 run 的 `search_state.json` 同时绑定 run ID、dataset identity 和完整训练配置摘要；
-`--resume` 不会重复已提交 proposal，也不会把另一份数据或配置的历史接进来。
+每个 run 的 `search_state.json` 由 `ProductionScheduleStore` 管理，同时绑定 run ID、dataset
+identity、完整训练配置、proposal、cohort、curriculum/rung、累计预算、父 checkpoint 和
+hard-example feedback；`--resume` 不会重复已提交 job，也不会把另一份数据或配置的历史
+接进来。
 
 ## 坐标和错误分类
 
@@ -88,7 +92,13 @@ sequence scoring 和 gallery 都通过共享 affine 几何投影保留控制点�
 `no_op` 留下的未解析目标固定归为 `Decision + unresolved_target`。`long_sequence` 是数据维度，
 不是错误模块；事件保留真实来源帧，不能再用整段序列的 AND 结果反写每张图。
 
-## Checkpoint 与遥测
+## Curriculum、难例、Checkpoint 与遥测
+
+课程顺序固定为 BASIC → MULTI_OBJECT → COMPLEX → FULL；每个阶段都从低到高执行配置中的
+ASHA 累计预算。TRAIN 失败事件按 canonical sequence/frame/error route 聚合，权重公式为
+`min(max_weight, 1 + bonus * sum(route.weight))`。Perception 消费加权 sampler，Outcome
+消费归一化加权 loss，Decision 消费当前课程中真实存在的难例帧；validation/test 不会进入
+训练权重。
 
 checkpoint 采用 generation-first / manifest-last 原子发布，加载时校验：
 
@@ -102,7 +112,7 @@ telemetry 固定为 `metrics.jsonl`、`resources.jsonl`、`evaluation.jsonl` 和
 `events.jsonl`。数据流是 Reporter → StateStore → Renderer；renderer 只读 canonical
 snapshot/event，不重新计算质量门、passed 或 primary error。
 
-到达 Evaluation 的 trial 会在同 trial 目录发布 `gallery/manifest.json`。manifest-last
+到达 Evaluation 的 job 会在同 trial 的 stage/rung 目录发布 `gallery/manifest.json`。manifest-last
 提交记录每张 PNG 的 SHA-256、真实 `frame_index`、canonical event IDs、错误域、原帧尺寸
 与 transform fingerprint；目录分类只看当前帧事件，不再沿用 legacy 的 sequence 级 AND。
 

@@ -6,16 +6,16 @@ from pathlib import Path
 
 import pytest
 
-from traning.app import initial_parameter_vector, run_configured_search
-from traning.config import OptimizationConfig, V2Config
-from traning.contracts import (
+from traning.core.app import initial_parameter_vector, run_configured_search
+from traning.conf import OptimizationConfig, V2Config
+from traning.state import (
     DataQualityIssue,
     DataQualityReport,
     DataQualitySeverity,
 )
-from traning.data import QualityGateBlockedError
-from traning.telemetry import StateStore, TelemetryReporter
-from traning.training import (
+from traning.core.data import QualityGateBlockedError
+from traning.lib.telemetry import StateStore, TelemetryReporter
+from traning.core.training import (
     ParameterVector,
     OrchestratedTrialEvaluator,
     SearchExhaustedError,

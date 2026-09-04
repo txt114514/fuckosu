@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from traning.contracts import (
+from traning.state import (
     BeliefState,
     DataSplit,
     DecisionAction,
@@ -20,7 +20,7 @@ from traning.contracts import (
     OutcomeTrainingSample,
     Point2D,
 )
-from traning.evaluation import (
+from traning.core.evaluation import (
     CombinedScore,
     PointScore,
     PredictedClick,
@@ -30,7 +30,7 @@ from traning.evaluation import (
     score_point,
     score_slider,
 )
-from traning.outcome.oracle import (
+from traning.core.outcome.oracle import (
     HypotheticalClick,
     OracleOutcome,
     OracleState,
@@ -319,7 +319,7 @@ def test_oracle_thresholds_produce_valid_training_sample_categories(
 ) -> None:
     """Oracle 阈值边界必须直接满足 OutcomeTrainingSample 的同源语义。"""
 
-    oracle_module = importlib.import_module("traning.outcome.oracle.oracle")
+    oracle_module = importlib.import_module("traning.core.outcome.oracle.oracle")
     point_score = PointScore(
         distance=0.0,
         distance_ratio=0.0,
@@ -471,8 +471,10 @@ def test_oracle_outcome_rejects_invalid_category_type_and_negative_error() -> No
 def test_evaluation_and_oracle_ast_use_one_shared_scoring_implementation() -> None:
     """禁止 legacy/Any 渗透，Oracle 必须调用共享 scorer 而非复制公式。"""
 
-    source_paths = tuple(sorted((_TRANING_ROOT / "evaluation").rglob("*.py"))) + tuple(
-        sorted((_TRANING_ROOT / "outcome/oracle").rglob("*.py"))
+    source_paths = tuple(
+        sorted((_TRANING_ROOT / "core/evaluation").rglob("*.py"))
+    ) + tuple(
+        sorted((_TRANING_ROOT / "core/outcome/oracle").rglob("*.py"))
     )
     forbidden_definitions = {
         "combine_coefficients",
@@ -484,7 +486,7 @@ def test_evaluation_and_oracle_ast_use_one_shared_scoring_implementation() -> No
         "temporal_coefficient",
     }
     oracle_tree = ast.parse(
-        (_TRANING_ROOT / "outcome/oracle/oracle.py").read_text(encoding="utf-8")
+        (_TRANING_ROOT / "core/outcome/oracle/oracle.py").read_text(encoding="utf-8")
     )
     for path in source_paths:
         tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -506,7 +508,7 @@ def test_evaluation_and_oracle_ast_use_one_shared_scoring_implementation() -> No
     imported_scorers = {
         alias.name
         for node in ast.walk(oracle_tree)
-        if isinstance(node, ast.ImportFrom) and node.module == "traning.evaluation"
+        if isinstance(node, ast.ImportFrom) and node.module == "traning.core.evaluation"
         for alias in node.names
     }
     called_functions = {

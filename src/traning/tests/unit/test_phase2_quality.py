@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from traning.contracts import DataQualitySeverity
-from traning.data import (
+from traning.state import DataQualitySeverity
+from traning.core.data import (
     DataQualityContext,
     DataQualityFinding,
     DataQualityGate,

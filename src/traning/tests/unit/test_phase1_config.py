@@ -7,7 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from traning.config import (
+from traning.conf import (
+    AshaRungConfig,
     CacheConfig,
     CoordinateConfig,
     OptimizationConfig,
@@ -16,7 +17,7 @@ from traning.config import (
     load_v2_config,
     v2_config_to_dict,
 )
-from traning.data.cache import CANDIDATE_CACHE_SCHEMA_VERSION
+from traning.core.data.cache import CANDIDATE_CACHE_SCHEMA_VERSION
 
 
 def test_default_config_round_trips_through_json(tmp_path) -> None:
@@ -84,19 +85,93 @@ def test_outcome_category_count_is_the_canonical_five() -> None:
 
 
 def test_optimization_default_is_unbounded_and_round_trips() -> None:
-    """默认不得复现 legacy max_trials=2 导致的提前终止。"""
+    """默认持续搜索及生产调度/难例参数必须完整 round-trip。"""
 
     config = V2Config(optimization=OptimizationConfig(max_trials=None))
     payload = v2_config_to_dict(config)
 
-    assert payload["optimization"] == {"max_trials": None}
-    assert load_v2_config(payload).optimization.max_trials is None
+    assert payload["optimization"] == {
+        "max_trials": None,
+        "cohort_size": 2,
+        "asha_rungs": [
+            {"budget_steps": 1, "promotion_fraction": 0.5},
+            {"budget_steps": 4, "promotion_fraction": 0.5},
+        ],
+        "hard_example_bonus": 1.0,
+        "hard_example_max_weight": 4.0,
+    }
+    assert load_v2_config(payload).optimization == config.optimization
     assert (
         load_v2_config(
             {"schema_version": 1, "optimization": {"max_trials": 7}}
         ).optimization.max_trials
         == 7
     )
+
+
+def test_custom_optimization_schedule_parses_and_exports_exactly() -> None:
+    """自定义 cohort、ASHA rung 和难例权重不得在配置边界丢失。"""
+
+    optimization = OptimizationConfig(
+        max_trials=9,
+        cohort_size=3,
+        asha_rungs=(
+            AshaRungConfig(2, 0.5),
+            AshaRungConfig(6, 0.25),
+            AshaRungConfig(12, 1.0),
+        ),
+        hard_example_bonus=1.75,
+        hard_example_max_weight=6.0,
+    )
+    payload = v2_config_to_dict(V2Config(optimization=optimization))
+
+    assert load_v2_config(payload).optimization == optimization
+    assert payload["optimization"] == {
+        "max_trials": 9,
+        "cohort_size": 3,
+        "asha_rungs": [
+            {"budget_steps": 2, "promotion_fraction": 0.5},
+            {"budget_steps": 6, "promotion_fraction": 0.25},
+            {"budget_steps": 12, "promotion_fraction": 1.0},
+        ],
+        "hard_example_bonus": 1.75,
+        "hard_example_max_weight": 6.0,
+    }
+
+
+@pytest.mark.parametrize(
+    "optimization",
+    (
+        {"cohort_size": 1},
+        {"asha_rungs": []},
+        {
+            "asha_rungs": [
+                {"budget_steps": 4, "promotion_fraction": 0.5},
+                {"budget_steps": 4, "promotion_fraction": 0.5},
+            ]
+        },
+        {"asha_rungs": [{"budget_steps": 1, "promotion_fraction": 0.0}]},
+        {
+            "asha_rungs": [
+                {
+                    "budget_steps": 1,
+                    "promotion_fraction": 0.5,
+                    "unknown": 1,
+                }
+            ]
+        },
+        {"hard_example_bonus": 0.0},
+        {"hard_example_max_weight": 1.0},
+        {"hard_example_max_weight": 0.5},
+    ),
+)
+def test_optimization_schedule_config_is_strict(
+    optimization: dict[str, object],
+) -> None:
+    """非法资源图和未知字段不能被配置解析器纠正或忽略。"""
+
+    with pytest.raises((TypeError, ValueError)):
+        load_v2_config({"schema_version": 1, "optimization": optimization})
 
 
 @pytest.mark.parametrize("value", (0, -1, True, 1.5, "2"))

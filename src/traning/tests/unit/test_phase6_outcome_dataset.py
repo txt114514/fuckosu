@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from package import AffineOsuVideoTransform
-from traning.contracts import (
+from traning.state import (
     ArtifactManifest,
     BeliefState,
     CandidateObservation,
@@ -21,10 +21,10 @@ from traning.contracts import (
     ObjectTypeDistribution,
     Point2D,
 )
-from traning.data import FrameCoordinateTransform
-from traning.evaluation import SCORE_VERSION
-from traning.infrastructure import AtomicWriteError, IntegrityError, SchemaMismatchError
-from traning.outcome.dataset import (
+from traning.core.data import FrameCoordinateTransform
+from traning.core.evaluation import SCORE_VERSION
+from traning.lib.infrastructure import AtomicWriteError, IntegrityError, SchemaMismatchError
+from traning.core.outcome.dataset import (
     MANIFEST_FILENAME,
     OUTCOME_DATASET_ARTIFACT_TYPE,
     OUTCOME_DATASET_SCHEMA_VERSION,
@@ -33,8 +33,8 @@ from traning.outcome.dataset import (
     CounterfactualOutcomeDatasetBuilder,
     OutcomeDatasetArtifactStore,
 )
-from traning.outcome.dataset import artifact as artifact_module
-from traning.outcome.oracle import (
+from traning.core.outcome.dataset import artifact as artifact_module
+from traning.core.outcome.oracle import (
     OUTCOME_ORACLE_VERSION,
     OracleState,
     OracleTarget,
@@ -456,7 +456,7 @@ def test_dataset_source_has_no_legacy_or_any_and_inference_has_no_oracle_fields(
 ):
     """Dataset 不得依赖 legacy/Any，推理契约在类型上不得暴露 oracle 标签。"""
 
-    dataset_root = Path(__file__).parents[2] / "outcome" / "dataset"
+    dataset_root = Path(__file__).parents[2] / "core/outcome" / "dataset"
     for source_path in dataset_root.rglob("*.py"):
         tree = ast.parse(source_path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):

@@ -23,8 +23,8 @@ from package.dataset_split import (
     SplitRatios,
     sync_dataset_split_manifest,
 )
-from traning.config import RuntimeDevice, V2Config, load_v2_config
-from traning.contracts import DataQualityReport, DataSplit
+from traning.conf import RuntimeDevice, V2Config, load_v2_config
+from traning.state import DataQualityReport, DataSplit
 
 from start.checks import TrainingStartupCheckReport, run_training_startup_checks
 
@@ -465,7 +465,9 @@ def run_start_flow(
         )
     else:
         try:
-            if executor is None or quality_report is None:  # pragma: no cover - checks 已阻断
+            if (
+                executor is None or quality_report is None
+            ):  # pragma: no cover - checks 已阻断
                 raise RuntimeError("V2 TrainingExecutor 或 DataQualityReport 缺失")
             training_result = executor.run(
                 config,
@@ -612,7 +614,9 @@ def _maybe_run_before_traning(
         )
 
     raw_results = TRAINING_PIPELINE.run_direct(before_settings)
-    results = tuple((str(stage), bool(success)) for stage, success in raw_results.items())
+    results = tuple(
+        (str(stage), bool(success)) for stage, success in raw_results.items()
+    )
     failed = tuple(stage for stage, success in results if not success)
     if failed:
         return BeforeTrainingRunReport(
@@ -646,7 +650,9 @@ def _sync_dataset_splits(
     return sync_dataset_split_manifest(
         dataset_root,
         manifest_path=manifest_path,
-        seed=config.data.seed if flow_config.split_seed is None else flow_config.split_seed,
+        seed=config.data.seed
+        if flow_config.split_seed is None
+        else flow_config.split_seed,
         ratios=SplitRatios(
             train=flow_config.train_ratio,
             validation=flow_config.validation_ratio,
@@ -665,10 +671,10 @@ def _effective_training_config(
 
     data = replace(
         config.data,
-        split_manifest=(
-            flow_config.split_manifest_path or config.data.split_manifest
-        ),
-        seed=config.data.seed if flow_config.split_seed is None else flow_config.split_seed,
+        split_manifest=(flow_config.split_manifest_path or config.data.split_manifest),
+        seed=config.data.seed
+        if flow_config.split_seed is None
+        else flow_config.split_seed,
     )
     runtime = config.runtime
     if flow_config.requested_device is not None:

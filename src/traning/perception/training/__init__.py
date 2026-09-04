@@ -1,19 +1,5 @@
-"""Perception 的 typed 训练目标和损失入口。"""
+"""已弃用兼容转发；新代码必须导入对应的 conf、core、lib 或 state 路径。"""
 
-from .losses import PerceptionLoss, PerceptionLossWeights, compute_perception_loss
-from .targets import (
-    CoordinateTrainingTarget,
-    PerceptionTargets,
-    build_coordinate_training_targets,
-    rasterize_perception_targets,
-)
+from traning.core.perception.training import *  # noqa: F403
 
-__all__ = (
-    "CoordinateTrainingTarget",
-    "PerceptionLoss",
-    "PerceptionLossWeights",
-    "PerceptionTargets",
-    "build_coordinate_training_targets",
-    "compute_perception_loss",
-    "rasterize_perception_targets",
-)
+__deprecated__ = True

@@ -1,25 +1,5 @@
-"""逐轨迹 Temporal Belief 的公开 API。"""
+"""已弃用兼容转发；新代码必须导入对应的 conf、core、lib 或 state 路径。"""
 
-from .encoder import OBJECT_TYPE_ORDER, BeliefTensorOutput, PerTrackBeliefEncoder
-from .runtime import PerTrackBeliefRuntime
-from .training import (
-    BeliefLoss,
-    BeliefTrainingBatch,
-    BeliefTrainingRecord,
-    belief_states_from_output,
-    collate_belief_records,
-    compute_belief_loss,
-)
+from traning.core.belief import *  # noqa: F403
 
-__all__ = (
-    "OBJECT_TYPE_ORDER",
-    "BeliefTensorOutput",
-    "BeliefLoss",
-    "BeliefTrainingBatch",
-    "BeliefTrainingRecord",
-    "PerTrackBeliefEncoder",
-    "PerTrackBeliefRuntime",
-    "belief_states_from_output",
-    "collate_belief_records",
-    "compute_belief_loss",
-)
+__deprecated__ = True

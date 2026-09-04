@@ -13,8 +13,8 @@ from unittest.mock import Mock
 import pytest
 from typer.testing import CliRunner
 
-from traning.app.cli import app
-from traning.training import ParameterVector
+from traning.core.app.cli import app
+from traning.core.training import ParameterVector
 
 
 def test_config_check_loads_the_formal_v2_config() -> None:
@@ -165,8 +165,8 @@ def test_train_cli_uses_production_trainer_without_external_evaluator(
     trainer = Mock()
     trainer.run.return_value = production_result
     trainer_factory = Mock(return_value=trainer)
-    monkeypatch.setattr("traning.app.cli.build_training_datasets", Mock())
-    monkeypatch.setattr("traning.app.cli.ProductionTrainer", trainer_factory)
+    monkeypatch.setattr("traning.core.app.cli.build_training_datasets", Mock())
+    monkeypatch.setattr("traning.core.app.cli.ProductionTrainer", trainer_factory)
 
     result = CliRunner().invoke(
         app,

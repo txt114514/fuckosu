@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from traning.config import DecisionConfig
-from traning.contracts import OutcomeDistribution
-from traning.decision.utility import ClickUtility, compute_click_utility
+from traning.conf import DecisionConfig
+from traning.state import OutcomeDistribution
+from traning.core.decision.utility import ClickUtility, compute_click_utility
 
 
 def _outcome(**changes: float | str) -> OutcomeDistribution:
@@ -115,7 +115,7 @@ def test_compute_rejects_wrong_typed_inputs() -> None:
 def test_utility_source_has_no_forbidden_decision_shortcuts() -> None:
     """Utility 层不得读取图像、GT、oracle、logits、argmax 或 legacy。"""
 
-    path = Path(__file__).resolve().parents[2] / "decision/utility.py"
+    path = Path(__file__).resolve().parents[2] / "core/decision/utility.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))
     forbidden_names = {
         "Any",

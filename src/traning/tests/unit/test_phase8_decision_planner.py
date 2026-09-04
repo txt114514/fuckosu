@@ -8,18 +8,18 @@ from pathlib import Path
 
 import pytest
 
-from traning.config import DecisionConfig
-from traning.contracts import (
+from traning.conf import DecisionConfig
+from traning.state import (
     BeliefState,
     DecisionAction,
     ObjectTypeDistribution,
     OutcomeDistribution,
     Point2D,
 )
-from traning.decision.planner import OptimalStoppingPlanner
+from traning.core.decision.planner import OptimalStoppingPlanner
 
 
-_PLANNER_PATH = Path(__file__).resolve().parents[2] / "decision/planner.py"
+_PLANNER_PATH = Path(__file__).resolve().parents[2] / "core/decision/planner.py"
 
 
 def _config(**changes: float | tuple[int, ...]) -> DecisionConfig:

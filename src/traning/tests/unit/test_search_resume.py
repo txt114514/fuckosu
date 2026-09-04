@@ -6,9 +6,9 @@ import json
 
 import pytest
 
-from traning.config import V2Config
-from traning.infrastructure import IntegrityError, SchemaMismatchError
-from traning.training import (
+from traning.conf import V2Config
+from traning.lib.infrastructure import IntegrityError, SchemaMismatchError
+from traning.core.training import (
     ParameterVector,
     SearchHistoryStore,
     TrialAcceptance,

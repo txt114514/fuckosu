@@ -7,16 +7,16 @@ from pathlib import Path
 
 import pytest
 
-from traning.config import TrackingConfig
-from traning.contracts import (
+from traning.conf import TrackingConfig
+from traning.state import (
     AssociationStatus,
     CandidateObservation,
     ObjectTypeDistribution,
     TrackLifecycle,
     TrainingCandidateRecord,
 )
-from traning.tracking.association import AssociationCostSpec, TrackAssociationView
-from traning.tracking.tracker import MultiObjectTracker
+from traning.core.tracking.association import AssociationCostSpec, TrackAssociationView
+from traning.core.tracking.tracker import MultiObjectTracker
 
 
 _RING = ObjectTypeDistribution(1.0, 0.0, 0.0, 0.0)
@@ -302,8 +302,8 @@ def test_tracking_rejects_training_records_and_statically_has_no_gt_dependency()
         tracker.update((training_record,))  # type: ignore[arg-type]
     assert tracker.snapshot() == ()
 
-    tracking_root = Path(__file__).parents[2] / "tracking"
-    forbidden_modules = ("osu_v2", "traning.contracts.data")
+    tracking_root = Path(__file__).parents[2] / "core/tracking"
+    forbidden_modules = ("osu_v2", "traning.state.data")
     forbidden_contracts = {
         "GroundTruthObject",
         "TrainingCandidateRecord",

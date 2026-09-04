@@ -7,10 +7,10 @@
 
 ```bash
 host-exec docker exec -u dev osu_ai_dev bash -lc \
-  'cd /home/dev/workspace && bash environment/check_gpu.sh'
+  'cd /home/dev/workspace && bash src/traning/lib/environment/check_gpu.sh'
 
 host-exec docker exec -u dev osu_ai_dev bash -lc \
-  'cd /home/dev/workspace && PYTHONPATH=src python -m traning.app env-check --config configs/traning.yaml --strict'
+  'cd /home/dev/workspace && PYTHONPATH=src python -m traning env-check --config configs/traning.yaml --strict'
 ```
 
 完整训练同样从主机桥运行：
@@ -66,7 +66,7 @@ runtime:
 ## 常用非 GPU 验证
 
 ```bash
-PYTHONPATH=src python -m traning.app config-check --config configs/traning.yaml
+PYTHONPATH=src python -m traning config-check --config configs/traning.yaml
 PYTHONPATH=src:. python -m pytest -q src/traning/tests
 PYTHONPATH=src:. python -m pytest -q src/start/tests
 python project_index/build_index.py --check

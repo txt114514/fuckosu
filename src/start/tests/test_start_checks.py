@@ -8,8 +8,8 @@ from pathlib import Path
 from package import DataSplit
 from start.checks import run_startup_checks, run_training_startup_checks
 from start.modules import source_module_entry, source_module_entries
-from traning.config import RuntimeConfig, RuntimeDevice, load_v2_config
-from traning.contracts import DataQualityReport
+from traning.conf import RuntimeConfig, RuntimeDevice, load_v2_config
+from traning.state import DataQualityReport
 
 
 def test_src_module_entries_are_importable_and_point_to_v2_app() -> None:
@@ -17,7 +17,7 @@ def test_src_module_entries_are_importable_and_point_to_v2_app() -> None:
 
     assert {"start", "package", "before_traning", "traning"} <= keys
     assert source_module_entry("traning").importable
-    assert source_module_entry("traning").public_entry == "traning.app"
+    assert source_module_entry("traning").public_entry == "traning.main"
 
 
 def test_global_startup_checks_pass_without_cuda_requirement() -> None:

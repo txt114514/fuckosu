@@ -10,8 +10,8 @@ import torch
 from PIL import Image
 
 from package import AffineOsuVideoTransform, OsuVideoTransform
-from traning.config import PerceptionConfig
-from traning.contracts import (
+from traning.conf import PerceptionConfig
+from traning.state import (
     BeliefState,
     DataSplit,
     GroundTruthObject,
@@ -21,35 +21,35 @@ from traning.contracts import (
     RuntimeFrame,
     TrainingSample,
 )
-from traning.data.coordinates import (
+from traning.core.data.coordinates import (
     FrameCoordinateTransform,
     FramePixelPoint,
     OsuPoint,
 )
-from traning.evaluation import (
+from traning.core.evaluation import (
     FramePredictedClick,
     PrimaryError,
     TargetObject,
     build_sequence_evaluation_events,
     score_frame_click_sequence,
 )
-from traning.perception import (
+from traning.core.perception import (
     DensePerceptionOutput,
     build_coordinate_training_targets,
     decode_candidates,
     rasterize_perception_targets,
 )
-from traning.outcome.dataset import (
+from traning.core.outcome.dataset import (
     CounterfactualFrame,
     CounterfactualOutcomeDatasetBuilder,
 )
-from traning.outcome.oracle import (
+from traning.core.outcome.oracle import (
     OracleState,
     OracleTarget,
     OutcomeCategory,
     OutcomeOracle,
 )
-from traning.visualization import (
+from traning.lib.visualization import (
     build_gallery_frame_overlay,
     project_gallery_target_overlays,
     render_gallery_png,

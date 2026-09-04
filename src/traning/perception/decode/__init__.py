@@ -1,5 +1,5 @@
-"""稠密感知输出解码公开入口。"""
+"""已弃用兼容转发；新代码必须导入对应的 conf、core、lib 或 state 路径。"""
 
-from .decoder import decode_candidates
+from traning.core.perception.decode import *  # noqa: F403
 
-__all__ = ("decode_candidates",)
+__deprecated__ = True

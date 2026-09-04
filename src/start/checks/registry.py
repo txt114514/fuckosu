@@ -8,14 +8,19 @@ from dataclasses import dataclass
 
 import torch
 
-from environment import EnvironmentReport as HostEnvironmentReport
-from environment import collect_environment_report
 from package.checks import StartupCheckReport, StartupCheckResult
 from start.checks.models import TrainingStartupCheckReport
 from start.modules import SourceModuleEntry, source_module_entries
-from traning.app.environment import EnvironmentCheckStatus, check_v2_environment
-from traning.config import RuntimeDevice, V2Config
-from traning.contracts import DataQualityReport, DataSplit
+from traning.conf import RuntimeDevice, V2Config
+from traning.lib.environment import (
+    EnvironmentReport as HostEnvironmentReport,
+    collect_environment_report,
+)
+from traning.lib.environment.training import (
+    EnvironmentCheckStatus,
+    check_v2_environment,
+)
+from traning.state import DataQualityReport, DataSplit
 
 
 CheckRunner = Callable[[], StartupCheckResult]

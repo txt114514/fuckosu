@@ -1,24 +1,5 @@
-"""公开 typed repository 契约及其内存、SQLite adapters。"""
+"""已弃用兼容转发；新代码必须导入对应的 conf、core、lib 或 state 路径。"""
 
-from .memory import (
-    InMemoryDatasetCatalogRepository,
-    InMemoryPreprocessingMetadataRepository,
-)
-from .models import DatasetCatalogEntry, PreprocessingMetadata, RepositoryError
-from .protocols import DatasetCatalogRepository, PreprocessingMetadataRepository
-from .sqlite import (
-    SQLiteDatasetCatalogRepository,
-    SQLitePreprocessingMetadataRepository,
-)
+from traning.core.data.repositories import *  # noqa: F403
 
-__all__ = (
-    "DatasetCatalogEntry",
-    "DatasetCatalogRepository",
-    "InMemoryDatasetCatalogRepository",
-    "InMemoryPreprocessingMetadataRepository",
-    "PreprocessingMetadata",
-    "PreprocessingMetadataRepository",
-    "RepositoryError",
-    "SQLiteDatasetCatalogRepository",
-    "SQLitePreprocessingMetadataRepository",
-)
+__deprecated__ = True

@@ -7,15 +7,15 @@ from pathlib import Path
 
 import pytest
 
-from traning.contracts import DataSplit
-from traning.evaluation import (
+from traning.state import DataSplit
+from traning.core.evaluation import (
     EvaluationTag,
     PrimaryError,
     SequenceScore,
     SequenceEvaluationEvent,
     build_sequence_evaluation_events,
 )
-from traning.training.hard_examples import (
+from traning.core.training.hard_examples import (
     EvaluationSplitEvent,
     HardExampleConsumer,
     HardExampleDestination,
@@ -26,7 +26,7 @@ from traning.training.hard_examples import (
 )
 
 
-_SOURCE_PATH = Path(__file__).resolve().parents[2] / "training/hard_examples.py"
+_SOURCE_PATH = Path(__file__).resolve().parents[2] / "core/training/hard_examples.py"
 
 
 def _event_id(number: int) -> str:
@@ -212,7 +212,7 @@ def test_hard_example_source_has_no_forbidden_dependency_or_rescoring() -> None:
             assert all(not alias.name.startswith("osu_v2") for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
-            assert not module.startswith(("osu_v2", "traning.outcome.oracle"))
+            assert not module.startswith(("osu_v2", "traning.core.outcome.oracle"))
         if isinstance(node, ast.Name):
             assert node.id not in forbidden_names
         if isinstance(node, ast.Attribute):

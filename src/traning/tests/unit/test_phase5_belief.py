@@ -9,13 +9,13 @@ from pathlib import Path
 import pytest
 import torch
 
-from traning.belief import (
+from traning.core.belief import (
     BeliefTensorOutput,
     PerTrackBeliefEncoder,
     PerTrackBeliefRuntime,
 )
-from traning.config import BeliefConfig, TrackingConfig
-from traning.contracts import (
+from traning.conf import BeliefConfig, TrackingConfig
+from traning.state import (
     AssociationStatus,
     BeliefState,
     CandidateObservation,
@@ -23,7 +23,7 @@ from traning.contracts import (
     TrackedObservation,
     TrackLifecycle,
 )
-from traning.tracking.tracker import MultiObjectTracker
+from traning.core.tracking.tracker import MultiObjectTracker
 
 
 _RING = ObjectTypeDistribution(1.0, 0.0, 0.0, 0.0)
@@ -422,8 +422,8 @@ def test_belief_model_has_no_action_gt_legacy_or_wide_type_boundary() -> None:
         for fragment in forbidden_key_fragments
     )
 
-    belief_root = Path(__file__).parents[2] / "belief"
-    forbidden_modules = ("osu_v2", "traning.contracts.data", "typing.Any")
+    belief_root = Path(__file__).parents[2] / "core/belief"
+    forbidden_modules = ("osu_v2", "traning.state.data", "typing.Any")
     forbidden_contracts = {
         "DecisionAction",
         "GroundTruthObject",

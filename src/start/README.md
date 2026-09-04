@@ -10,11 +10,12 @@
 2. 确有新原始数据时运行 `before_traning` 七阶段转换；否则明确跳过。
 3. 增量同步 canonical dataset split manifest，既有 item 的 split 不漂移。
 4. 加载 `configs/traning.yaml`，检查设备、坐标证据和 canonical 数据质量报告。
-5. `--dry-run` 到此生成报告；正式模式进入可恢复参数搜索和六阶段训练。
+5. `--dry-run` 到此生成报告；正式模式进入可恢复的 curriculum/ASHA 参数搜索和六阶段训练。
 6. 只有全部门禁通过且 runtime checkpoint 复验成功，整个流程才返回 `passed`。
 
-默认配置不限制 trial 数。普通阶段门禁失败会保存 observation 并继续选择未重复参数；
-固定数据质量错误、显式 trial 预算/空间耗尽和不可恢复异常才会终止，并各自留下明确终态。
+默认配置不限制 trial 数。普通阶段门禁失败或 ASHA prune 会保存资源 job 与 observation 并
+继续选择未重复参数；固定数据质量错误、显式 trial 预算/空间耗尽和不可恢复异常才会终止，
+并各自留下明确终态。
 
 ## 命令
 
@@ -48,5 +49,6 @@ host-exec docker exec -u dev osu_ai_dev bash -lc \
 ```
 
 每次运行在 `artifacts/training_runs/<run_id>/start_flow_report.json` 保存完整阶段证据；
-trial checkpoint 与 `search_state.json` 位于同一 run 目录，重启时使用 `--resume` 接续，
-不会重复已原子提交的 proposal。
+各 trial 的 curriculum/rung checkpoint、TRAIN-only hard-example feedback 与
+`search_state.json` 位于同一 run 目录。重启时使用 `--resume` 接续，会先校验全部制品摘要，
+不会重复已原子提交的 job。

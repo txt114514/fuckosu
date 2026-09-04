@@ -1,7 +1,9 @@
-"""允许通过 ``python -m traning.app`` 启动 V2 CLI。"""
+"""已弃用兼容转发；新代码必须导入对应的 conf、core、lib 或 state 路径。"""
 
-from traning.app.cli import app
+from traning.main import main
+
+__deprecated__ = True
 
 
 if __name__ == "__main__":
-    app()
+    main()

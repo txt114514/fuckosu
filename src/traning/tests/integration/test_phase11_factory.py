@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from traning.app.factory import (
+from traning.core.app.factory import (
     assemble_runtime_pipeline,
     build_frame_coordinate_transform,
     build_untrained_runtime_for_smoke,
 )
-from traning.app.runtime import V2RuntimePipeline
-from traning.belief import PerTrackBeliefEncoder
-from traning.config import (
+from traning.core.app.runtime import V2RuntimePipeline
+from traning.core.belief import PerTrackBeliefEncoder
+from traning.conf import (
     BeliefConfig,
     CoordinateConfig,
     DecisionConfig,
@@ -21,10 +21,10 @@ from traning.config import (
     RuntimeDevice,
     V2Config,
 )
-from traning.data import OsuPoint
-from traning.outcome import DenseOutcomeModel
-from traning.perception import PerceptionModel
-from traning.training import RuntimeModelBundle
+from traning.core.data import OsuPoint
+from traning.core.outcome import DenseOutcomeModel
+from traning.core.perception import PerceptionModel
+from traning.core.training import RuntimeModelBundle
 
 
 def _cpu_config() -> V2Config:

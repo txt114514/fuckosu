@@ -6,10 +6,10 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from start.flow import TrainingExecutionResult
-from traning.config import V2Config
-from traning.contracts import DataQualityReport, DataSplit
-from traning.data import TrainingDatasetBundle, build_training_datasets
-from traning.training import ProductionGateSpec, ProductionTrainer
+from traning.conf import V2Config
+from traning.state import DataQualityReport, DataSplit
+from traning.core.data import TrainingDatasetBundle, build_training_datasets
+from traning.core.training import ProductionGateSpec, ProductionTrainer
 
 
 @dataclass(slots=True)
@@ -57,7 +57,9 @@ class ProductionTrainingExecutor:
             raise ValueError("生产模型训练入口只接受 split=train")
         inspected = self.inspect(config, split=split)
         if quality_report is not inspected:
-            raise ValueError("start 必须把 inspect 返回的同一 DataQualityReport 交回 run")
+            raise ValueError(
+                "start 必须把 inspect 返回的同一 DataQualityReport 交回 run"
+            )
         datasets = self._datasets
         if datasets is None:  # pragma: no cover - inspect 已保证
             raise RuntimeError("训练数据 bundle 未初始化")

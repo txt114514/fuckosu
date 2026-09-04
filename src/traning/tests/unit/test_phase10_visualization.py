@@ -8,18 +8,18 @@ from pathlib import Path
 
 import pytest
 
-from traning.evaluation.attribution import (
+from traning.core.evaluation.attribution import (
     EvaluationTag,
     PrimaryError,
     SequenceEvaluationEvent,
 )
-from traning.telemetry.reporter import (
+from traning.lib.telemetry.reporter import (
     DASHBOARD_SCHEMA_VERSION,
     DashboardMetrics,
     DashboardResources,
     DashboardSnapshot,
 )
-from traning.visualization import (
+from traning.lib.visualization import (
     DashboardMetric,
     DashboardMetricRow,
     QtDashboardRenderer,
@@ -29,7 +29,7 @@ from traning.visualization import (
 )
 
 
-_SOURCE_PATH = Path(__file__).resolve().parents[2] / "visualization/renderers.py"
+_SOURCE_PATH = Path(__file__).resolve().parents[2] / "lib/visualization/renderers.py"
 
 
 def _failed_evaluation() -> SequenceEvaluationEvent:
@@ -222,10 +222,10 @@ def test_renderer_source_has_no_gui_store_io_or_semantic_side_channel() -> None:
         "PySide6",
         "rich",
         "osu_v2",
-        "traning.data.quality",
-        "traning.evaluation.scoring",
-        "traning.outcome.oracle",
-        "traning.telemetry.store",
+        "traning.core.data.quality",
+        "traning.core.evaluation.scoring",
+        "traning.core.outcome.oracle",
+        "traning.lib.telemetry.store",
     )
     forbidden_calls = {
         "SequenceEvaluationEvent",

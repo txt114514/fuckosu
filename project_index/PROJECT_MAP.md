@@ -12,11 +12,13 @@
 | 训练前处理 | `src/before_traning` | [`README.md`](../src/before_traning/docs/README.md) | [`CODEX_INDEX.md`](../src/before_traning/docs/CODEX_INDEX.md) |
 | OSU Decision Model | `src/traning` | [`README.md`](../src/traning/README.md)、[`TRAINING_PLAN.md`](../src/traning/docs/TRAINING_PLAN.md)、[`ENVIRONMENT.md`](../src/traning/docs/ENVIRONMENT.md) | [`CODEX_INDEX.md`](../src/traning/docs/CODEX_INDEX.md) |
 | 全局共享 API | `src/package` | [`README.md`](../src/package/README.md) | 公开入口：`src/package/__init__.py` |
-| 运行环境检查 | `environment` | 环境/CUDA 诊断脚本与 Python 检查 API | 公开入口：`environment/__init__.py` |
+| 运行环境检查 | `src/traning/lib/environment` | 环境/CUDA 诊断脚本与 Python 检查 API | 公开入口：`traning.lib.environment` |
 
-`src/traning` 已由 V2 架构整体覆盖，是唯一活动训练实现。仓库不再提供 `src/osu_v2`、
-旧 `traning.core/conf/state`、外部 evaluator 或独立 `src/visualization` 兼容层；训练可视化是
-`src/traning/visualization` 内部 telemetry 消费者。
+`src/traning` 已由 V2 架构整体覆盖，是唯一活动训练实现。当前 `conf/core/lib/state` 是
+权威结构；旧 `app/config/contracts/...` 扁平路径和仓库根 `environment` 只作 deprecated
+转发。仓库不再提供 `src/osu_v2`、外部 evaluator 或独立 `src/visualization` 实现。
+可视化原语位于 `src/traning/lib/visualization`，production 制品编排位于
+`src/traning/core/training/gallery_artifacts.py`。
 
 ## 全局 API 约定
 
@@ -37,7 +39,7 @@
 2. `src/start/flow.py` 固定完整生命周期：raw scan → before_traning → canonical split →
    startup checks → typed dataset quality gate → production training → report。
 3. `src/start/executor.py` 把启动层检查过的同一份数据质量报告交给
-   `traning.training.ProductionTrainer`，避免检查与训练各算一套结论。
+   `traning.core.training.ProductionTrainer`，避免检查与训练各算一套结论。
 4. `src/start/checks/registry.py` 执行严格配置、环境和 canonical 数据质量检查。
 5. `PYTHONPATH=src python src/start/main.py` 或 `PYTHONPATH=src python -m start`
    执行默认完整流程。
@@ -56,25 +58,33 @@
 1. 先读 `src/traning/docs/CODEX_INDEX.md`，再读
    `src/traning/docs/TRAINING_PLAN.md`；运行 CUDA 或训练 step 前再读
    `src/traning/docs/ENVIRONMENT.md`。
-2. `src/traning/config/models.py` 定义唯一严格配置；工程基线是
+2. `src/traning/conf/models.py` 定义唯一严格配置；工程基线是
    `configs/traning.yaml`。
-3. `src/traning/contracts` 将 `TrainingSample`、`RuntimeFrame`、训练候选、推理候选、
-   belief、outcome 和 decision 从类型上隔离。
-4. `src/traning/data/segments.py` 从 canonical split manifest 构建 typed dataset bundle；
-   `data/cache`、`data/quality` 和 `data/repositories` 管理制品完整性及 blocking 语义。
-5. 正式因果 runtime 位于 `src/traning/app/runtime.py`：Perception → Tracking → Belief →
+3. `src/traning/state` 将 `TrainingSample`、`VideoFrame`、训练候选、推理候选、belief、
+   outcome、decision 和环境报告从类型上隔离，并由 `TYPE_REGISTRY` 枚举。
+4. `src/traning/core/data/segments.py` 从 canonical split manifest 构建 typed dataset bundle；
+   `core/data/cache`、`quality` 和 `repositories` 管理制品完整性及 blocking 语义。
+5. 正式因果 runtime 位于 `src/traning/core/app/runtime.py`：Perception → Tracking → Belief →
    Outcome → Decision；最终动作不读取 GT、oracle label 或 imitation logits。
-6. `src/traning/training/production_stages.py` 在真实 typed 数据上执行 Perception、Tracking、
-   Belief、Outcome、Decision、Evaluation 六阶段门禁。
-7. `src/traning/training/production.py` 负责恢复搜索、持续提案和 checkpoint 发布；普通门禁
-   失败会继续选择未重复参数，只有全通过、显式耗尽或 blocking/异常才终止。
-8. `src/traning/evaluation` 是唯一 canonical scoring/attribution 边界；训练 target、评分和
+6. `src/traning/core/training/curriculum_data.py` 把 BASIC → MULTI_OBJECT → COMPLEX → FULL
+   映成真实累计 segment 视图；`production_stages.py` 在该视图上执行六阶段门禁和 ASHA
+   增量训练步。
+7. `src/traning/core/training/production.py` 负责持续提案和同 cohort/stage/rung 的 ASHA 调度；
+   `production_schedule.py` 原子保存 proposal、父 checkpoint、反馈制品及终态 history。
+   普通门禁失败或 ASHA prune 会继续选择未重复参数，只有全通过、显式耗尽或 blocking/异常
+   才终止。
+8. `src/traning/core/training/hard_example_feedback.py` 将 TRAIN canonical event 持久化为帧级
+   Perception/Outcome/Decision 权重；validation/test 只能进入排除审计。每个 job 的制品在
+   调度状态之前提交，恢复时重新校验摘要。
+9. `src/traning/core/evaluation` 是唯一 canonical scoring/attribution 边界；训练 target、评分和
    gallery 必须共享 `FrameCoordinateTransform`，禁止只在渲染端补偏移。
-9. `src/traning/telemetry` 写入 metrics/resources/evaluation/events JSONL；
-   `src/traning/visualization` 只消费不可变快照，不修改训练状态。
-10. 可直接运行模型 CLI：
-    `PYTHONPATH=src python -m traning.app train --config configs/traning.yaml`。
-11. 定位符号优先运行 `python project_index/build_index.py --lookup 符号名`。
+10. `src/traning/core/training/gallery_artifacts.py` 按事件真实帧写入 PNG，并以 manifest-last 记录
+   passed/failed、canonical 错误域、事件 ID、图像摘要和坐标指纹；序列维度不参与归因。
+11. `src/traning/lib/telemetry` 写入 metrics/resources/evaluation/events JSONL；
+   `src/traning/lib/visualization` 只消费不可变快照，不修改训练状态。
+12. 可直接运行模型 CLI：
+    `PYTHONPATH=src python -m traning train --config configs/traning.yaml`。
+13. 定位符号优先运行 `python project_index/build_index.py --lookup 符号名`。
 
 ## before_traning 最短阅读路径
 

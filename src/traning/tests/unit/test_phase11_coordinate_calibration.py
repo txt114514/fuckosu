@@ -7,15 +7,15 @@ from pathlib import Path
 
 import pytest
 
-from traning.app import build_frame_coordinate_transform
-from traning.config import load_v2_config
-from traning.data import (
+from traning.core.app import build_frame_coordinate_transform
+from traning.conf import load_v2_config
+from traning.core.data import (
     CalibrationObservation,
     audit_affine_calibration,
     fit_affine_least_squares,
     load_affine_calibration_evidence,
 )
-from traning.infrastructure import SchemaMismatchError
+from traning.lib.infrastructure import SchemaMismatchError
 
 
 _WORKSPACE = Path(__file__).resolve().parents[4]

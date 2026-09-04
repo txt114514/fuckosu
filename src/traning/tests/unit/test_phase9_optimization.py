@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from traning.training.optimization import (
+from traning.core.training.optimization import (
     PARAMETER_REGISTRY,
     DeterministicSearchController,
     ParameterRegistry,
@@ -244,7 +244,7 @@ def test_run_search_raises_typed_error_on_exhaustion() -> None:
 def test_optimization_contract_has_no_any_or_legacy_dependency() -> None:
     """优化契约不得依赖宽泛 Any、legacy 或错误顶层包。"""
 
-    source_path = Path(__file__).parents[2] / "training" / "optimization.py"
+    source_path = Path(__file__).parents[2] / "core/training" / "optimization.py"
     source = source_path.read_text(encoding="utf-8")
     tree = ast.parse(source)
     imported_names = {

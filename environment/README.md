@@ -1,19 +1,15 @@
-# Environment Utilities
+# Deprecated Environment Wrapper
 
-本目录保存仓库运行环境相关代码，独立于 `src/traning` 的训练核心实现。
+本目录仅为旧导入和脚本路径保留兼容包装，不再包含环境探测实现。
 
-- `env_check.py`：收集 Python、PyTorch/CUDA、GPU、FFmpeg 和关键依赖状态。
-- `check_gpu.sh`：在正确容器 namespace 中验证 `nvidia-smi` 和 PyTorch CUDA 可用性。
+新代码使用：
 
-GPU 命令优先使用主机桥：
-
-```bash
-host-exec docker exec -u dev osu_ai_dev bash -lc \
-  'cd /home/dev/workspace && bash environment/check_gpu.sh'
+```python
+from traning.lib.environment import collect_environment_report
 ```
 
-训练 CLI 仍保留环境检查命令：
+GPU 检查的新入口是：
 
 ```bash
-PYTHONPATH=src python -m traning.cli env-check --strict --require-cuda
+bash src/traning/lib/environment/check_gpu.sh
 ```

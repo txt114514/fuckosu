@@ -9,9 +9,9 @@ from pathlib import Path
 import pytest
 import torch
 
-from traning.app.factory import build_frame_coordinate_transform
-from traning.belief import PerTrackBeliefEncoder
-from traning.config import (
+from traning.core.app.factory import build_frame_coordinate_transform
+from traning.core.belief import PerTrackBeliefEncoder
+from traning.conf import (
     BeliefConfig,
     CoordinateConfig,
     DecisionConfig,
@@ -21,10 +21,10 @@ from traning.config import (
     RuntimeDevice,
     V2Config,
 )
-from traning.infrastructure import IntegrityError, SchemaMismatchError
-from traning.outcome import DenseOutcomeModel
-from traning.perception import PerceptionModel
-from traning.training import (
+from traning.lib.infrastructure import IntegrityError, SchemaMismatchError
+from traning.core.outcome import DenseOutcomeModel
+from traning.core.perception import PerceptionModel
+from traning.core.training import (
     RuntimeModelBundle,
     load_runtime_checkpoint,
     publish_runtime_checkpoint,

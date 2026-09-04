@@ -2,7 +2,8 @@
 
 仓库以 `src/start/main.py` 作为唯一总启动流程，以 `src/traning` 作为唯一活动训练包。
 旧 Spatial → Temporal imitation → argmax Decision 实现和独立 `src/visualization`
-包已经退役；V2 已整体迁入并覆盖原 `traning`，不保留旧接口兼容层。
+包已经退役；V2 已整体迁入 `traning`。旧扁平路径只保留 deprecated re-export，
+新代码以 `conf/core/lib/state` 为唯一权威结构。
 
 ## 当前模型链路
 
@@ -43,17 +44,17 @@ PYTHONPATH=src python -m start
 只执行模型侧诊断或训练：
 
 ```bash
-PYTHONPATH=src python -m traning.app config-check --config configs/traning.yaml
-PYTHONPATH=src python -m traning.app coordinate-audit --config configs/traning.yaml
-PYTHONPATH=src python -m traning.app env-check --config configs/traning.yaml --strict
-PYTHONPATH=src python -m traning.app train --config configs/traning.yaml --resume
+PYTHONPATH=src python -m traning config-check --config configs/traning.yaml
+PYTHONPATH=src python -m traning coordinate-audit --config configs/traning.yaml
+PYTHONPATH=src python -m traning env-check --config configs/traning.yaml --strict
+PYTHONPATH=src python -m traning train --config configs/traning.yaml --resume
 ```
 
 CUDA 命令必须从主机桥进入正常容器 namespace：
 
 ```bash
 host-exec docker exec -u dev osu_ai_dev bash -lc \
-  'cd /home/dev/workspace && bash environment/check_gpu.sh'
+  'cd /home/dev/workspace && bash src/traning/lib/environment/check_gpu.sh'
 ```
 
 ## 主要目录
@@ -63,7 +64,7 @@ host-exec docker exec -u dev osu_ai_dev bash -lc \
 | `src/before_traning` | 谱面导入、视频匹配、音画对齐、裁剪与 segment 生成 |
 | `src/package` | 多个顶层模块共用的坐标、split 与检查公开 API |
 | `src/start` | 唯一总启动编排和检查入口 |
-| `src/traning` | Perception、Tracking、Belief、Outcome、Decision、训练、遥测和只读可视化 |
+| `src/traning` | `conf/core/lib/state` 分层的训练、推理、环境与统一类型实现 |
 | `configs/traning.yaml` | 唯一严格生产配置 |
 
 训练 run 写入 `artifacts/training_runs/<run_id>/`。每个已完成 trial 的搜索历史会原子

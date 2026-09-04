@@ -8,9 +8,10 @@ from pathlib import Path
 
 import pytest
 import torch
+from torch.nn import functional as F
 
-from traning.config import OutcomeConfig
-from traning.contracts import (
+from traning.conf import OutcomeConfig
+from traning.state import (
     BeliefState,
     DataSplit,
     DecisionAction,
@@ -19,9 +20,9 @@ from traning.contracts import (
     OutcomeTrainingSample,
     Point2D,
 )
-from traning.outcome.model import DenseOutcomeModel
-from traning.outcome.dataset import CounterfactualOutcomeDataset
-from traning.outcome.training import (
+from traning.core.outcome.model import DenseOutcomeModel
+from traning.core.outcome.dataset import CounterfactualOutcomeDataset
+from traning.core.outcome.training import (
     OutcomeLossWeights,
     collate_outcome_samples,
     compute_outcome_loss,
@@ -30,7 +31,7 @@ from traning.outcome.training import (
 )
 
 
-_TRAINING_PATH = Path(__file__).resolve().parents[2] / "outcome/training.py"
+_TRAINING_PATH = Path(__file__).resolve().parents[2] / "core/outcome/training.py"
 
 
 def _config() -> OutcomeConfig:
@@ -158,6 +159,170 @@ def test_loss_is_finite_and_backward_reaches_all_model_groups() -> None:
         parameters = tuple(module.parameters())
         assert parameters
         assert all(parameter.grad is not None for parameter in parameters)
+
+
+def test_sample_weighted_loss_matches_manual_normalized_components() -> None:
+    """三个逐样本损失必须共享同一权重并除以权重总和。"""
+
+    torch.manual_seed(11)
+    model = DenseOutcomeModel(_config(), belief_embedding_dim=3)
+    batch = collate_outcome_samples(_dataset(), belief_embedding_dim=3)
+    output = model(batch.belief_embeddings, batch.horizon_ms)
+    sample_weights = torch.tensor((1.0, 2.0, 4.0, 8.0, 16.0))
+
+    loss = compute_outcome_loss(
+        output,
+        batch,
+        sample_weights=sample_weights,
+    )
+
+    category_per_record = -torch.log_softmax(output.category_logits, dim=1)[
+        torch.arange(len(batch.sample_ids)), batch.category_targets
+    ]
+    expiry_per_record = F.softplus(output.expiry_logits) - (
+        batch.expiry_targets * output.expiry_logits
+    )
+    score_delta = (output.expected_score - batch.score_targets).abs()
+    score_per_record = torch.where(
+        score_delta < 1.0,
+        0.5 * score_delta.square(),
+        score_delta - 0.5,
+    )
+    expected_components = tuple(
+        (component * sample_weights).sum() / sample_weights.sum()
+        for component in (
+            category_per_record,
+            expiry_per_record,
+            score_per_record,
+        )
+    )
+
+    assert torch.allclose(loss.category, expected_components[0])
+    assert torch.allclose(loss.expiry, expected_components[1])
+    assert torch.allclose(loss.score, expected_components[2])
+    assert torch.allclose(
+        loss.total,
+        expected_components[0] + expected_components[1] + 0.1 * expected_components[2],
+    )
+
+
+def test_sample_weights_change_model_gradient_without_scaling_all_samples_equally() -> (
+    None
+):
+    """非均匀 hard-example 权重必须真实改变模型梯度。"""
+
+    torch.manual_seed(19)
+    model = DenseOutcomeModel(_config(), belief_embedding_dim=3)
+    batch = collate_outcome_samples(_dataset(), belief_embedding_dim=3)
+
+    unweighted = compute_outcome_loss(
+        model(batch.belief_embeddings, batch.horizon_ms),
+        batch,
+    )
+    unweighted.total.backward()
+    unweighted_gradient = model.category_head.weight.grad
+    assert unweighted_gradient is not None
+    unweighted_snapshot = unweighted_gradient.detach().clone()
+
+    model.zero_grad(set_to_none=True)
+    weighted = compute_outcome_loss(
+        model(batch.belief_embeddings, batch.horizon_ms),
+        batch,
+        sample_weights=torch.tensor((20.0, 1.0, 1.0, 1.0, 1.0)),
+    )
+    weighted.total.backward()
+    weighted_gradient = model.category_head.weight.grad
+
+    assert weighted_gradient is not None
+    assert bool(torch.isfinite(weighted_gradient).all().item())
+    assert not torch.allclose(unweighted_snapshot, weighted_gradient)
+
+
+def test_sample_weights_none_preserves_original_mean_reductions() -> None:
+    """省略权重或显式传 None 都必须精确保留原始 mean reduction。"""
+
+    torch.manual_seed(23)
+    model = DenseOutcomeModel(_config(), belief_embedding_dim=3)
+    batch = collate_outcome_samples(_dataset(), belief_embedding_dim=3)
+    output = model(batch.belief_embeddings, batch.horizon_ms)
+
+    implicit = compute_outcome_loss(output, batch)
+    explicit = compute_outcome_loss(output, batch, sample_weights=None)
+    legacy_components = (
+        F.cross_entropy(output.category_logits, batch.category_targets),
+        F.binary_cross_entropy_with_logits(
+            output.expiry_logits,
+            batch.expiry_targets,
+        ),
+        F.smooth_l1_loss(output.expected_score, batch.score_targets),
+    )
+
+    assert torch.equal(implicit.category, explicit.category)
+    assert torch.equal(implicit.expiry, explicit.expiry)
+    assert torch.equal(implicit.score, explicit.score)
+    assert torch.equal(implicit.category, legacy_components[0])
+    assert torch.equal(implicit.expiry, legacy_components[1])
+    assert torch.equal(implicit.score, legacy_components[2])
+
+
+def test_sample_weights_reject_invalid_type_shape_device_dtype_and_values() -> None:
+    """权重边界不得隐式转换、reshape、搬运或接受非正非有限值。"""
+
+    model = DenseOutcomeModel(_config(), belief_embedding_dim=3)
+    batch = collate_outcome_samples(_dataset(), belief_embedding_dim=3)
+    output = model(batch.belief_embeddings, batch.horizon_ms)
+    batch_size = len(batch.sample_ids)
+
+    with pytest.raises(TypeError, match="torch.Tensor"):
+        compute_outcome_loss(output, batch, sample_weights=(1.0,) * batch_size)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match=r"\[batch\]"):
+        compute_outcome_loss(
+            output,
+            batch,
+            sample_weights=torch.ones(batch_size, 1),
+        )
+    with pytest.raises(ValueError, match=r"\[batch\]"):
+        compute_outcome_loss(
+            output,
+            batch,
+            sample_weights=torch.ones(batch_size - 1),
+        )
+    with pytest.raises(ValueError, match="同一设备"):
+        compute_outcome_loss(
+            output,
+            batch,
+            sample_weights=torch.ones(batch_size, device="meta"),
+        )
+    with pytest.raises(TypeError, match="dtype"):
+        compute_outcome_loss(
+            output,
+            batch,
+            sample_weights=torch.ones(batch_size, dtype=torch.float64),
+        )
+
+    invalid_values = (
+        (float("nan"), 1.0, 1.0, 1.0, 1.0),
+        (float("inf"), 1.0, 1.0, 1.0, 1.0),
+        (0.0, 1.0, 1.0, 1.0, 1.0),
+        (-1.0, 1.0, 1.0, 1.0, 1.0),
+    )
+    for values in invalid_values:
+        with pytest.raises(ValueError, match="有限|严格大于"):
+            compute_outcome_loss(
+                output,
+                batch,
+                sample_weights=torch.tensor(values),
+            )
+
+    with pytest.raises(ValueError, match="权重和必须有限"):
+        compute_outcome_loss(
+            output,
+            batch,
+            sample_weights=torch.full(
+                (batch_size,),
+                torch.finfo(torch.float32).max,
+            ),
+        )
 
 
 def test_evaluation_reuses_canonical_metrics_and_returns_finite_values() -> None:

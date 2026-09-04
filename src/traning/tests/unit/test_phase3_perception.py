@@ -8,9 +8,9 @@ from pathlib import Path
 import pytest
 import torch
 
-from traning.config import PerceptionConfig
-from traning.contracts import RuntimeFrame
-from traning.perception import (
+from traning.conf import PerceptionConfig
+from traning.state import RuntimeFrame
+from traning.core.perception import (
     DensePerceptionOutput,
     PerceptionLossWeights,
     PerceptionModel,
@@ -19,7 +19,7 @@ from traning.perception import (
     compute_perception_loss,
     decode_candidates,
 )
-from traning.perception.models import FusedFeatureOutput, SpatialHead
+from traning.core.perception.models import FusedFeatureOutput, SpatialHead
 
 
 def _dense_output(
@@ -245,7 +245,7 @@ def test_perception_runtime_accepts_only_runtime_frame_fields() -> None:
 def test_perception_source_has_no_legacy_or_gt_runtime_dependency() -> None:
     """静态阻止旧接口或 GT-only 名称重新进入正式 Perception 源码。"""
 
-    package_root = Path(__file__).resolve().parents[2] / "perception"
+    package_root = Path(__file__).resolve().parents[2] / "core/perception"
     forbidden_runtime_names = {
         "temporal_target",
         "selected_candidate_id",

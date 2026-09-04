@@ -7,7 +7,7 @@ import sqlite3
 from pathlib import Path
 from typing import cast
 
-from traning.contracts.common import JSONObject
+from traning.state.common import JSONObject
 
 
 def load_preprocessing_metadata(

@@ -91,3 +91,11 @@ training:
 # null 表示未全门禁通过时持续提出合法且未重复的参数；显式正整数才是 trial 预算。
 optimization:
   max_trials: null
+  cohort_size: 2
+  asha_rungs:
+    - budget_steps: 1
+      promotion_fraction: 0.5
+    - budget_steps: 4
+      promotion_fraction: 0.5
+  hard_example_bonus: 1.0
+  hard_example_max_weight: 4.0

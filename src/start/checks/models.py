@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from package.checks import CheckStatus, StartupCheckReport, StartupCheckResult
-from traning.contracts import DataQualityReport
+from traning.state import DataQualityReport
 
 
 @dataclass(frozen=True, slots=True)

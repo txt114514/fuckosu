@@ -6,14 +6,14 @@ from dataclasses import replace
 
 import pytest
 
-from traning.config import (
+from traning.conf import (
     DecisionConfig,
     OutcomeConfig,
     V2Config,
     load_v2_config,
     v2_config_to_dict,
 )
-from traning.contracts import (
+from traning.state import (
     DecisionAction,
     DecisionResult,
     OutcomeDistribution,

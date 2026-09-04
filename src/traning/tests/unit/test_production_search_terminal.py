@@ -5,19 +5,19 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from package import AffineOsuVideoTransform
+from package import AffineOsuVideoTransform, CurriculumStage
 
-from traning.config import CoordinateConfig, OptimizationConfig, V2Config
-from traning.contracts import DataQualityReport, DataSplit
-from traning.data import (
+from traning.conf import CoordinateConfig, OptimizationConfig, V2Config
+from traning.state import DataQualityReport, DataSplit
+from traning.core.data import (
     FrameCoordinateTransform,
     SegmentTrainingDataset,
     TrainingDatasetBundle,
 )
-from traning.telemetry import StateStore, TelemetryReporter
-from traning.training import (
-    CHECKPOINT_MANIFEST_FILENAME,
+from traning.lib.telemetry import StateStore, TelemetryReporter
+from traning.core.training import (
     ExecutionStatus,
+    HardExampleFeedbackArtifact,
     ParameterVector,
     ProductionGateSpec,
     ProductionTrainer,
@@ -27,7 +27,7 @@ from traning.training import (
     TrainingStage,
     TrialAcceptance,
 )
-from traning.training.production_stages import trial_checkpoint_directory
+from traning.core.training.production_schedule import ProductionTrialContext
 
 
 _AFFINE_MATRIX = (
@@ -92,23 +92,31 @@ class _DeterministicStageRunner:
         self,
         *,
         base_config: V2Config,
-        parameters: ParameterVector,
-        trial_index: int,
+        context: ProductionTrialContext,
         datasets: TrainingDatasetBundle,
         gates: ProductionGateSpec,
         run_dir: Path,
         run_id: str,
         reporter: TelemetryReporter,
+        input_feedback: HardExampleFeedbackArtifact | None,
     ) -> None:
-        """记录 proposal，并保存生产入口稍后读取的最小状态。"""
+        """记录 proposal 首个 job，并保存生产入口读取的最小状态。"""
 
-        del base_config, datasets, gates, run_id, reporter
-        self.parameters = parameters
-        self.trial_index = trial_index
+        del datasets, gates, run_id, reporter, input_feedback
+        self.context = context
+        self.parameters = context.parameters
+        self.trial_index = context.trial_index
         self.run_dir = run_dir
-        self.metrics = ProductionTrialMetrics(golden_hit_rate=0.1 * trial_index)
+        self.rung_count = len(base_config.optimization.asha_rungs)
+        self.metrics = ProductionTrialMetrics(golden_hit_rate=0.1 * context.trial_index)
         self.stage_results: list[StageResult] = []
-        type(self).created_trials.append((trial_index, parameters))
+        self.hard_example_plan = None
+        self.feedback_evaluated = False
+        if (
+            context.curriculum_stage is CurriculumStage.BASIC
+            and context.rung_index == 0
+        ):
+            type(self).created_trials.append((context.trial_index, context.parameters))
 
     def run(self, stage: TrainingStage) -> StageResult:
         """普通失败返回 FAILED；指定 trial 则走完整阶段并提交占位 manifest。"""
@@ -122,13 +130,20 @@ class _DeterministicStageRunner:
             self.stage_results.append(result)
             return result
         if stage is TrainingStage.EVALUATION:
-            acceptance = TrialAcceptance(*(True for _ in range(7)))
-            checkpoint_directory = trial_checkpoint_directory(
-                self.run_dir,
-                self.trial_index,
+            full_terminal = (
+                self.context.curriculum_stage is CurriculumStage.FULL
+                and self.context.rung_index == self.rung_count - 1
             )
-            checkpoint_directory.mkdir(parents=True, exist_ok=True)
-            (checkpoint_directory / CHECKPOINT_MANIFEST_FILENAME).touch()
+            acceptance = TrialAcceptance(
+                data=True,
+                perception=True,
+                tracking=True,
+                belief=True,
+                outcome=True,
+                decision=True,
+                golden=True,
+                schedule=full_terminal,
+            )
             result = StageResult(
                 stage,
                 ExecutionStatus.PASSED,
@@ -138,6 +153,19 @@ class _DeterministicStageRunner:
             result = StageResult(stage, ExecutionStatus.PASSED)
         self.stage_results.append(result)
         return result
+
+    def publish_job_checkpoint(self, directory: Path) -> None:
+        """写入最小非空 job artifact，供 production 摘要与 parent 链使用。"""
+
+        directory.mkdir(parents=True, exist_ok=False)
+        (directory / "fake-checkpoint.txt").write_text(
+            (
+                f"trial={self.trial_index};"
+                f"stage={self.context.curriculum_stage.value};"
+                f"rung={self.context.rung_index}"
+            ),
+            encoding="utf-8",
+        )
 
 
 def _accept_checkpoint(*_args: object, **_kwargs: object) -> None:
@@ -154,11 +182,11 @@ def test_production_gate_failure_continues_and_publishes_passed(
     _DeterministicStageRunner.passing_index = 1
     _DeterministicStageRunner.created_trials = []
     monkeypatch.setattr(
-        "traning.training.production.ProductionStageRunner",
+        "traning.core.training.production.ProductionStageRunner",
         _DeterministicStageRunner,
     )
     monkeypatch.setattr(
-        "traning.training.production.load_runtime_checkpoint",
+        "traning.core.training.production.load_runtime_checkpoint",
         _accept_checkpoint,
     )
 
@@ -172,9 +200,15 @@ def test_production_gate_failure_continues_and_publishes_passed(
     assert len({parameters for _index, parameters in created}) == 2
     assert result.observation.trial_index == 1
     assert result.observation.acceptance.passed
-    event_types = tuple(
+    all_event_types = tuple(
         event.event_type
         for event in StateStore(tmp_path / "passed-run" / "telemetry").history().events
+    )
+    assert all_event_types.count("search.job.completed") == 9
+    event_types = tuple(
+        event_type
+        for event_type in all_event_types
+        if event_type != "search.job.completed"
     )
     assert event_types == (
         "search.trial.completed",
@@ -193,7 +227,7 @@ def test_production_exhaustion_publishes_terminal_and_resume_does_not_repeat(
     _DeterministicStageRunner.passing_index = None
     _DeterministicStageRunner.created_trials = []
     monkeypatch.setattr(
-        "traning.training.production.ProductionStageRunner",
+        "traning.core.training.production.ProductionStageRunner",
         _DeterministicStageRunner,
     )
     run_dir = tmp_path / "exhausted-run"
@@ -212,8 +246,14 @@ def test_production_exhaustion_publishes_terminal_and_resume_does_not_repeat(
     assert resumed_error.value.decision.trial_count == 2
     assert tuple(_DeterministicStageRunner.created_trials) == created_before_resume
     # ProductionTrainer 的默认 store 已结束写入作用域；新实例从磁盘恢复完整历史。
-    event_types = tuple(
+    all_event_types = tuple(
         event.event_type for event in StateStore(run_dir / "telemetry").history().events
+    )
+    assert all_event_types.count("search.job.completed") == 2
+    event_types = tuple(
+        event_type
+        for event_type in all_event_types
+        if event_type != "search.job.completed"
     )
     assert event_types == (
         "search.trial.completed",
@@ -232,7 +272,7 @@ def test_production_fatal_error_publishes_failed_terminal(
     config = _config(max_trials=None)
     _DeterministicStageRunner.created_trials = []
     monkeypatch.setattr(
-        "traning.training.production.ProductionStageRunner",
+        "traning.core.training.production.ProductionStageRunner",
         _DeterministicStageRunner,
     )
 

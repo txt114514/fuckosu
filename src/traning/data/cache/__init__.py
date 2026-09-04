@@ -1,27 +1,5 @@
-"""推理候选缓存公开入口。"""
+"""已弃用兼容转发；新代码必须导入对应的 conf、core、lib 或 state 路径。"""
 
-from .cache import (
-    CANDIDATE_CACHE_ARTIFACT_TYPE,
-    CANDIDATE_CACHE_SCHEMA_VERSION,
-    MANIFEST_FILENAME,
-    RECORDS_FILENAME,
-    CandidateCacheManifest,
-    CandidateCacheDataset,
-    CandidateCacheReader,
-    CandidateCacheWriter,
-    load_candidate_cache,
-    publish_candidate_cache,
-)
+from traning.core.data.cache import *  # noqa: F403
 
-__all__ = (
-    "CANDIDATE_CACHE_ARTIFACT_TYPE",
-    "CANDIDATE_CACHE_SCHEMA_VERSION",
-    "CandidateCacheManifest",
-    "CandidateCacheDataset",
-    "CandidateCacheReader",
-    "CandidateCacheWriter",
-    "MANIFEST_FILENAME",
-    "RECORDS_FILENAME",
-    "load_candidate_cache",
-    "publish_candidate_cache",
-)
+__deprecated__ = True

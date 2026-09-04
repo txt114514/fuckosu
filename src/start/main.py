@@ -24,12 +24,12 @@ from start.executor import ProductionTrainingExecutor
 from start.flow import StartFlowConfig, StartFlowResult, run_start_flow
 from start.modules import source_module_entries
 from start.samples import DEFAULT_MATCHED_MANIFEST
-from traning.app.cli import (
+from traning.core.app.cli import (
     config_check as model_config_check,
     coordinate_audit as model_coordinate_audit,
     env_check as model_env_check,
 )
-from traning.config import RuntimeDevice
+from traning.conf import RuntimeDevice
 
 
 DEFAULT_TRAINING_CONFIG = Path("configs/traning.yaml")
@@ -203,7 +203,9 @@ def _render_result(result: StartFlowResult) -> None:
     colors = {"passed": "green", "skipped": "yellow", "failed": "red"}
     for stage in result.stages:
         color = colors[stage.status]
-        table.add_row(stage.stage_id, f"[{color}]{stage.status}[/{color}]", stage.message)
+        table.add_row(
+            stage.stage_id, f"[{color}]{stage.status}[/{color}]", stage.message
+        )
     console.print(table)
     console.print(f"报告：{result.report_path}")
 

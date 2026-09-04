@@ -7,7 +7,7 @@ import math
 import pytest
 import torch
 
-from traning.evaluation.metrics import (
+from traning.core.evaluation.metrics import (
     expected_score_mae,
     expiry_binary_cross_entropy,
     expiry_brier_score,
@@ -15,7 +15,7 @@ from traning.evaluation.metrics import (
     multiclass_nll,
     top_label_ece,
 )
-from traning.outcome.calibration import (
+from traning.core.outcome.calibration import (
     ScalarTemperatureCalibrator,
     evaluate_temperature_calibration,
     fit_temperature_calibrator,

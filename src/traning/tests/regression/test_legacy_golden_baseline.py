@@ -9,8 +9,8 @@ from pathlib import Path
 import pytest
 import torch
 
-from traning.config import PerceptionConfig
-from traning.evaluation import (
+from traning.conf import PerceptionConfig
+from traning.core.evaluation import (
     SCORE_VERSION,
     PredictedClick,
     TargetObject,
@@ -18,7 +18,7 @@ from traning.evaluation import (
     score_point,
     score_slider,
 )
-from traning.perception import (
+from traning.core.perception import (
     DensePerceptionOutput,
     decode_candidates,
 )

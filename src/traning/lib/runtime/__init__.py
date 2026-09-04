@@ -3,6 +3,7 @@
 from traning.lib.runtime.memory import (
     CudaRuntimeConfig,
     CudaRuntimeState,
+    MemoryReport,
     MemorySnapshot,
     RuntimeMemoryBudget,
     amp_uses_grad_scaler,
@@ -21,6 +22,7 @@ from traning.lib.runtime.memory import (
 __all__ = [
     "CudaRuntimeConfig",
     "CudaRuntimeState",
+    "MemoryReport",
     "MemorySnapshot",
     "RuntimeMemoryBudget",
     "amp_uses_grad_scaler",

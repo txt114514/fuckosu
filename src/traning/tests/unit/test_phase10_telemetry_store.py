@@ -9,21 +9,21 @@ from pathlib import Path
 
 import pytest
 
-from traning.contracts import TelemetryEvent
-from traning.evaluation import (
+from traning.state import TelemetryEvent
+from traning.core.evaluation import (
     EvaluationTag,
     PrimaryError,
     SequenceScore,
     build_sequence_evaluation_events,
 )
-from traning.infrastructure.errors import IntegrityError, SchemaMismatchError
-from traning.telemetry.events import (
+from traning.lib.infrastructure.errors import IntegrityError, SchemaMismatchError
+from traning.lib.telemetry.events import (
     TELEMETRY_SCHEMA_VERSION,
     EvaluationEvent,
     MetricsEvent,
     ResourceEvent,
 )
-from traning.telemetry.store import StateStore
+from traning.lib.telemetry.store import StateStore
 
 
 _FILENAMES = (
@@ -200,7 +200,7 @@ def test_publish_calls_fsync_and_rejects_unknown_event(
 ) -> None:
     """发布必须执行 fsync，并拒绝未注册事件类型。"""
 
-    import traning.telemetry.store as store_module
+    import traning.lib.telemetry.store as store_module
 
     store = StateStore(tmp_path / "telemetry")
     real_fsync = store_module.os.fsync

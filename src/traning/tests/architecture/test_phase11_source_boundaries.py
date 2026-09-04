@@ -77,11 +77,24 @@ def _is_runtime_or_decision(relative: Path) -> bool:
         relative.parts[0] in {"belief", "decision", "tracking"}
         or relative.parts[:2]
         in {
+            ("core", "belief"),
+            ("core", "decision"),
+            ("core", "tracking"),
+        }
+        or relative.parts[:2]
+        in {
             ("perception", "decode"),
             ("perception", "models"),
             ("perception", "runtime"),
         }
+        or relative.parts[:3]
+        in {
+            ("core", "perception", "decode"),
+            ("core", "perception", "models"),
+            ("core", "perception", "runtime"),
+        }
         or relative == Path("outcome/model.py")
+        or relative == Path("core/outcome/model.py")
         or relative.name == "runtime.py"
         or "runtime" in relative.parts
     )
@@ -201,7 +214,7 @@ def test_runtime_and_decision_cannot_import_training_or_oracle_information() -> 
             continue
         tree = _tree(path)
         for module, imported_name in _imported_names(tree):
-            if module.startswith("traning.outcome.oracle"):
+            if module.startswith("traning.core.outcome.oracle"):
                 violations.append(f"{relative}: oracle import {module}")
             if imported_name in _RUNTIME_FORBIDDEN_NAMES:
                 violations.append(f"{relative}: forbidden import {imported_name}")
